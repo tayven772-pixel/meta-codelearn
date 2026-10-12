@@ -1401,16 +1401,53 @@ function PricingPage() {
 }
 
 function AccountSettingsPage() {
+  const [discordUser, setDiscordUser] = useState<{ id: string; username: string; displayName: string; avatar: string | null } | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authMessage, setAuthMessage] = useState('');
+  useEffect(() => {
+    let active = true;
+    fetch('/api/auth/me', { credentials: 'same-origin' })
+      .then(response => response.ok ? response.json() : Promise.reject(new Error('Unable to check sign-in status')))
+      .then(data => { if (active) { setDiscordUser(data.authenticated ? data.user : null); setAuthLoading(false); } })
+      .catch(() => { if (active) setAuthLoading(false); });
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('discord') === 'connected') setAuthMessage('Discord sign-in successful.');
+    if (params.get('discord') === 'cancelled') setAuthMessage('Discord sign-in was cancelled.');
+    return () => { active = false; };
+  }, []);
+  async function signOut() {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+      setDiscordUser(null);
+      setAuthMessage('You have signed out.');
+    } catch {
+      setAuthMessage('Could not sign out right now. Please try again.');
+    }
+  }
   return (
     <AppShell>
       <main className="account-page">
         <section className="account-card">
           <p className="section-kicker">Account & privacy</p>
-          <h1>Meta accounts are being rebuilt</h1>
-          <p className="account-email">Clerk has been removed from Meta.</p>
+          <h1>Meta account</h1>
+          <p className="account-email">Sign in securely with your Discord account.</p>
+          {authMessage && <p role="status" className="account-email">{authMessage}</p>}
+          {authLoading ? <p>Checking sign-in status…</p> : discordUser ? (
+            <div className="account-setting-block">
+              <h2>Signed in with Discord</h2>
+              <p>Welcome, {discordUser.displayName || discordUser.username} (@{discordUser.username}).</p>
+              <button type="button" className="button-secondary" onClick={signOut}>Sign out</button>
+            </div>
+          ) : (
+            <div className="account-setting-block">
+              <h2>Connect your Discord</h2>
+              <p>Use Discord to verify your identity. Meta will never ask for your Discord password.</p>
+              <a className="button-secondary" href="/api/auth/discord">Continue with Discord</a>
+            </div>
+          )}
           <div className="account-setting-block">
             <h2>Your local data</h2>
-            <p>Your projects, settings, and lesson progress on this browser remain available while the new Meta authentication system is built.</p>
+            <p>Lesson progress and project data currently remain on this browser. Discord sign-in does not yet sync learning data between devices.</p>
             <div className="account-setting-links">
               <Link href="/privacy" className="button-secondary">Read privacy policy</Link>
             </div>
