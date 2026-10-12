@@ -1407,11 +1407,39 @@ function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(window.location.pathname.startsWith('/sign-up'));
+  const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState<'success' | 'error'>('error');
 
-  function handleEmailSignIn(event: FormEvent<HTMLFormElement>) {
+  async function handleEmailSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage('Email sign-in is not connected yet. Your details have not been sent or saved.');
+    setBusy(true);
+    setMessage('');
+    try {
+      const response = await fetch(isRegistering ? '/api/auth/register' : '/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Something went wrong. Please try again.');
+      setMessageType('success');
+      setMessage(data.message || (isRegistering ? 'Account created. Check your email for a verification link.' : 'Signed in successfully. Opening Meta CodeLearn…'));
+      if (!isRegistering) window.setTimeout(() => window.location.assign('/'), 700);
+    } catch (error) {
+      setMessageType('error');
+      setMessage(error instanceof Error ? error.message : 'Unable to connect. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function switchMode(registering: boolean) {
+    setIsRegistering(registering);
+    setMessage('');
+    window.history.replaceState(null, '', registering ? '/sign-up' : '/sign-in');
   }
 
   return (
@@ -1428,42 +1456,65 @@ function LoginPage() {
           <div className="login-intro-note"><Code2 aria-hidden="true" /><span>Project-based learning, built around you.</span></div>
         </div>
         <section className="login-card" aria-labelledby="login-title">
-          <p className="section-kicker">WELCOME BACK</p>
-          <h2 id="login-title">Sign in to meta</h2>
-          <p className="login-card-subtitle">Use your account to continue learning.</p>
-          <form className="login-form" onSubmit={handleEmailSignIn}>
+          <p className="section-kicker">{isRegistering ? 'GET STARTED' : 'WELCOME BACK'}</p>
+          <h2 id="login-title">{isRegistering ? 'Create your account' : 'Sign in to meta'}</h2>
+          <p className="login-card-subtitle">{isRegistering ? 'Create an account and verify your email to get started.' : 'Use your account to continue learning.'}</p>
+          <form className="login-form" onSubmit={handleEmailSubmit}>
             <label htmlFor="login-email">Email address</label>
             <div className="login-input-wrap">
               <Mail aria-hidden="true" />
-              <input id="login-email" type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={event => setEmail(event.target.value)} required />
+              <input id="login-email" type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={event => setEmail(event.target.value)} required maxLength={254} />
             </div>
             <div className="login-password-heading">
               <label htmlFor="login-password">Password</label>
-              <Link href="/delete-account" className="login-help-link">Need help?</Link>
+              {!isRegistering && <Link href="/delete-account" className="login-help-link">Need help?</Link>}
             </div>
             <div className="login-input-wrap">
               <LockKeyhole aria-hidden="true" />
-              <input id="login-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter your password" value={password} onChange={event => setPassword(event.target.value)} required />
+              <input id="login-password" type={showPassword ? 'text' : 'password'} autoComplete={isRegistering ? 'new-password' : 'current-password'} placeholder={isRegistering ? 'Use at least 10 characters' : 'Enter your password'} value={password} onChange={event => setPassword(event.target.value)} required minLength={isRegistering ? 10 : 1} maxLength={128} />
               <button className="login-password-toggle" type="button" onClick={() => setShowPassword(current => !current)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}</button>
             </div>
-            <button className="login-submit" type="submit">Sign in <ArrowRight aria-hidden="true" /></button>
+            <button className="login-submit" type="submit" disabled={busy}>{busy ? 'Please wait…' : isRegistering ? 'Create account' : 'Sign in'} <ArrowRight aria-hidden="true" /></button>
           </form>
-          <p className="login-create-copy">New to meta? <button type="button" className="login-text-button" onClick={() => setMessage('Account creation is not connected yet.')}>Create an account</button></p>
-          <div className="login-divider"><span>OR CONTINUE WITH</span></div>
-          <a className="login-provider login-discord" href="/api/auth/discord">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.7 5.2a18.2 18.2 0 0 0-4.5-1.4l-.6 1.2a16.6 16.6 0 0 0-5.2 0l-.6-1.2a18.2 18.2 0 0 0-4.5 1.4C1.5 9.4.7 13.5 1.1 17.5a18.3 18.3 0 0 0 5.5 2.8l1.2-2a11.8 11.8 0 0 1-1.9-.9l.5-.4c3.7 1.7 7.8 1.7 11.5 0l.5.4a11.8 11.8 0 0 1-1.9.9l1.2 2a18.3 18.3 0 0 0 5.5-2.8c.5-4.6-.8-8.7-3.5-12.3ZM8.8 14.9c-1.1 0-2-1-2-2.2s.9-2.2 2-2.2 2 1 2 2.2-.9 2.2-2 2.2Zm6.4 0c-1.1 0-2-1-2-2.2s.9-2.2 2-2.2 2 1 2 2.2-.9 2.2-2 2.2Z"/></svg>
-            <span>Continue with Discord</span><ArrowRight aria-hidden="true" />
-          </a>
-          <button className="login-provider login-google" type="button" onClick={() => setMessage('Google sign-in is not configured yet.')}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.8 3-4.3 3-7.3Z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.5l-3.2-2.5c-.9.6-2 .9-3.4.9-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.4 13.8a6 6 0 0 1 0-3.7V7.5H3.1a10 10 0 0 0 0 8.9l3.3-2.6Z"/><path fill="#EA4335" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.9A9.7 9.7 0 0 0 12 2a10 10 0 0 0-8.9 5.5l3.3 2.6C7.2 7.8 9.4 6 12 6Z"/></svg>
-            <span>Continue with Google</span><ArrowRight aria-hidden="true" />
-          </button>
-          {message && <p className="login-status" role="status">{message}</p>}
+          <p className="login-create-copy">
+            {isRegistering ? 'Already have an account? ' : 'New to meta? '}
+            <button type="button" className="login-text-button" onClick={() => switchMode(!isRegistering)}>{isRegistering ? 'Sign in' : 'Create an account'}</button>
+          </p>
+          {!isRegistering && <>
+            <div className="login-divider"><span>OR CONTINUE WITH</span></div>
+            <a className="login-provider login-discord" href="/api/auth/discord">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.7 5.2a18.2 18.2 0 0 0-4.5-1.4l-.6 1.2a16.6 16.6 0 0 0-5.2 0l-.6-1.2a18.2 18.2 0 0 0-4.5 1.4C1.5 9.4.7 13.5 1.1 17.5a18.3 18.3 0 0 0 5.5 2.8l1.2-2a11.8 11.8 0 0 1-1.9-.9l.5-.4c3.7 1.7 7.8 1.7 11.5 0l.5.4a11.8 11.8 0 0 1-1.9.9l1.2 2a18.3 18.3 0 0 0 5.5-2.8c.5-4.6-.8-8.7-3.5-12.3ZM8.8 14.9c-1.1 0-2-1-2-2.2s.9-2.2 2-2.2 2 1 2 2.2-.9 2.2-2 2.2Zm6.4 0c-1.1 0-2-1-2-2.2s.9-2.2 2-2.2 2 1 2 2.2-.9 2.2-2 2.2Z"/></svg>
+              <span>Continue with Discord</span><ArrowRight aria-hidden="true" />
+            </a>
+            <button className="login-provider login-google" type="button" onClick={() => { setMessageType('error'); setMessage('Google sign-in is not configured yet.'); }}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.8 3-4.3 3-7.3Z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.5l-3.2-2.5c-.9.6-2 .9-3.4.9-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.4 13.8a6 6 0 0 1 0-3.7V7.5H3.1a10 10 0 0 0 0 8.9l3.3-2.6Z"/><path fill="#EA4335" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.9A9.7 9.7 0 0 0 12 2a10 10 0 0 0-8.9 5.5l3.3 2.6C7.2 7.8 9.4 6 12 6Z"/></svg>
+              <span>Continue with Google</span><ArrowRight aria-hidden="true" />
+            </button>
+          </>}
+          {message && <p className="login-status" data-status={messageType} role="status">{message}</p>}
           <p className="login-legal">By continuing, you agree to Meta's <Link href="/privacy">Privacy Policy</Link>.</p>
         </section>
       </section>
     </main>
   );
+}
+
+function VerifyEmailPage() {
+  const [message, setMessage] = useState('Verifying your email address…');
+  const [success, setSuccess] = useState(false);
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get('token');
+    if (!token) { setMessage('This verification link is missing its token. Please use the full link from your email.'); return; }
+    fetch(`/api/auth/verify?token=${encodeURIComponent(token)}`)
+      .then(async response => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Verification failed.');
+        setSuccess(true);
+        setMessage(data.message || 'Email verified. You can now sign in.');
+      })
+      .catch(error => setMessage(error instanceof Error ? error.message : 'Verification failed. Please try again.'));
+  }, []);
+  return <main className="login-page"><section className="login-card" style={{ maxWidth: 560, margin: '12vh auto' }}><p className="section-kicker">META CODELEARN</p><h2>{success ? 'Email verified' : 'Verify your email'}</h2><p className="login-card-subtitle" role="status">{message}</p>{success && <Link className="login-submit" href="/sign-in">Continue to sign in <ArrowRight aria-hidden="true" /></Link>}</section></main>;
 }
 
 function AccountSettingsPage() {
@@ -1904,6 +1955,7 @@ function MainRoutes() {
       <Route path="/pricing" component={PricingPage} />
       <Route path="/privacy" component={PrivacyPage} />
       <Route path="/delete-account" component={DeleteAccountPage} />
+      <Route path="/verify-email" component={VerifyEmailPage} />
       <Route path="/sign-in/*?" component={LoginPage} />
       <Route path="/sign-up/*?" component={LoginPage} />
       <Route component={NotFound} />
