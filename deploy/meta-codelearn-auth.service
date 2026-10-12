@@ -1,0 +1,21 @@
+[Unit]
+Description=Meta CodeLearn email authentication API
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/meta-codelearn
+EnvironmentFile=/etc/meta-codelearn-auth.env
+ExecStart=/usr/bin/node /opt/meta-codelearn/server/auth.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/meta-codelearn
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
