@@ -7,6 +7,7 @@
     { "source": "/sign-up", "destination": "/index.html" },
     { "source": "/sign-up/(.*)", "destination": "/index.html" },
     { "source": "/user-portal", "destination": "/index.html" },
+    { "source": "/account", "destination": "/index.html" },
     { "source": "/learn/(.*)", "destination": "/index.html" }
   ]
 }
