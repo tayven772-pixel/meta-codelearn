@@ -684,7 +684,10 @@ function ProjectsPage() {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
-    setProjects((current) => [...current, project]);
+    const nextProjects = [...projects, project];
+    // Persist before navigating: ProjectPage initializes from localStorage on mount.
+    writeProjects(nextProjects);
+    setProjects(nextProjects);
     setProjectName('');
     setProjectType('Blank');
     setShowCreator(false);
