@@ -1832,3 +1832,14 @@ html[data-reduced-motion='true'] *::after {
   .profile-editor-body { padding: 14px; }
   .profile-field { max-width: 100%; }
 }
+
+
+/* Consistent blue feedback for interactive icons across mouse, touch, and keyboard.
+   Preserve white icons on filled primary actions and keep provider logos unchanged. */
+:where(button:not(.button-primary), a:not(.button-primary), [role="button"]:not(.button-primary), [tabindex]:not(.button-primary)):is(:hover, :active, :focus-visible, [aria-pressed="true"], [aria-current="page"], .selected, .active) svg:not(.login-google svg) {
+  color: #2563eb;
+}
+
+:root[data-theme='dark'] :where(button:not(.button-primary), a:not(.button-primary), [role="button"]:not(.button-primary), [tabindex]:not(.button-primary)):is(:hover, :active, :focus-visible, [aria-pressed="true"], [aria-current="page"], .selected, .active) svg:not(.login-google svg) {
+  color: #60a5fa;
+}
