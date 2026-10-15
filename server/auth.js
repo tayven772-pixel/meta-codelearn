@@ -6,12 +6,27 @@ import express from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import nodemailer from 'nodemailer';
+import { OAuth2Client } from 'google-auth-library';
 import Database from 'better-sqlite3';
+import discordStart from '../api/auth/discord.js';
+import discordCallback from '../api/auth/callback.js';
+import { readSession, clearCookie, COOKIE_NAME } from '../lib/discord-auth.js';
+
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const port = Number(process.env.AUTH_PORT || 3001);
 const appOrigin = (process.env.APP_ORIGIN || 'https://metasupportcom.dbm.shared-servers.com').replace(/\/$/, '');
+const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
+const googleOAuth = googleClientId && googleClientSecret
+  ? new OAuth2Client(
+      googleClientId,
+      googleClientSecret,
+      `${appOrigin}/api/auth/google/callback`
+    )
+  : null;
+
 const fromEmail = process.env.SMTP_FROM || process.env.SMTP_USER;
 const databasePath = process.env.AUTH_DB_PATH || path.join(__dirname, 'data', 'auth.sqlite');
 fs.mkdirSync(path.dirname(databasePath), { recursive: true });
@@ -47,6 +62,31 @@ db.exec(`
     expires_at INTEGER NOT NULL
   );
 `);
+const userColumns = new Set(
+  db.prepare('PRAGMA table_info(users)').all().map(column => column.name)
+);
+if (!userColumns.has('display_name')) {
+  db.exec('ALTER TABLE users ADD COLUMN display_name TEXT');
+}
+if (!userColumns.has('username')) {
+  db.exec('ALTER TABLE users ADD COLUMN username TEXT COLLATE NOCASE');
+}
+if (!userColumns.has('avatar_png')) {
+  db.exec('ALTER TABLE users ADD COLUMN avatar_png BLOB');
+}
+if (!userColumns.has('google_sub')) {
+  db.exec('ALTER TABLE users ADD COLUMN google_sub TEXT');
+}
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique
+  ON users(username)
+  WHERE username IS NOT NULL AND username <> '';
+`);
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub_unique
+  ON users(google_sub)
+  WHERE google_sub IS NOT NULL AND google_sub <> '';
+`);
 
 const mailer = nodemailer.createTransport({
   service: 'gmail',
@@ -54,7 +94,7 @@ const mailer = nodemailer.createTransport({
 });
 app.disable('x-powered-by');
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(express.json({ limit: '12kb' }));
+app.use(express.json({ limit: '2mb' }));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, limit: 100, standardHeaders: true, legacyHeaders: false }));
 
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
@@ -170,6 +210,232 @@ app.post('/api/auth/logout', (req, res) => {
   }
   res.clearCookie('meta_session', { httpOnly: true, secure: appOrigin.startsWith('https://'), sameSite: 'lax', path: '/' });
   res.json({ ok: true });
+});
+
+
+
+// Profile API: only the account owning the active email session can edit it.
+app.get('/api/auth/profile', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const user = sessionUser(req);
+  if (!user) return res.status(401).json({ error: 'Please sign in to view your profile.' });
+  const avatar = user.avatar_png;
+  return res.json({
+    profile: {
+      email: user.email,
+      displayName: user.display_name || '',
+      username: user.username || '',
+      avatarPng: avatar ? `data:image/png;base64,${Buffer.from(avatar).toString('base64')}` : null
+    }
+  });
+});
+
+app.patch('/api/auth/profile', (req, res) => {
+  const user = sessionUser(req);
+  if (!user) return res.status(401).json({ error: 'Please sign in to edit your profile.' });
+
+  const body = req.body || {};
+  const current = db.prepare('SELECT display_name, username, avatar_png FROM users WHERE id=?').get(user.id);
+  let displayName = current.display_name || '';
+  let username = current.username || '';
+  let avatarPng = current.avatar_png || null;
+
+  if (Object.hasOwn(body, 'displayName')) {
+    if (typeof body.displayName !== 'string') return res.status(400).json({ error: 'Display name must be text.' });
+    displayName = body.displayName.trim();
+    if (displayName.length < 1 || displayName.length > 40) {
+      return res.status(400).json({ error: 'Display name must be between 1 and 40 characters.' });
+    }
+  }
+
+  if (Object.hasOwn(body, 'username')) {
+    if (typeof body.username !== 'string') return res.status(400).json({ error: 'Username must be text.' });
+    username = body.username.trim();
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) {
+      return res.status(400).json({ error: 'Username must be 3–20 characters using letters, numbers, or underscores.' });
+    }
+    const taken = db.prepare('SELECT id FROM users WHERE username=? COLLATE NOCASE AND id<>?').get(username, user.id);
+    if (taken) return res.status(409).json({ error: 'That username is already taken.' });
+  }
+
+  if (Object.hasOwn(body, 'avatarPng')) {
+    if (body.avatarPng === null) {
+      avatarPng = null;
+    } else {
+      if (typeof body.avatarPng !== 'string') return res.status(400).json({ error: 'Upload a PNG image.' });
+      const match = body.avatarPng.match(/^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/);
+      if (!match) return res.status(400).json({ error: 'Profile picture must be a PNG image.' });
+      const image = Buffer.from(match[1], 'base64');
+      const pngSignature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+      if (image.length < 8 || image.length > 1024 * 1024 || !image.subarray(0, 8).equals(pngSignature)) {
+        return res.status(400).json({ error: 'PNG files must be valid PNGs no larger than 1 MB.' });
+      }
+      avatarPng = image;
+    }
+  }
+
+  try {
+    db.prepare('UPDATE users SET display_name=?, username=?, avatar_png=? WHERE id=?')
+      .run(displayName || null, username || null, avatarPng, user.id);
+  } catch (error) {
+    if (String(error?.code || '').startsWith('SQLITE_CONSTRAINT')) {
+      return res.status(409).json({ error: 'That username is already taken.' });
+    }
+    console.error('Profile save failed:', error?.message || 'unknown error');
+    return res.status(500).json({ error: 'Could not save profile changes.' });
+  }
+
+  return res.json({
+    profile: {
+      email: user.email,
+      displayName,
+      username,
+      avatarPng: avatarPng ? `data:image/png;base64,${Buffer.from(avatarPng).toString('base64')}` : null
+    }
+  });
+});
+
+app.get('/api/auth/google', (req, res) => {
+  if (!googleOAuth) {
+    return res.status(503).send('Google sign-in is not configured.');
+  }
+
+  const state = randomToken();
+  res.cookie('meta_google_oauth_state', state, {
+    httpOnly: true,
+    secure: appOrigin.startsWith('https://'),
+    sameSite: 'lax',
+    path: '/api/auth/google',
+    maxAge: 10 * 60 * 1000,
+  });
+
+  res.setHeader('Cache-Control', 'no-store');
+  const url = googleOAuth.generateAuthUrl({
+    access_type: 'online',
+    scope: ['openid', 'email', 'profile'],
+    state,
+    prompt: 'select_account',
+  });
+
+  return res.redirect(url);
+});
+
+app.get('/api/auth/google/callback', async (req, res) => {
+  const stateCookie = String(req.headers.cookie || '')
+    .split(';')
+    .map(value => value.trim())
+    .find(value => value.startsWith('meta_google_oauth_state='))
+    ?.slice('meta_google_oauth_state='.length);
+
+  const clearStateCookie = () => res.clearCookie(
+    'meta_google_oauth_state',
+    {
+      httpOnly: true,
+      secure: appOrigin.startsWith('https://'),
+      sameSite: 'lax',
+      path: '/api/auth/google',
+    }
+  );
+
+  const receivedState = String(req.query.state || '');
+  if (
+    !stateCookie ||
+    !receivedState ||
+    stateCookie.length !== receivedState.length ||
+    !crypto.timingSafeEqual(Buffer.from(stateCookie), Buffer.from(receivedState))
+  ) {
+    clearStateCookie();
+    return res.status(400).send('Google sign-in could not be verified. Please try again.');
+  }
+
+  clearStateCookie();
+
+  if (req.query.error || !req.query.code || !googleOAuth) {
+    return res.redirect(`${appOrigin}/sign-in?google=error`);
+  }
+
+  try {
+    const { tokens } = await googleOAuth.getToken(String(req.query.code));
+    if (!tokens.id_token) {
+      return res.redirect(`${appOrigin}/sign-in?google=error`);
+    }
+
+    const ticket = await googleOAuth.verifyIdToken({
+      idToken: tokens.id_token,
+      audience: googleClientId,
+    });
+    const profile = ticket.getPayload();
+
+    const googleSub = String(profile?.sub || '');
+    const email = normalizeEmail(profile?.email);
+    const emailVerified = profile?.email_verified === true;
+
+    if (!googleSub || !validEmail(email) || !emailVerified) {
+      return res.redirect(`${appOrigin}/sign-in?google=error`);
+    }
+
+    let user = db.prepare('SELECT * FROM users WHERE google_sub=?').get(googleSub);
+
+    if (!user) {
+      user = db.prepare('SELECT * FROM users WHERE email=? COLLATE NOCASE').get(email);
+
+      if (user && user.google_sub && user.google_sub !== googleSub) {
+        return res.redirect(`${appOrigin}/sign-in?google=error`);
+      }
+
+      if (user) {
+        db.prepare(
+          'UPDATE users SET google_sub=?, verified_at=COALESCE(verified_at, ?) WHERE id=?'
+        ).run(googleSub, new Date().toISOString(), user.id);
+        user = db.prepare('SELECT * FROM users WHERE id=?').get(user.id);
+      } else {
+        const encodedPassword = await passwordHash(randomToken());
+        const displayName = String(profile?.name || '').trim().slice(0, 40) || null;
+        const result = db.prepare(`
+          INSERT INTO users(email, password_hash, verified_at, created_at, display_name, google_sub)
+          VALUES(?, ?, ?, ?, ?, ?)
+        `).run(
+          email,
+          encodedPassword,
+          new Date().toISOString(),
+          new Date().toISOString(),
+          displayName,
+          googleSub
+        );
+        user = db.prepare('SELECT * FROM users WHERE id=?').get(Number(result.lastInsertRowid));
+      }
+    }
+
+    setSession(res, user.id);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.redirect(`${appOrigin}/user-portal`);
+  } catch (error) {
+    console.error('Google sign-in failed:', error?.message || 'unknown error');
+    return res.redirect(`${appOrigin}/sign-in?google=error`);
+  }
+});
+// Discord OAuth routes; existing email authentication remains unchanged.
+app.get('/api/auth/discord', (req, res) => discordStart(req, res));
+app.get('/api/auth/callback', async (req, res) => discordCallback(req, res));
+
+app.get('/api/auth/discord/me', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const user = readSession(req);
+  if (!user) return res.json({ authenticated: false, user: null });
+  return res.json({
+    authenticated: true,
+    user: {
+      id: user.id,
+      username: user.username,
+      displayName: user.global_name,
+      avatar: user.avatar
+    }
+  });
+});
+
+app.post('/api/auth/discord/logout', (_req, res) => {
+  clearCookie(res, COOKIE_NAME);
+  return res.json({ ok: true });
 });
 
 app.listen(port, '127.0.0.1', () => console.log(`Meta CodeLearn auth API listening on 127.0.0.1:${port}`));

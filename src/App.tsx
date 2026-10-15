@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import JSZip from 'jszip';
 import { Link, Redirect, Route, Router as WouterRouter, Switch, useLocation, useParams } from 'wouter';
@@ -1217,6 +1218,95 @@ function SettingsPage() {
     }
   });
 
+  const [profile, setProfile] = useState<{
+    email: string;
+    displayName: string;
+    username: string;
+    avatarPng: string | null;
+  } | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMessage, setProfileMessage] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/auth/profile', { credentials: 'same-origin' })
+      .then(async response => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not load your profile.');
+        return data.profile;
+      })
+      .then(data => {
+        if (active) setProfile(data);
+      })
+      .catch(error => {
+        if (active) setProfileMessage(error.message || 'Could not load your profile.');
+      })
+      .finally(() => {
+        if (active) setProfileLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
+
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!profile) return;
+
+    setProfileSaving(true);
+    setProfileMessage('');
+    const payload: {
+      displayName: string;
+      username?: string;
+      avatarPng: string | null;
+    } = {
+      displayName: profile.displayName.trim(),
+      avatarPng: profile.avatarPng,
+    };
+    if (profile.username.trim()) payload.username = profile.username.trim();
+
+    try {
+      const response = await fetch('/api/auth/profile', {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Could not save your profile.');
+      setProfile(data.profile);
+      setProfileMessage('Profile saved successfully.');
+    } catch (error) {
+      setProfileMessage(error instanceof Error ? error.message : 'Could not save your profile.');
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  function chooseProfilePicture(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (file.type !== 'image/png') {
+      setProfileMessage('Please choose a PNG image.');
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      setProfileMessage('The PNG must be no larger than 1 MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string' && reader.result.startsWith('data:image/png;base64,')) {
+        setProfile(current => current ? { ...current, avatarPng: reader.result as string } : current);
+        setProfileMessage('Picture ready. Save your profile to keep the change.');
+      } else {
+        setProfileMessage('Could not read that PNG. Please try another image.');
+      }
+    };
+    reader.onerror = () => setProfileMessage('Could not read that image. Please try again.');
+    reader.readAsDataURL(file);
+  }
+
   useEffect(() => {
     const sizes: Record<string, string> = { small: '11px', medium: '12px', large: '14px' };
     document.documentElement.style.setProperty('--meta-editor-font-size', sizes[editorSize] || sizes.medium);
@@ -1247,6 +1337,68 @@ function SettingsPage() {
           </div>
         </section>
 
+        <section className="settings-group profile-settings">
+          <div className="settings-group-head">
+            <h2>Your profile</h2>
+            <p>Update the details shown on your Meta account.</p>
+          </div>
+          {profileLoading ? (
+            <div className="profile-editor-body"><p>Loading your profile…</p></div>
+          ) : profile ? (
+            <form className="profile-editor-body" onSubmit={saveProfile}>
+              <div className="profile-picture-row">
+                <div className="profile-avatar-preview">
+                  {profile.avatarPng
+                    ? <img src={profile.avatarPng} alt="Your profile picture" />
+                    : <span>{(profile.displayName || profile.username || profile.email || 'M').slice(0, 1).toUpperCase()}</span>}
+                </div>
+                <div className="profile-picture-controls">
+                  <strong>Profile picture</strong>
+                  <span>PNG only, maximum 1 MB.</span>
+                  <input className="profile-file-input" type="file" accept="image/png,.png" onChange={chooseProfilePicture} aria-label="Upload PNG profile picture" />
+                  {profile.avatarPng && (
+                    <button type="button" className="button-secondary" onClick={() => {
+                      setProfile(current => current ? { ...current, avatarPng: null } : current);
+                      setProfileMessage('Picture removed from the preview. Save your profile to keep the change.');
+                    }}>Remove picture</button>
+                  )}
+                </div>
+              </div>
+              <label className="profile-field">
+                <span>Display name</span>
+                <input className="profile-input" type="text" required minLength={1} maxLength={40}
+                  autoComplete="nickname" value={profile.displayName}
+                  onChange={event => setProfile(current => current ? { ...current, displayName: event.target.value } : current)}
+                  placeholder="Your display name" />
+              </label>
+              <label className="profile-field">
+                <span>Username <small>(optional)</small></span>
+                <input className="profile-input" type="text" minLength={3} maxLength={20}
+                  pattern="[A-Za-z0-9_]{3,20}" title="Use 3–20 letters, numbers, or underscores."
+                  autoComplete="username" value={profile.username}
+                  onChange={event => setProfile(current => current ? { ...current, username: event.target.value } : current)}
+                  placeholder="e.g. MetaBuilder_1" />
+                <small>3–20 characters: letters, numbers, and underscores.</small>
+              </label>
+              <label className="profile-field">
+                <span>Account email</span>
+                <input className="profile-input" type="email" value={profile.email} readOnly />
+              </label>
+              {profileMessage && <p className="profile-status" role="status">{profileMessage}</p>}
+              <div className="profile-save-row">
+                <button className="button-primary" type="submit" disabled={profileSaving}>
+                  {profileSaving ? 'Saving…' : 'Save profile'}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="profile-editor-body">
+              <p className="profile-status" role="status">{profileMessage || 'Please sign in with your Meta email account to edit this profile.'}</p>
+              <Link href="/sign-in" className="button-secondary">Go to sign in</Link>
+              <p className="profile-help">If you signed in with Discord, profile editing through Discord is not connected yet.</p>
+            </div>
+          )}
+        </section>
         <section className="settings-group">
           <div className="settings-group-head">
             <h2>Appearance</h2>
@@ -1427,7 +1579,13 @@ function LoginPage() {
       if (!response.ok) throw new Error(data.error || 'Something went wrong. Please try again.');
       setMessageType('success');
       setMessage(data.message || (isRegistering ? 'Account created. Check your email for a verification link.' : 'Signed in successfully. Opening Meta CodeLearn…'));
-      if (!isRegistering) window.setTimeout(() => window.location.assign('/'), 700);
+      if (!isRegistering) {
+        const requestedNext = new URLSearchParams(window.location.search).get('next');
+        const destination = requestedNext && requestedNext.startsWith('/') && !requestedNext.startsWith('//')
+          ? requestedNext
+          : '/user-portal';
+        window.setTimeout(() => window.location.assign(destination), 700);
+      }
     } catch (error) {
       setMessageType('error');
       setMessage(error instanceof Error ? error.message : 'Unable to connect. Please try again.');
@@ -1486,10 +1644,10 @@ function LoginPage() {
               <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.7 5.2a18.2 18.2 0 0 0-4.5-1.4l-.6 1.2a16.6 16.6 0 0 0-5.2 0l-.6-1.2a18.2 18.2 0 0 0-4.5 1.4C1.5 9.4.7 13.5 1.1 17.5a18.3 18.3 0 0 0 5.5 2.8l1.2-2a11.8 11.8 0 0 1-1.9-.9l.5-.4c3.7 1.7 7.8 1.7 11.5 0l.5.4a11.8 11.8 0 0 1-1.9.9l1.2 2a18.3 18.3 0 0 0 5.5-2.8c.5-4.6-.8-8.7-3.5-12.3ZM8.8 14.9c-1.1 0-2-1-2-2.2s.9-2.2 2-2.2 2 1 2 2.2-.9 2.2-2 2.2Zm6.4 0c-1.1 0-2-1-2-2.2s.9-2.2 2-2.2 2 1 2 2.2-.9 2.2-2 2.2Z"/></svg>
               <span>Continue with Discord</span><ArrowRight aria-hidden="true" />
             </a>
-            <button className="login-provider login-google" type="button" onClick={() => { setMessageType('error'); setMessage('Google sign-in is not configured yet.'); }}>
+            <a className="login-provider login-google" href="/api/auth/google">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.8 3-4.3 3-7.3Z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.5l-3.2-2.5c-.9.6-2 .9-3.4.9-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.4 13.8a6 6 0 0 1 0-3.7V7.5H3.1a10 10 0 0 0 0 8.9l3.3-2.6Z"/><path fill="#EA4335" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.9A9.7 9.7 0 0 0 12 2a10 10 0 0 0-8.9 5.5l3.3 2.6C7.2 7.8 9.4 6 12 6Z"/></svg>
               <span>Continue with Google</span><ArrowRight aria-hidden="true" />
-            </button>
+            </a>
           </>}
           {message && <p className="login-status" data-status={messageType} role="status">{message}</p>}
           <p className="login-legal">By continuing, you agree to Meta's <Link href="/privacy">Privacy Policy</Link>.</p>
@@ -1523,7 +1681,7 @@ function AccountSettingsPage() {
   const [authMessage, setAuthMessage] = useState('');
   useEffect(() => {
     let active = true;
-    fetch('/api/auth/me', { credentials: 'same-origin' })
+    fetch('/api/auth/discord/me', { credentials: 'same-origin' })
       .then(response => response.ok ? response.json() : Promise.reject(new Error('Unable to check sign-in status')))
       .then(data => { if (active) { setDiscordUser(data.authenticated ? data.user : null); setAuthLoading(false); } })
       .catch(() => { if (active) setAuthLoading(false); });
@@ -1534,7 +1692,7 @@ function AccountSettingsPage() {
   }, []);
   async function signOut() {
     try {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+      await fetch('/api/auth/discord/logout', { method: 'POST', credentials: 'same-origin' });
       setDiscordUser(null);
       setAuthMessage('You have signed out.');
     } catch {
@@ -1932,26 +2090,57 @@ function NotFound() {
   );
 }
 
-function HomeRedirect() {
-  return <Redirect to="/user-portal" />;
+function ProtectedRoute({ children }: { children: ReactNode }) {
+  const [status, setStatus] = useState<'checking' | 'signed-in' | 'signed-out'>('checking');
+
+  useEffect(() => {
+    let active = true;
+
+    const emailCheck = fetch('/api/auth/me', { credentials: 'same-origin' })
+      .then(response => response.ok)
+      .catch(() => false);
+
+    const discordCheck = fetch('/api/auth/discord/me', { credentials: 'same-origin' })
+      .then(response => response.ok ? response.json() : null)
+      .then(data => Boolean(data?.authenticated))
+      .catch(() => false);
+
+    Promise.all([emailCheck, discordCheck]).then(([emailSignedIn, discordSignedIn]) => {
+      if (active) setStatus(emailSignedIn || discordSignedIn ? 'signed-in' : 'signed-out');
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (status === 'checking') {
+    return <main className="page-container"><p>Checking sign-in…</p></main>;
+  }
+
+  if (status === 'signed-out') {
+    const next = window.location.pathname + window.location.search;
+    return <Redirect to={`/sign-in?next=${encodeURIComponent(next)}`} />;
+  }
+
+  return <>{children}</>;
 }
 
 function UserPortal() {
   return <HomePage />;
 }
-
 function MainRoutes() {
   return (
     <Switch>
-      <Route path="/" component={HomeRedirect} />
-      <Route path="/user-portal" component={UserPortal} />
-      <Route path="/learn/:lessonId" component={LessonPage} />
-      <Route path="/play" component={PlayPage} />
-      <Route path="/play/:track" component={PlayPage} />
-      <Route path="/account" component={AccountSettingsPage} />
-      <Route path="/projects/:projectId" component={ProjectPage} />
-      <Route path="/projects" component={ProjectsPage} />
-      <Route path="/settings" component={SettingsPage} />
+      <Route path="/" component={HomePage} />
+      <Route path="/user-portal" component={() => <ProtectedRoute><UserPortal /></ProtectedRoute>} />
+      <Route path="/learn/:lessonId" component={() => <ProtectedRoute><LessonPage /></ProtectedRoute>} />
+      <Route path="/play" component={() => <ProtectedRoute><PlayPage /></ProtectedRoute>} />
+      <Route path="/play/:track" component={() => <ProtectedRoute><PlayPage /></ProtectedRoute>} />
+      <Route path="/account" component={() => <ProtectedRoute><AccountSettingsPage /></ProtectedRoute>} />
+      <Route path="/projects/:projectId" component={() => <ProtectedRoute><ProjectPage /></ProtectedRoute>} />
+      <Route path="/projects" component={() => <ProtectedRoute><ProjectsPage /></ProtectedRoute>} />
+      <Route path="/settings" component={() => <ProtectedRoute><SettingsPage /></ProtectedRoute>} />
       <Route path="/pricing" component={PricingPage} />
       <Route path="/privacy" component={PrivacyPage} />
       <Route path="/delete-account" component={DeleteAccountPage} />
@@ -1962,7 +2151,6 @@ function MainRoutes() {
     </Switch>
   );
 }
-
 function Router() {
   return (
     <WouterRouter base={basePath}>

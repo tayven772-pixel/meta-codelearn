@@ -1,1 +1,1 @@
-{"name":"meta-codelearn-discord-bot","version":"1.0.0","private":true,"type":"module","scripts":{"start":"node src/index.js","register":"node src/register-commands.js"},"engines":{"node":">=20"},"dependencies":{"discord.js":"^14.22.1","dotenv":"^16.4.7"}}
+{"name":"meta-codelearn-discord-bot","version":"1.0.0","private":true,"type":"module","scripts":{"start":"node src/index.js","register":"node src/register-commands.js","manage":"node scripts/manage.js"},"engines":{"node":">=20"},"dependencies":{"better-sqlite3":"^13.0.3","discord.js":"^14.22.1","dotenv":"^16.4.7"}}
