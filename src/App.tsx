@@ -7,6 +7,7 @@ import {
   ArrowRight,
   BookOpen,
   Check,
+  ClipboardCheck,
   CheckCircle2,
   CircleHelp,
   Clock3,
@@ -310,6 +311,7 @@ function useProgress() {
       setSnapshot((current) => (
         current.storageKey === storageKey &&
         current.progress.completedLessonIds.join('|') === next.completedLessonIds.join('|') &&
+        (current.progress.completedQuizLessonIds ?? []).join('|') === (next.completedQuizLessonIds ?? []).join('|') &&
         current.progress.skillLevel === next.skillLevel
           ? current
           : { storageKey, progress: next }
@@ -338,6 +340,22 @@ function useProgress() {
         };
   });
 
+  const completeQuiz = (lessonId: string) => setSnapshot((current) => {
+    const currentProgress = current.storageKey === storageKey
+      ? current.progress
+      : readProgress(storageKey);
+    const completedQuizLessonIds = currentProgress.completedQuizLessonIds ?? [];
+    return completedQuizLessonIds.includes(lessonId)
+      ? current
+      : {
+          storageKey,
+          progress: {
+            ...currentProgress,
+            completedQuizLessonIds: [...completedQuizLessonIds, lessonId],
+          },
+        };
+  });
+
   const setSkillLevel = (skillLevel: LearnerSkillLevel) => setSnapshot((current) => {
     const currentProgress = current.storageKey === storageKey
       ? current.progress
@@ -347,7 +365,7 @@ function useProgress() {
       : { storageKey, progress: { ...currentProgress, skillLevel } };
   });
 
-  return { progress, complete, setSkillLevel };
+  return { progress, complete, completeQuiz, setSkillLevel };
 }
 
 function Header({ progressCount }: { progressCount: number }) {
@@ -2091,7 +2109,7 @@ function isAnswerCorrect(answer: string, lesson: Lesson): boolean {
 function LessonPage() {
   const params = useParams<{ lessonId: string }>();
   const lesson = lessonFor(params.lessonId);
-  const { progress, complete } = useProgress();
+  const { progress, complete, completeQuiz } = useProgress();
   const [languageId, setLanguageId] = useState(() => {
     try {
       return localStorage.getItem(LANGUAGE_KEY) ?? localStorage.getItem('code-atlas-language-v1') ?? 'python';
@@ -2102,12 +2120,18 @@ function LessonPage() {
   const [answer, setAnswer] = useState('');
   const [feedback, setFeedback] = useState<'correct' | 'try-again' | null>(null);
   const [showHint, setShowHint] = useState(false);
+  const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({});
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
+  const [quizScore, setQuizScore] = useState<number | null>(null);
   const activeLanguage = languageFor(languageId);
 
   useEffect(() => {
     setAnswer('');
     setFeedback(null);
     setShowHint(false);
+    setQuizAnswers({});
+    setQuizSubmitted(false);
+    setQuizScore(null);
   }, [params.lessonId]);
 
   if (!lesson) return <NotFound />;
@@ -2116,6 +2140,7 @@ function LessonPage() {
   const previous = lessons[currentIndex - 1];
   const next = lesson.nextLessonId ? lessonFor(lesson.nextLessonId) : undefined;
   const isComplete = progress.completedLessonIds.includes(lesson.id);
+  const quizPassed = progress.completedQuizLessonIds?.includes(lesson.id) ?? false;
   const example = lesson.examplesByLanguage[languageId];
   const displayExample = example?.replace(/\\n/g, '\n');
 
@@ -2127,6 +2152,13 @@ function LessonPage() {
     } else {
       setFeedback('try-again');
     }
+  };
+
+  const submitQuiz = () => {
+    const score = lesson.quiz.reduce((total, question, index) => total + (quizAnswers[index] === question.answerIndex ? 1 : 0), 0);
+    setQuizScore(score);
+    setQuizSubmitted(true);
+    if (score >= 2) completeQuiz(lesson.id);
   };
 
   const updateLanguage = (value: string) => {
@@ -2201,6 +2233,54 @@ function LessonPage() {
               )}
               {isComplete && feedback !== 'correct' && <div className="feedback correct" role="status" data-testid="status-already-complete"><CheckCircle2 aria-hidden="true" /><span>You’ve completed this lesson before. Feel free to practice again.</span></div>}
             </form>
+            {(isComplete || feedback === 'correct') && (
+              <section className="quiz-section" aria-labelledby="quiz-heading" data-testid="section-lesson-checkpoint">
+                <div className="quiz-heading"><ClipboardCheck aria-hidden="true" /> Lesson checkpoint</div>
+                <h2 id="quiz-heading">Quick knowledge check</h2>
+                <p className="quiz-intro">Answer these three short questions to check what stuck. You need 2 out of 3 to pass, and you can retry whenever you like.</p>
+                {lesson.quiz.map((question, questionIndex) => (
+                  <fieldset className="quiz-question" key={question.question}>
+                    <legend>{questionIndex + 1}. {question.question}</legend>
+                    <div className="quiz-options">
+                      {question.options.map((option, optionIndex) => {
+                        const selected = quizAnswers[questionIndex] === optionIndex;
+                        const correct = quizSubmitted && question.answerIndex === optionIndex;
+                        const incorrect = quizSubmitted && selected && question.answerIndex !== optionIndex;
+                        return (
+                          <label className={`quiz-option${correct ? ' is-correct' : ''}${incorrect ? ' is-incorrect' : ''}`} key={option}>
+                            <input
+                              type="radio"
+                              name={`quiz-${lesson.id}-${questionIndex}`}
+                              value={optionIndex}
+                              checked={selected}
+                              onChange={() => {
+                                setQuizAnswers((current) => ({ ...current, [questionIndex]: optionIndex }));
+                                setQuizSubmitted(false);
+                                setQuizScore(null);
+                              }}
+                            />
+                            <span>{option}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {quizSubmitted && <p className="quiz-explanation"><strong>Why:</strong> {question.explanation}</p>}
+                  </fieldset>
+                ))}
+                <div className="exercise-actions">
+                  <button type="button" className="button-primary" onClick={submitQuiz} disabled={Object.keys(quizAnswers).length < lesson.quiz.length} data-testid="button-submit-checkpoint">
+                    {quizSubmitted ? 'Check again' : 'Check my answers'} <ArrowRight aria-hidden="true" />
+                  </button>
+                  {quizPassed && quizScore === null && <span className="level-label">Checkpoint already passed</span>}
+                </div>
+                {quizScore !== null && (
+                  <div className={`quiz-result ${quizScore >= 2 ? 'passed' : 'retry'}`} role="status" data-testid="status-checkpoint-result">
+                    {quizScore >= 2 ? <CheckCircle2 aria-hidden="true" /> : <CircleHelp aria-hidden="true" />}
+                    <span><strong>{quizScore >= 2 ? 'Checkpoint passed!' : 'Nearly there — try again.'}</strong> You scored {quizScore} out of {lesson.quiz.length}. {quizScore >= 2 ? 'You can move on with confidence, or review the explanations above.' : 'Review the explanations, change your answers, and check again.'}</span>
+                  </div>
+                )}
+              </section>
+            )}
             <nav className="lesson-nav" aria-label="Lesson navigation">
               {previous ? <Link href={`/learn/${previous.id}`} className="button-secondary" data-testid="button-previous-lesson"><ArrowLeft aria-hidden="true" /> Previous</Link> : <span className="lesson-nav-spacer" />}
               {next ? (
