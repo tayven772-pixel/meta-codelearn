@@ -1723,6 +1723,7 @@ function AccountSettingsPage() {
   const [emailUser, setEmailUser] = useState<{ id: string; email: string; verified: boolean; displayName?: string | null; profilePicture?: string | null } | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authMessage, setAuthMessage] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
   useEffect(() => {
     let active = true;
     async function checkSessions() {
@@ -1769,6 +1770,31 @@ function AccountSettingsPage() {
       setAuthMessage('Could not sign out right now. Please try again.');
     }
   }
+  async function deleteAccount() {
+    const confirmed = window.confirm(
+      'Delete your Meta account data and clear saved learning progress and projects on this browser? This cannot be undone and does not delete your Google or Discord account.'
+    );
+    if (!confirmed || isDeleting) return;
+    setIsDeleting(true);
+    setAuthMessage('');
+    try {
+      const response = await fetch('/api/auth/delete-account', {
+        method: 'POST',
+        credentials: 'same-origin',
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || 'Could not delete your Meta account.');
+      }
+      for (const key of ['meta-progress-v1', 'code-atlas-progress-v1', 'meta-projects-v2', 'meta-projects-v1']) {
+        localStorage.removeItem(key);
+      }
+      window.location.assign('/sign-in?account=deleted');
+    } catch (error) {
+      setAuthMessage(error instanceof Error ? error.message : 'Could not delete your Meta account. Please try again.');
+      setIsDeleting(false);
+    }
+  }
   return (
     <AppShell>
       <main className="account-page">
@@ -1803,6 +1829,13 @@ function AccountSettingsPage() {
               </div>
             </div>
           )}
+          <section className="danger-zone">
+            <h2>Delete Meta account</h2>
+            <p>Delete your Meta email/Google account data, or clear your Discord sign-in session, and remove saved learning progress and projects from this browser. This does not delete your Google or Discord account.</p>
+            <button type="button" className="danger-button" onClick={deleteAccount} disabled={isDeleting || authLoading || (!discordUser && !emailUser)}>
+              {isDeleting ? 'Deleting account…' : 'Delete Meta account'}
+            </button>
+          </section>
           <div className="account-setting-block">
             <h2>Your local data</h2>
             <p>Lesson progress and project data currently remain on this browser. Discord sign-in does not yet sync learning data between devices.</p>
