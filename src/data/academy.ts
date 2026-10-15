@@ -25,6 +25,7 @@ export type Lesson = {
 export type LearnerSkillLevel = 'beginner' | 'intermediate' | 'pro';
 export type Progress = {
   completedLessonIds: string[];
+  completedQuizLessonIds?: string[];
   skillLevel?: LearnerSkillLevel;
 };
 
