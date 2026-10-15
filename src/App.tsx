@@ -577,37 +577,72 @@ function PlayPage() {
 
   return (
     <AppShell>
-      <main className="lesson-main play-page">
-        <div className="lesson-head">
-          <Link href="/user-portal" className="back-link"><ArrowLeft aria-hidden="true" /> Back to Meta</Link>
-          <div className="lesson-heading-row">
-            <div>
-              <div className="eyebrow"><span className="eyebrow-line" /> Lesson Play</div>
-              <h1>{selected ? selected.title : 'Build something real.'}</h1>
-              <p className="lesson-sub">
-                {selected
-                  ? selected.description
-                  : 'Pick a project track. Meta teaches the concept first, then gives you a guided build mission.'}
-              </p>
+      <main className="home-main play-page-main">
+        <section className="hero" aria-labelledby="play-heading">
+          <div className="hero-copy-block">
+            <div className="eyebrow"><span className="eyebrow-line" /> {selected ? `Your build path / ${selected.shortTitle}` : 'Lesson Play / build to learn'}</div>
+            <h1 id="play-heading">
+              {selected ? <>Build with <em>{selected.shortTitle}.</em></> : <>Choose a path.<br /><em>Build something real.</em></>}
+            </h1>
+            <p className="hero-copy">
+              {selected
+                ? selected.description
+                : 'Learn programming by making games, websites, apps, and more. Start with a small idea, practice the concept, then build something you can call your own.'}
+            </p>
+            <div className="hero-actions">
+              {selected ? (
+                <>
+                  <a href="#your-mission" className="button-primary">See your mission <ArrowRight aria-hidden="true" /></a>
+                  <Link href="/play" className="text-link"><ArrowLeft aria-hidden="true" /> All learning paths</Link>
+                </>
+              ) : (
+                <>
+                  <a href="#play-tracks" className="button-primary">Explore learning paths <ArrowRight aria-hidden="true" /></a>
+                  <Link href="/#learning-path" className="text-link">Foundation lessons <ArrowRight aria-hidden="true" /></Link>
+                </>
+              )}
             </div>
-            <div className="lesson-meta"><Play aria-hidden="true" /> Project-based learning</div>
           </div>
-        </div>
+          <div className="hero-visual" aria-label="A sample code card showing a small programming project">
+            <span className="hero-note">FIG. 02 / LEARN BY MAKING</span>
+            <div className="atlas-card">
+              <div className="code-window-head">
+                <span className="window-dots"><i /><i /><i /></span>
+                <span>{selected ? `${selected.shortTitle.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_project.js` : 'first_project.js'}</span>
+                <span>JS</span>
+              </div>
+              <div className="code-row"><span className="line-no">01</span><span><span className="code-comment">// Start with one small idea</span></span></div>
+              <div className="code-row"><span className="line-no">02</span><span><span className="code-key">const</span> project = <span className="code-string">"your idea"</span>;</span></div>
+              <div className="code-row"><span className="line-no">03</span><span><span className="code-key">learn</span>(project);</span></div>
+              <div className="code-row"><span className="line-no">04</span><span><span className="code-comment">// Then make it your own</span></span></div>
+            </div>
+            <div className="visual-stamp"><span><b>{selected ? selected.projects.length : playTracks.length}</b><br />{selected ? 'build steps' : 'paths to build'}</span></div>
+          </div>
+        </section>
 
         {!selected ? (
-          <section className="play-hub-grid" aria-label="Lesson Play tracks">
-            {playTracks.map((track) => (
-              <Link href={`/play/${track.id}`} className="play-hub-card" key={track.id}>
-                <span className="play-hub-kicker">{track.shortTitle}</span>
-                <h2>{track.title}</h2>
-                <p>{track.description}</p>
-                <span className="play-outcome">{track.outcome}</span>
-                <span className="play-open">Start track <ArrowRight aria-hidden="true" /></span>
-              </Link>
-            ))}
+          <section className="section play-track-library" id="play-tracks" aria-labelledby="play-tracks-heading">
+            <div className="section-heading">
+              <div>
+                <p className="section-kicker">The project library / build your skills</p>
+                <h2 id="play-tracks-heading">What do you want to make?</h2>
+                <p className="section-sub">Choose a track and turn the ideas into a real project, one checkpoint at a time.</p>
+              </div>
+            </div>
+            <div className="play-hub-grid" aria-label="Lesson Play tracks">
+              {playTracks.map((track) => (
+                <Link href={`/play/${track.id}`} className="play-hub-card" key={track.id}>
+                  <span className="play-hub-kicker">{track.shortTitle}</span>
+                  <h2>{track.title}</h2>
+                  <p>{track.description}</p>
+                  <span className="play-outcome">{track.outcome}</span>
+                  <span className="play-open">Start track <ArrowRight aria-hidden="true" /></span>
+                </Link>
+              ))}
+            </div>
           </section>
         ) : (
-          <section className="play-track-layout">
+          <section className="play-track-layout" id="your-mission">
             <article className="play-track-main">
               <p className="section-kicker">Your mission</p>
               <h2>{selected.outcome}</h2>
