@@ -1642,6 +1642,7 @@ function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isRegistering, setIsRegistering] = useState(window.location.pathname.startsWith('/sign-up'));
   const [busy, setBusy] = useState(false);
+  const [showResend, setShowResend] = useState(false);
   const [message, setMessage] = useState(() =>
     new URLSearchParams(window.location.search).get('account') === 'deleted'
       ? 'Your Meta account data has been deleted.'
@@ -1663,7 +1664,11 @@ function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Something went wrong. Please try again.');
+      if (!response.ok) {
+        setShowResend(!isRegistering && response.status === 403 && String(data.error || '').toLowerCase().includes('verify'));
+        throw new Error(data.error || 'Something went wrong. Please try again.');
+      }
+      setShowResend(false);
       setMessageType('success');
       setMessage(data.message || (isRegistering ? 'Account created. Check your email for a verification link.' : 'Signed in successfully. Opening Meta CodeLearn…'));
       if (!isRegistering) {
@@ -1681,8 +1686,33 @@ function LoginPage() {
     }
   }
 
+  async function resendVerification() {
+    if (busy) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      const response = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Could not resend the verification email.');
+      setMessageType('success');
+      setMessage(data.message || 'A new verification email has been sent.');
+      setShowResend(false);
+    } catch (error) {
+      setMessageType('error');
+      setMessage(error instanceof Error ? error.message : 'Could not resend the verification email.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function switchMode(registering: boolean) {
     setIsRegistering(registering);
+    setShowResend(false);
     setMessage('');
     window.history.replaceState(null, '', registering ? '/sign-up' : '/sign-in');
   }
@@ -1721,6 +1751,7 @@ function LoginPage() {
             </div>
             <button className="login-submit" type="submit" disabled={busy}>{busy ? 'Please wait…' : isRegistering ? 'Create account' : 'Sign in'} <ArrowRight aria-hidden="true" /></button>
           </form>
+          {!isRegistering && showResend && <p className="login-create-copy">Email not verified or link expired? <button type="button" className="login-text-button" onClick={resendVerification} disabled={busy}>Resend verification email</button></p>}
           <p className="login-create-copy">
             {isRegistering ? 'Already have an account? ' : 'New to meta? '}
             <button type="button" className="login-text-button" onClick={() => switchMode(!isRegistering)}>{isRegistering ? 'Sign in' : 'Create an account'}</button>
@@ -1759,7 +1790,7 @@ function VerifyEmailPage() {
       })
       .catch(error => setMessage(error instanceof Error ? error.message : 'Verification failed. Please try again.'));
   }, []);
-  return <main className="login-page"><section className="login-card" style={{ maxWidth: 560, margin: '12vh auto' }}><p className="section-kicker">META CODELEARN</p><h2>{success ? 'Email verified' : 'Verify your email'}</h2><p className="login-card-subtitle" role="status">{message}</p>{success && <Link className="login-submit" href="/sign-in">Continue to sign in <ArrowRight aria-hidden="true" /></Link>}</section></main>;
+  return <main className="login-page"><section className="login-card" style={{ maxWidth: 560, margin: '12vh auto' }}><p className="section-kicker">META CODELEARN</p><h2>{success ? 'Email verified' : 'Verify your email'}</h2><p className="login-card-subtitle" role="status">{message}</p>{success ? <Link className="login-submit" href="/sign-in">Continue to sign in <ArrowRight aria-hidden="true" /></Link> : <Link className="login-submit" href="/sign-in">Back to sign in <ArrowRight aria-hidden="true" /></Link>}</section></main>;
 }
 
 function AccountSettingsPage() {
