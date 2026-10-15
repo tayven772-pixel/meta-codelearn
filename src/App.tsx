@@ -577,37 +577,72 @@ function PlayPage() {
 
   return (
     <AppShell>
-      <main className="lesson-main play-page">
-        <div className="lesson-head">
-          <Link href="/user-portal" className="back-link"><ArrowLeft aria-hidden="true" /> Back to Meta</Link>
-          <div className="lesson-heading-row">
-            <div>
-              <div className="eyebrow"><span className="eyebrow-line" /> Lesson Play</div>
-              <h1>{selected ? selected.title : 'Build something real.'}</h1>
-              <p className="lesson-sub">
-                {selected
-                  ? selected.description
-                  : 'Pick a project track. Meta teaches the concept first, then gives you a guided build mission.'}
-              </p>
+      <main className="home-main play-page-main">
+        <section className="hero" aria-labelledby="play-heading">
+          <div className="hero-copy-block">
+            <div className="eyebrow"><span className="eyebrow-line" /> {selected ? `Your build path / ${selected.shortTitle}` : 'Lesson Play / build to learn'}</div>
+            <h1 id="play-heading">
+              {selected ? <>Build with <em>{selected.shortTitle}.</em></> : <>Choose a path.<br /><em>Build something real.</em></>}
+            </h1>
+            <p className="hero-copy">
+              {selected
+                ? selected.description
+                : 'Learn programming by making games, websites, apps, and more. Start with a small idea, practice the concept, then build something you can call your own.'}
+            </p>
+            <div className="hero-actions">
+              {selected ? (
+                <>
+                  <a href="#your-mission" className="button-primary">See your mission <ArrowRight aria-hidden="true" /></a>
+                  <Link href="/play" className="text-link"><ArrowLeft aria-hidden="true" /> All learning paths</Link>
+                </>
+              ) : (
+                <>
+                  <a href="#play-tracks" className="button-primary">Explore learning paths <ArrowRight aria-hidden="true" /></a>
+                  <Link href="/#learning-path" className="text-link">Foundation lessons <ArrowRight aria-hidden="true" /></Link>
+                </>
+              )}
             </div>
-            <div className="lesson-meta"><Play aria-hidden="true" /> Project-based learning</div>
           </div>
-        </div>
+          <div className="hero-visual" aria-label="A sample code card showing a small programming project">
+            <span className="hero-note">FIG. 02 / LEARN BY MAKING</span>
+            <div className="atlas-card">
+              <div className="code-window-head">
+                <span className="window-dots"><i /><i /><i /></span>
+                <span>{selected ? `${selected.shortTitle.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_project.js` : 'first_project.js'}</span>
+                <span>JS</span>
+              </div>
+              <div className="code-row"><span className="line-no">01</span><span><span className="code-comment">// Start with one small idea</span></span></div>
+              <div className="code-row"><span className="line-no">02</span><span><span className="code-key">const</span> project = <span className="code-string">"your idea"</span>;</span></div>
+              <div className="code-row"><span className="line-no">03</span><span><span className="code-key">learn</span>(project);</span></div>
+              <div className="code-row"><span className="line-no">04</span><span><span className="code-comment">// Then make it your own</span></span></div>
+            </div>
+            <div className="visual-stamp"><span><b>{selected ? selected.projects.length : playTracks.length}</b><br />{selected ? 'build steps' : 'paths to build'}</span></div>
+          </div>
+        </section>
 
         {!selected ? (
-          <section className="play-hub-grid" aria-label="Lesson Play tracks">
-            {playTracks.map((track) => (
-              <Link href={`/play/${track.id}`} className="play-hub-card" key={track.id}>
-                <span className="play-hub-kicker">{track.shortTitle}</span>
-                <h2>{track.title}</h2>
-                <p>{track.description}</p>
-                <span className="play-outcome">{track.outcome}</span>
-                <span className="play-open">Start track <ArrowRight aria-hidden="true" /></span>
-              </Link>
-            ))}
+          <section className="section play-track-library" id="play-tracks" aria-labelledby="play-tracks-heading">
+            <div className="section-heading">
+              <div>
+                <p className="section-kicker">The project library / build your skills</p>
+                <h2 id="play-tracks-heading">What do you want to make?</h2>
+                <p className="section-sub">Choose a track and turn the ideas into a real project, one checkpoint at a time.</p>
+              </div>
+            </div>
+            <div className="play-hub-grid" aria-label="Lesson Play tracks">
+              {playTracks.map((track) => (
+                <Link href={`/play/${track.id}`} className="play-hub-card" key={track.id}>
+                  <span className="play-hub-kicker">{track.shortTitle}</span>
+                  <h2>{track.title}</h2>
+                  <p>{track.description}</p>
+                  <span className="play-outcome">{track.outcome}</span>
+                  <span className="play-open">Start track <ArrowRight aria-hidden="true" /></span>
+                </Link>
+              ))}
+            </div>
           </section>
         ) : (
-          <section className="play-track-layout">
+          <section className="play-track-layout" id="your-mission">
             <article className="play-track-main">
               <p className="section-kicker">Your mission</p>
               <h2>{selected.outcome}</h2>
@@ -1607,6 +1642,7 @@ function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isRegistering, setIsRegistering] = useState(window.location.pathname.startsWith('/sign-up'));
   const [busy, setBusy] = useState(false);
+  const [showResend, setShowResend] = useState(false);
   const [message, setMessage] = useState(() =>
     new URLSearchParams(window.location.search).get('account') === 'deleted'
       ? 'Your Meta account data has been deleted.'
@@ -1628,7 +1664,11 @@ function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Something went wrong. Please try again.');
+      if (!response.ok) {
+        setShowResend(!isRegistering && response.status === 403 && String(data.error || '').toLowerCase().includes('verify'));
+        throw new Error(data.error || 'Something went wrong. Please try again.');
+      }
+      setShowResend(false);
       setMessageType('success');
       setMessage(data.message || (isRegistering ? 'Account created. Check your email for a verification link.' : 'Signed in successfully. Opening Meta CodeLearn…'));
       if (!isRegistering) {
@@ -1646,8 +1686,33 @@ function LoginPage() {
     }
   }
 
+  async function resendVerification() {
+    if (busy) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      const response = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Could not resend the verification email.');
+      setMessageType('success');
+      setMessage(data.message || 'A new verification email has been sent.');
+      setShowResend(false);
+    } catch (error) {
+      setMessageType('error');
+      setMessage(error instanceof Error ? error.message : 'Could not resend the verification email.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function switchMode(registering: boolean) {
     setIsRegistering(registering);
+    setShowResend(false);
     setMessage('');
     window.history.replaceState(null, '', registering ? '/sign-up' : '/sign-in');
   }
@@ -1686,6 +1751,7 @@ function LoginPage() {
             </div>
             <button className="login-submit" type="submit" disabled={busy}>{busy ? 'Please wait…' : isRegistering ? 'Create account' : 'Sign in'} <ArrowRight aria-hidden="true" /></button>
           </form>
+          {!isRegistering && showResend && <p className="login-create-copy">Email not verified or link expired? <button type="button" className="login-text-button" onClick={resendVerification} disabled={busy}>Resend verification email</button></p>}
           <p className="login-create-copy">
             {isRegistering ? 'Already have an account? ' : 'New to meta? '}
             <button type="button" className="login-text-button" onClick={() => switchMode(!isRegistering)}>{isRegistering ? 'Sign in' : 'Create an account'}</button>
@@ -1724,7 +1790,7 @@ function VerifyEmailPage() {
       })
       .catch(error => setMessage(error instanceof Error ? error.message : 'Verification failed. Please try again.'));
   }, []);
-  return <main className="login-page"><section className="login-card" style={{ maxWidth: 560, margin: '12vh auto' }}><p className="section-kicker">META CODELEARN</p><h2>{success ? 'Email verified' : 'Verify your email'}</h2><p className="login-card-subtitle" role="status">{message}</p>{success && <Link className="login-submit" href="/sign-in">Continue to sign in <ArrowRight aria-hidden="true" /></Link>}</section></main>;
+  return <main className="login-page"><section className="login-card" style={{ maxWidth: 560, margin: '12vh auto' }}><p className="section-kicker">META CODELEARN</p><h2>{success ? 'Email verified' : 'Verify your email'}</h2><p className="login-card-subtitle" role="status">{message}</p>{success ? <Link className="login-submit" href="/sign-in">Continue to sign in <ArrowRight aria-hidden="true" /></Link> : <Link className="login-submit" href="/sign-in">Back to sign in <ArrowRight aria-hidden="true" /></Link>}</section></main>;
 }
 
 function AccountSettingsPage() {

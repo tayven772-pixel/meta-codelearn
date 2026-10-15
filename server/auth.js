@@ -96,6 +96,8 @@ const mailer = nodemailer.createTransport({
   auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_APP_PASSWORD },
 });
 app.disable('x-powered-by');
+// Trust only the local reverse proxy so rate limits use the real client IP.
+app.set('trust proxy', 'loopback');
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '2mb' }));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, limit: 100, standardHeaders: true, legacyHeaders: false }));
@@ -159,7 +161,7 @@ app.post('/api/auth/register', async (req, res) => {
   const password = String(req.body?.password || '');
   if (!validEmail(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
   if (password.length < 10 || password.length > 128) return res.status(400).json({ error: 'Use a password between 10 and 128 characters.' });
-  if (db.prepare('SELECT id FROM users WHERE email=?').get(email)) return res.status(409).json({ error: 'An account with that email already exists. Try signing in instead.' });
+  if (db.prepare('SELECT id FROM users WHERE email=?').get(email)) return res.status(409).json({ error: 'An account with that email already exists. If you have not verified it yet, sign in and choose “Resend verification email”.' });
 
   const encoded = await passwordHash(password);
   let userId;
@@ -183,13 +185,41 @@ app.post('/api/auth/register', async (req, res) => {
   return res.status(201).json({ message: 'Account created. Check your email for a verification link that expires in 30 minutes.' });
 });
 
+app.post('/api/auth/resend-verification', async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  const password = String(req.body?.password || '');
+  if (!validEmail(email) || !password || password.length > 128) {
+    return res.status(400).json({ error: 'Enter the email address and password used to create your account.' });
+  }
+
+  const user = db.prepare('SELECT * FROM users WHERE email=?').get(email);
+  if (!user || user.verified_at || !(await verifyPassword(password, user.password_hash))) {
+    return res.status(400).json({ error: 'We could not find an unverified account with that email and password. Check your details or create a new account with another email.' });
+  }
+
+  db.prepare('DELETE FROM email_tokens WHERE user_id=?').run(user.id);
+  const token = randomToken();
+  db.prepare('INSERT INTO email_tokens(token_hash,user_id,expires_at) VALUES(?,?,?)')
+    .run(hash(token), user.id, Date.now() + 30 * 60 * 1000);
+
+  try {
+    await sendVerification(email, token);
+  } catch (error) {
+    console.error('Verification resend failed:', error?.message || 'unknown error');
+    db.prepare('DELETE FROM email_tokens WHERE user_id=?').run(user.id);
+    return res.status(503).json({ error: 'We could not send the verification email right now. Please try again in a little while.' });
+  }
+
+  return res.json({ message: 'A new verification email has been sent. The previous link will no longer work, and this link expires in 30 minutes.' });
+});
+
 app.get('/api/auth/verify', (req, res) => {
   const token = String(req.query.token || '');
   if (!/^[A-Za-z0-9_-]{40,60}$/.test(token)) return res.status(400).json({ error: 'This verification link is invalid or expired.' });
   const row = db.prepare('SELECT user_id,expires_at FROM email_tokens WHERE token_hash=?').get(hash(token));
   if (!row || row.expires_at < Date.now()) {
     if (row) db.prepare('DELETE FROM email_tokens WHERE token_hash=?').run(hash(token));
-    return res.status(400).json({ error: 'This verification link is invalid or expired. Please register again.' });
+    return res.status(400).json({ error: 'This verification link is invalid or expired. Return to sign in and request a new verification email.' });
   }
   db.prepare('UPDATE users SET verified_at=? WHERE id=?').run(new Date().toISOString(), row.user_id);
   db.prepare('DELETE FROM email_tokens WHERE user_id=?').run(row.user_id);

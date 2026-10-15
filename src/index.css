@@ -501,6 +501,10 @@ button { color: inherit; }
   .auth-copy h1 { font-size: clamp(42px, 8vw, 62px); }
   .progression-section { gap: 20px; padding: 24px; }
 }
+@media (min-width: 651px) and (max-width: 980px) {
+  .play-hub-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 @media (max-width: 650px) {
   .topbar { height: 62px; padding: 0 18px; }
   .top-links { gap: 10px; font-size: 10px; }
@@ -576,10 +580,11 @@ button { color: inherit; }
 .play-card strong { font: 600 18px var(--app-font-serif); }
 .play-card p { margin: 6px 0 0; color: #74746d; font-size: 11px; line-height: 1.6; }
 .play-card > svg { width: 16px; color: #2563eb; }
-.play-page { padding-bottom: 72px; }
-.play-hub-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; padding: 30px 0 70px; }
-.play-hub-card { min-height: 250px; display: flex; flex-direction: column; padding: 22px; border: 1px solid #d7d3c4; border-radius: 11px; background: #f9f6ed; transition: transform .2s, border-color .2s; }
-.play-hub-card:hover { transform: translateY(-4px); border-color: #60a5fa; }
+.play-page-main { padding-bottom: 72px; }
+.play-track-library { padding-top: 48px; }
+.play-hub-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px; padding: 0 0 34px; }
+.play-hub-card { min-height: 250px; display: flex; flex-direction: column; padding: 19px; border: 1px solid #dedacb; border-radius: 8px; background: #f9f6ed; transition: transform .2s, border-color .2s, box-shadow .2s; }
+.play-hub-card:hover { transform: translateY(-3px); border-color: #60a5fa; box-shadow: 0 9px 22px #3739270d; }
 .play-hub-kicker { color: #2563eb; font: 10px var(--app-font-mono); letter-spacing: .1em; text-transform: uppercase; }
 .play-hub-card h2 { margin: 10px 0 8px; font: 600 27px var(--app-font-serif); letter-spacing: -.03em; }
 .play-hub-card p { margin: 0; color: #6f706b; font-size: 12px; line-height: 1.7; }
