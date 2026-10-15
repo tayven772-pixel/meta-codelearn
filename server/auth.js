@@ -77,6 +77,9 @@ if (!userColumns.has('avatar_png')) {
 if (!userColumns.has('google_sub')) {
   db.exec('ALTER TABLE users ADD COLUMN google_sub TEXT');
 }
+if (!userColumns.has('google_picture')) {
+  db.exec('ALTER TABLE users ADD COLUMN google_picture TEXT');
+}
 db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique
   ON users(username)
@@ -101,7 +104,13 @@ const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const randomToken = () => crypto.randomBytes(32).toString('base64url');
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 const validEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
-const publicUser = (user) => ({ id: user.id, email: user.email, verified: Boolean(user.verified_at) });
+const publicUser = (user) => ({
+  id: user.id,
+  email: user.email,
+  verified: Boolean(user.verified_at),
+  displayName: user.display_name || null,
+  profilePicture: user.google_picture || (user.avatar_png ? `data:image/png;base64,${Buffer.from(user.avatar_png).toString('base64')}` : null),
+});
 
 async function sendVerification(email, token) {
   const link = `${appOrigin}/verify-email?token=${encodeURIComponent(token)}`;
@@ -212,6 +221,32 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ ok: true });
 });
 
+app.post('/api/auth/delete-account', (req, res) => {
+  const user = sessionUser(req);
+  const discordUser = readSession(req);
+
+  if (!user && !discordUser) {
+    return res.status(401).json({ error: 'Please sign in before deleting your Meta account.' });
+  }
+
+  if (user) {
+    db.prepare('DELETE FROM users WHERE id=?').run(user.id);
+  }
+
+  res.clearCookie('meta_session', {
+    httpOnly: true,
+    secure: appOrigin.startsWith('https://'),
+    sameSite: 'lax',
+    path: '/',
+  });
+  clearCookie(res, COOKIE_NAME);
+  return res.json({
+    ok: true,
+    deletedMetaAccount: Boolean(user),
+    clearedDiscordSession: Boolean(discordUser),
+  });
+});
+
 
 
 // Profile API: only the account owning the active email session can edit it.
@@ -225,7 +260,8 @@ app.get('/api/auth/profile', (req, res) => {
       email: user.email,
       displayName: user.display_name || '',
       username: user.username || '',
-      avatarPng: avatar ? `data:image/png;base64,${Buffer.from(avatar).toString('base64')}` : null
+      avatarPng: avatar ? `data:image/png;base64,${Buffer.from(avatar).toString('base64')}` : null,
+      googlePicture: user.google_picture || null
     }
   });
 });
@@ -290,7 +326,8 @@ app.patch('/api/auth/profile', (req, res) => {
       email: user.email,
       displayName,
       username,
-      avatarPng: avatarPng ? `data:image/png;base64,${Buffer.from(avatarPng).toString('base64')}` : null
+      avatarPng: avatarPng ? `data:image/png;base64,${Buffer.from(avatarPng).toString('base64')}` : null,
+      googlePicture: user.google_picture || null
     }
   });
 });
@@ -369,12 +406,19 @@ app.get('/api/auth/google/callback', async (req, res) => {
     const googleSub = String(profile?.sub || '');
     const email = normalizeEmail(profile?.email);
     const emailVerified = profile?.email_verified === true;
+    const googlePicture = typeof profile?.picture === 'string' && profile.picture.startsWith('https://')
+      ? profile.picture.slice(0, 2048)
+      : null;
 
     if (!googleSub || !validEmail(email) || !emailVerified) {
       return res.redirect(`${appOrigin}/sign-in?google=error`);
     }
 
     let user = db.prepare('SELECT * FROM users WHERE google_sub=?').get(googleSub);
+    if (user) {
+      db.prepare('UPDATE users SET google_picture=? WHERE id=?').run(googlePicture, user.id);
+      user = db.prepare('SELECT * FROM users WHERE id=?').get(user.id);
+    }
 
     if (!user) {
       user = db.prepare('SELECT * FROM users WHERE email=? COLLATE NOCASE').get(email);
@@ -385,22 +429,23 @@ app.get('/api/auth/google/callback', async (req, res) => {
 
       if (user) {
         db.prepare(
-          'UPDATE users SET google_sub=?, verified_at=COALESCE(verified_at, ?) WHERE id=?'
-        ).run(googleSub, new Date().toISOString(), user.id);
+          'UPDATE users SET google_sub=?, google_picture=?, verified_at=COALESCE(verified_at, ?) WHERE id=?'
+        ).run(googleSub, googlePicture, new Date().toISOString(), user.id);
         user = db.prepare('SELECT * FROM users WHERE id=?').get(user.id);
       } else {
         const encodedPassword = await passwordHash(randomToken());
         const displayName = String(profile?.name || '').trim().slice(0, 40) || null;
         const result = db.prepare(`
-          INSERT INTO users(email, password_hash, verified_at, created_at, display_name, google_sub)
-          VALUES(?, ?, ?, ?, ?, ?)
+          INSERT INTO users(email, password_hash, verified_at, created_at, display_name, google_sub, google_picture)
+          VALUES(?, ?, ?, ?, ?, ?, ?)
         `).run(
           email,
           encodedPassword,
           new Date().toISOString(),
           new Date().toISOString(),
           displayName,
-          googleSub
+          googleSub,
+          googlePicture
         );
         user = db.prepare('SELECT * FROM users WHERE id=?').get(Number(result.lastInsertRowid));
       }
@@ -428,7 +473,8 @@ app.get('/api/auth/discord/me', (req, res) => {
       id: user.id,
       username: user.username,
       displayName: user.global_name,
-      avatar: user.avatar
+      avatar: user.avatar,
+      avatarUrl: user.avatar ? `https://cdn.discordapp.com/avatars/${encodeURIComponent(user.id)}/${encodeURIComponent(user.avatar)}.png?size=128` : null
     }
   });
 });

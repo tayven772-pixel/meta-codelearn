@@ -658,6 +658,14 @@ function ProjectsPage() {
   const [showCreator, setShowCreator] = useState(false);
   const [projectName, setProjectName] = useState('');
   const [projectType, setProjectType] = useState('Blank');
+  const [projectSearch, setProjectSearch] = useState('');
+  const [projectTypeFilter, setProjectTypeFilter] = useState('All');
+  const visibleProjects = projects.filter((project) => {
+    const matchesSearch = project.name.toLowerCase().includes(projectSearch.trim().toLowerCase());
+    const matchesType = projectTypeFilter === 'All' || project.type === projectTypeFilter;
+    return matchesSearch && matchesType;
+  });
+  const projectTypes = Array.from(new Set(projects.map((project) => project.type))).sort((a, b) => a.localeCompare(b));
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [aiError, setAiError] = useState('');
@@ -751,21 +759,55 @@ function ProjectsPage() {
           </div>
 
           {projects.length ? (
-            <div className="simple-project-grid">
-              {projects.map((project) => (
-                <button
-                  type="button"
-                  className="simple-project-card"
-                  key={project.id}
-                  onClick={() => setLocation(`/projects/${project.id}`)}
-                  aria-label={`Open ${project.name}`}
-                >
-                  <span className="simple-project-icon"><FolderKanban aria-hidden="true" /></span>
-                  <strong>{project.name}</strong>
-                  <small>{project.type}</small>
-                </button>
-              ))}
-            </div>
+            <>
+              <div className="project-list-filters">
+                <label>
+                  <span className="sr-only">Search your projects</span>
+                  <input
+                    type="search"
+                    value={projectSearch}
+                    onChange={(event) => setProjectSearch(event.target.value)}
+                    placeholder="Search projects…"
+                    aria-label="Search your projects"
+                  />
+                </label>
+                <label>
+                  <span className="sr-only">Filter by project type</span>
+                  <select
+                    value={projectTypeFilter}
+                    onChange={(event) => setProjectTypeFilter(event.target.value)}
+                    aria-label="Filter by project type"
+                  >
+                    <option value="All">All types</option>
+                    {projectTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+                  </select>
+                </label>
+              </div>
+              {visibleProjects.length ? (
+                <div className="simple-project-grid">
+                  {visibleProjects.map((project) => (
+                    <button
+                      type="button"
+                      className="simple-project-card"
+                      key={project.id}
+                      onClick={() => setLocation(`/projects/${project.id}`)}
+                      aria-label={`Open ${project.name}`}
+                    >
+                      <span className="simple-project-icon"><FolderKanban aria-hidden="true" /></span>
+                      <strong>{project.name}</strong>
+                      <small>{project.type}</small>
+                      {project.updatedAt && <small>Updated {new Date(project.updatedAt).toLocaleDateString()}</small>}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="projects-empty-minimal">
+                  <Search aria-hidden="true" />
+                  <span>No projects match those filters. Try another search or choose All types.</span>
+                  <button type="button" className="button-secondary" onClick={() => { setProjectSearch(''); setProjectTypeFilter('All'); }}>Clear filters</button>
+                </div>
+              )}
+            </>
           ) : (
             <div className="projects-empty-minimal">
               <FolderKanban aria-hidden="true" />
@@ -1223,6 +1265,7 @@ function SettingsPage() {
     displayName: string;
     username: string;
     avatarPng: string | null;
+    googlePicture: string | null;
   } | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -1348,18 +1391,18 @@ function SettingsPage() {
             <form className="profile-editor-body" onSubmit={saveProfile}>
               <div className="profile-picture-row">
                 <div className="profile-avatar-preview">
-                  {profile.avatarPng
-                    ? <img src={profile.avatarPng} alt="Your profile picture" />
+                  {(profile.avatarPng || profile.googlePicture)
+                    ? <img src={profile.avatarPng || profile.googlePicture || ''} alt="Your profile picture" referrerPolicy="no-referrer" />
                     : <span>{(profile.displayName || profile.username || profile.email || 'M').slice(0, 1).toUpperCase()}</span>}
                 </div>
                 <div className="profile-picture-controls">
                   <strong>Profile picture</strong>
-                  <span>PNG only, maximum 1 MB.</span>
+                  <span>Google picture shown by default when available. Upload a PNG to override it (max 1 MB).</span>
                   <input className="profile-file-input" type="file" accept="image/png,.png" onChange={chooseProfilePicture} aria-label="Upload PNG profile picture" />
                   {profile.avatarPng && (
                     <button type="button" className="button-secondary" onClick={() => {
                       setProfile(current => current ? { ...current, avatarPng: null } : current);
-                      setProfileMessage('Picture removed from the preview. Save your profile to keep the change.');
+                      setProfileMessage('Custom picture removed. Save your profile to use your Google picture or initials.');
                     }}>Remove picture</button>
                   )}
                 </div>
@@ -1561,8 +1604,14 @@ function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isRegistering, setIsRegistering] = useState(window.location.pathname.startsWith('/sign-up'));
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('');
-  const [messageType, setMessageType] = useState<'success' | 'error'>('error');
+  const [message, setMessage] = useState(() =>
+    new URLSearchParams(window.location.search).get('account') === 'deleted'
+      ? 'Your Meta account data has been deleted.'
+      : ''
+  );
+  const [messageType, setMessageType] = useState<'success' | 'error'>(() =>
+    new URLSearchParams(window.location.search).get('account') === 'deleted' ? 'success' : 'error'
+  );
 
   async function handleEmailSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1676,15 +1725,35 @@ function VerifyEmailPage() {
 }
 
 function AccountSettingsPage() {
-  const [discordUser, setDiscordUser] = useState<{ id: string; username: string; displayName: string; avatar: string | null } | null>(null);
+  const [discordUser, setDiscordUser] = useState<{ id: string; username: string; displayName: string; avatar: string | null; avatarUrl: string | null } | null>(null);
+  const [emailUser, setEmailUser] = useState<{ id: string; email: string; verified: boolean; displayName?: string | null; profilePicture?: string | null } | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authMessage, setAuthMessage] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
   useEffect(() => {
     let active = true;
-    fetch('/api/auth/discord/me', { credentials: 'same-origin' })
-      .then(response => response.ok ? response.json() : Promise.reject(new Error('Unable to check sign-in status')))
-      .then(data => { if (active) { setDiscordUser(data.authenticated ? data.user : null); setAuthLoading(false); } })
-      .catch(() => { if (active) setAuthLoading(false); });
+    async function checkSessions() {
+      const [discordResult, emailResult] = await Promise.allSettled([
+        fetch('/api/auth/discord/me', { credentials: 'same-origin' }),
+        fetch('/api/auth/me', { credentials: 'same-origin' }),
+      ]);
+      let nextDiscordUser = null;
+      let nextEmailUser = null;
+      if (discordResult.status === 'fulfilled' && discordResult.value.ok) {
+        const data = await discordResult.value.json().catch(() => ({}));
+        if (data.authenticated && data.user) nextDiscordUser = data.user;
+      }
+      if (emailResult.status === 'fulfilled' && emailResult.value.ok) {
+        const data = await emailResult.value.json().catch(() => ({}));
+        if (data.user) nextEmailUser = data.user;
+      }
+      if (active) {
+        setDiscordUser(nextDiscordUser);
+        setEmailUser(nextEmailUser);
+        setAuthLoading(false);
+      }
+    }
+    checkSessions().catch(() => { if (active) setAuthLoading(false); });
     const params = new URLSearchParams(window.location.search);
     if (params.get('discord') === 'connected') setAuthMessage('Discord sign-in successful.');
     if (params.get('discord') === 'cancelled') setAuthMessage('Discord sign-in was cancelled.');
@@ -1692,11 +1761,48 @@ function AccountSettingsPage() {
   }, []);
   async function signOut() {
     try {
-      await fetch('/api/auth/discord/logout', { method: 'POST', credentials: 'same-origin' });
+      const responses = await Promise.all([
+        fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }),
+        fetch('/api/auth/discord/logout', { method: 'POST', credentials: 'same-origin' }),
+      ]);
+      if (responses.some(response => !response.ok)) {
+        throw new Error('One or more sign-out requests failed.');
+      }
       setDiscordUser(null);
+      setEmailUser(null);
       setAuthMessage('You have signed out.');
+      window.location.assign('/sign-in');
     } catch {
       setAuthMessage('Could not sign out right now. Please try again.');
+    }
+  }
+  async function deleteAccount() {
+    const confirmed = window.confirm(
+      'Delete your Meta account data and clear saved learning progress and projects on this browser? This cannot be undone and does not delete your Google or Discord account.'
+    );
+    if (!confirmed || isDeleting) return;
+    setIsDeleting(true);
+    setAuthMessage('');
+    try {
+      const response = await fetch('/api/auth/delete-account', {
+        method: 'POST',
+        credentials: 'same-origin',
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || 'Could not delete your Meta account.');
+      }
+      try {
+        for (const key of ['meta-progress-v1', 'code-atlas-progress-v1', 'meta-projects-v2', 'meta-projects-v1']) {
+          localStorage.removeItem(key);
+        }
+      } catch {
+        // The server account is already deleted even if browser storage is unavailable.
+      }
+      window.location.assign('/sign-in?account=deleted');
+    } catch (error) {
+      setAuthMessage(error instanceof Error ? error.message : 'Could not delete your Meta account. Please try again.');
+      setIsDeleting(false);
     }
   }
   return (
@@ -1705,21 +1811,41 @@ function AccountSettingsPage() {
         <section className="account-card">
           <p className="section-kicker">Account & privacy</p>
           <h1>Meta account</h1>
-          <p className="account-email">Sign in securely with your Discord account.</p>
+          <p className="account-email">Manage your Meta CodeLearn sign-in and privacy settings.</p>
           {authMessage && <p role="status" className="account-email">{authMessage}</p>}
-          {authLoading ? <p>Checking sign-in status…</p> : discordUser ? (
+          {authLoading ? <p>Checking sign-in status…</p> : (discordUser || emailUser) ? (
             <div className="account-setting-block">
-              <h2>Signed in with Discord</h2>
-              <p>Welcome, {discordUser.displayName || discordUser.username} (@{discordUser.username}).</p>
+              <h2>{discordUser ? 'Signed in with Discord' : 'Signed in with email or Google'}</h2>
+              {discordUser ? (
+                <div className="account-provider-identity">
+                  {discordUser.avatarUrl && <img src={discordUser.avatarUrl} alt="Discord profile picture" referrerPolicy="no-referrer" />}
+                  <p>Welcome, {discordUser.displayName || discordUser.username} (@{discordUser.username}).</p>
+                </div>
+              ) : (
+                <div className="account-provider-identity">
+                  {emailUser?.profilePicture && <img src={emailUser.profilePicture} alt="Google profile picture" referrerPolicy="no-referrer" />}
+                  <p>{emailUser?.displayName && <>Welcome, {emailUser.displayName}. </>}Signed in as {emailUser?.email}{emailUser?.verified ? ' · Email verified' : ' · Email not verified'}.</p>
+                </div>
+              )}
               <button type="button" className="button-secondary" onClick={signOut}>Sign out</button>
             </div>
           ) : (
             <div className="account-setting-block">
-              <h2>Connect your Discord</h2>
-              <p>Use Discord to verify your identity. Meta will never ask for your Discord password.</p>
-              <a className="button-secondary" href="/api/auth/discord">Continue with Discord</a>
+              <h2>Sign in to your Meta account</h2>
+              <p>Sign in to manage your account, or connect Discord to verify your identity.</p>
+              <div className="account-setting-links">
+                <Link className="button-secondary" href="/sign-in">Continue to sign in</Link>
+                <a className="button-secondary" href="/api/auth/discord">Continue with Discord</a>
+              </div>
             </div>
           )}
+          <section className="danger-zone">
+            <h2>Delete Meta account</h2>
+            <p>Delete your Meta email/Google account data, or clear your Discord sign-in session, and remove saved learning progress and projects from this browser. This does not delete your Google or Discord account.</p>
+            <button type="button" className="danger-button" onClick={deleteAccount} disabled={isDeleting || authLoading || (!discordUser && !emailUser)}>
+              {isDeleting ? 'Deleting account…' : 'Delete Meta account'}
+            </button>
+          </section>
           <div className="account-setting-block">
             <h2>Your local data</h2>
             <p>Lesson progress and project data currently remain on this browser. Discord sign-in does not yet sync learning data between devices.</p>

@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'Meta',
   webDir: 'dist',
   server: {
-    url: 'https://discord-bot-blond-beta.vercel.app',
+    url: 'https://metasupportcom.dbm.shared-servers.com',
     cleartext: false,
   },
   android: {

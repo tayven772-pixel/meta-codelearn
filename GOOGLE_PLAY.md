@@ -7,7 +7,7 @@ Meta's web project includes Capacitor 8 Android tooling so the same codebase can
 - Capacitor 8
 - Target/compile SDK expected: Android 16 / API 36
 - Web build directory: `dist`
-- Android application id: `com.meta.codeatlas`
+- Application ID declared in the current `capacitor.config.ts`: `app.meta.learn` (confirm this matches the package ID of the existing installed APK before changing it; changing it can create a separate app listing).
 - Public privacy route: `/privacy`
 - Edge-to-edge safe-area CSS included
 - The core app does not request sensitive device permissions
@@ -28,16 +28,20 @@ Meta's web project includes Capacitor 8 Android tooling so the same codebase can
 Google Play approval cannot be guaranteed by source code alone; Play Console declarations and review are part of compliance.
 
 
-## Code-side Google Play readiness completed
+## Code-side readiness currently present
 
 - Public privacy policy route: `/privacy`
-- Public external account deletion resource: `/delete-account`
-- In-app account deletion path: `Account -> Delete my account`
+- Public account-deletion information route: `/delete-account` (currently directs users to contact support; this is not a verified self-service deletion flow)
 - Public support contact is displayed on policy/deletion pages
-- No app code requests contacts, SMS, call logs, camera, microphone, precise location, or background location
 - Responsive/mobile safe-area handling is included
 - Capacitor Android wrapper configuration is included
 - PWA metadata and app theme metadata are included
+
+## Blocking items before claiming store readiness
+
+- End-to-end test the new in-app account deletion endpoint and UI, including session invalidation and deletion of associated database rows. The current `/delete-account` page is email-request based, so confirm that the external deletion resource meets current Play policy and improve it if necessary.
+- Confirm the actual Android package ID and persistent signing identity from the currently distributed APK before publishing an update.
+- Test the installed APK against the intended production website and verify that login, logout, and project flows work.
 
 ## Play Console items that still require the publisher
 
