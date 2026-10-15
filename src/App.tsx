@@ -1677,14 +1677,33 @@ function VerifyEmailPage() {
 
 function AccountSettingsPage() {
   const [discordUser, setDiscordUser] = useState<{ id: string; username: string; displayName: string; avatar: string | null } | null>(null);
+  const [emailUser, setEmailUser] = useState<{ id: string; email: string; verified: boolean } | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authMessage, setAuthMessage] = useState('');
   useEffect(() => {
     let active = true;
-    fetch('/api/auth/discord/me', { credentials: 'same-origin' })
-      .then(response => response.ok ? response.json() : Promise.reject(new Error('Unable to check sign-in status')))
-      .then(data => { if (active) { setDiscordUser(data.authenticated ? data.user : null); setAuthLoading(false); } })
-      .catch(() => { if (active) setAuthLoading(false); });
+    async function checkSessions() {
+      const [discordResult, emailResult] = await Promise.allSettled([
+        fetch('/api/auth/discord/me', { credentials: 'same-origin' }),
+        fetch('/api/auth/me', { credentials: 'same-origin' }),
+      ]);
+      let nextDiscordUser = null;
+      let nextEmailUser = null;
+      if (discordResult.status === 'fulfilled' && discordResult.value.ok) {
+        const data = await discordResult.value.json().catch(() => ({}));
+        if (data.authenticated && data.user) nextDiscordUser = data.user;
+      }
+      if (emailResult.status === 'fulfilled' && emailResult.value.ok) {
+        const data = await emailResult.value.json().catch(() => ({}));
+        if (data.user) nextEmailUser = data.user;
+      }
+      if (active) {
+        setDiscordUser(nextDiscordUser);
+        setEmailUser(nextEmailUser);
+        setAuthLoading(false);
+      }
+    }
+    checkSessions().catch(() => { if (active) setAuthLoading(false); });
     const params = new URLSearchParams(window.location.search);
     if (params.get('discord') === 'connected') setAuthMessage('Discord sign-in successful.');
     if (params.get('discord') === 'cancelled') setAuthMessage('Discord sign-in was cancelled.');
@@ -1692,9 +1711,17 @@ function AccountSettingsPage() {
   }, []);
   async function signOut() {
     try {
-      await fetch('/api/auth/discord/logout', { method: 'POST', credentials: 'same-origin' });
+      const responses = await Promise.all([
+        fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }),
+        fetch('/api/auth/discord/logout', { method: 'POST', credentials: 'same-origin' }),
+      ]);
+      if (responses.some(response => !response.ok)) {
+        throw new Error('One or more sign-out requests failed.');
+      }
       setDiscordUser(null);
+      setEmailUser(null);
       setAuthMessage('You have signed out.');
+      window.location.assign('/sign-in');
     } catch {
       setAuthMessage('Could not sign out right now. Please try again.');
     }
@@ -1705,19 +1732,26 @@ function AccountSettingsPage() {
         <section className="account-card">
           <p className="section-kicker">Account & privacy</p>
           <h1>Meta account</h1>
-          <p className="account-email">Sign in securely with your Discord account.</p>
+          <p className="account-email">Manage your Meta CodeLearn sign-in and privacy settings.</p>
           {authMessage && <p role="status" className="account-email">{authMessage}</p>}
-          {authLoading ? <p>Checking sign-in status…</p> : discordUser ? (
+          {authLoading ? <p>Checking sign-in status…</p> : (discordUser || emailUser) ? (
             <div className="account-setting-block">
-              <h2>Signed in with Discord</h2>
-              <p>Welcome, {discordUser.displayName || discordUser.username} (@{discordUser.username}).</p>
+              <h2>{discordUser ? 'Signed in with Discord' : 'Signed in with email or Google'}</h2>
+              {discordUser ? (
+                <p>Welcome, {discordUser.displayName || discordUser.username} (@{discordUser.username}).</p>
+              ) : (
+                <p>Signed in as {emailUser?.email}{emailUser?.verified ? ' · Email verified' : ' · Email not verified'}.</p>
+              )}
               <button type="button" className="button-secondary" onClick={signOut}>Sign out</button>
             </div>
           ) : (
             <div className="account-setting-block">
-              <h2>Connect your Discord</h2>
-              <p>Use Discord to verify your identity. Meta will never ask for your Discord password.</p>
-              <a className="button-secondary" href="/api/auth/discord">Continue with Discord</a>
+              <h2>Sign in to your Meta account</h2>
+              <p>Sign in to manage your account, or connect Discord to verify your identity.</p>
+              <div className="account-setting-links">
+                <Link className="button-secondary" href="/sign-in">Continue to sign in</Link>
+                <a className="button-secondary" href="/api/auth/discord">Continue with Discord</a>
+              </div>
             </div>
           )}
           <div className="account-setting-block">
