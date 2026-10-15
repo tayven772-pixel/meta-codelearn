@@ -234,7 +234,8 @@ app.get('/api/auth/profile', (req, res) => {
       email: user.email,
       displayName: user.display_name || '',
       username: user.username || '',
-      avatarPng: avatar ? `data:image/png;base64,${Buffer.from(avatar).toString('base64')}` : null
+      avatarPng: avatar ? `data:image/png;base64,${Buffer.from(avatar).toString('base64')}` : null,
+      googlePicture: user.google_picture || null
     }
   });
 });
@@ -299,7 +300,8 @@ app.patch('/api/auth/profile', (req, res) => {
       email: user.email,
       displayName,
       username,
-      avatarPng: avatarPng ? `data:image/png;base64,${Buffer.from(avatarPng).toString('base64')}` : null
+      avatarPng: avatarPng ? `data:image/png;base64,${Buffer.from(avatarPng).toString('base64')}` : null,
+      googlePicture: user.google_picture || null
     }
   });
 });
@@ -445,7 +447,8 @@ app.get('/api/auth/discord/me', (req, res) => {
       id: user.id,
       username: user.username,
       displayName: user.global_name,
-      avatar: user.avatar
+      avatar: user.avatar,
+      avatarUrl: user.avatar ? `https://cdn.discordapp.com/avatars/${encodeURIComponent(user.id)}/${encodeURIComponent(user.avatar)}.png?size=128` : null
     }
   });
 });
