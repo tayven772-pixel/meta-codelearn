@@ -37,6 +37,9 @@ jobs:
       - name: Check authentication server syntax
         run: node --check server/auth.js
 
+      - name: Type-check frontend
+        run: npx tsc --noEmit
+
       - name: Build production website
         run: npm run build
 
