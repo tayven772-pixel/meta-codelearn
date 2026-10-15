@@ -1265,6 +1265,7 @@ function SettingsPage() {
     displayName: string;
     username: string;
     avatarPng: string | null;
+    googlePicture: string | null;
   } | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -1390,18 +1391,18 @@ function SettingsPage() {
             <form className="profile-editor-body" onSubmit={saveProfile}>
               <div className="profile-picture-row">
                 <div className="profile-avatar-preview">
-                  {profile.avatarPng
-                    ? <img src={profile.avatarPng} alt="Your profile picture" />
+                  {(profile.avatarPng || profile.googlePicture)
+                    ? <img src={profile.avatarPng || profile.googlePicture || ''} alt="Your profile picture" referrerPolicy="no-referrer" />
                     : <span>{(profile.displayName || profile.username || profile.email || 'M').slice(0, 1).toUpperCase()}</span>}
                 </div>
                 <div className="profile-picture-controls">
                   <strong>Profile picture</strong>
-                  <span>PNG only, maximum 1 MB.</span>
+                  <span>Google picture shown by default when available. Upload a PNG to override it (max 1 MB).</span>
                   <input className="profile-file-input" type="file" accept="image/png,.png" onChange={chooseProfilePicture} aria-label="Upload PNG profile picture" />
                   {profile.avatarPng && (
                     <button type="button" className="button-secondary" onClick={() => {
                       setProfile(current => current ? { ...current, avatarPng: null } : current);
-                      setProfileMessage('Picture removed from the preview. Save your profile to keep the change.');
+                      setProfileMessage('Custom picture removed. Save your profile to use your Google picture or initials.');
                     }}>Remove picture</button>
                   )}
                 </div>
@@ -1718,8 +1719,8 @@ function VerifyEmailPage() {
 }
 
 function AccountSettingsPage() {
-  const [discordUser, setDiscordUser] = useState<{ id: string; username: string; displayName: string; avatar: string | null } | null>(null);
-  const [emailUser, setEmailUser] = useState<{ id: string; email: string; verified: boolean } | null>(null);
+  const [discordUser, setDiscordUser] = useState<{ id: string; username: string; displayName: string; avatar: string | null; avatarUrl: string | null } | null>(null);
+  const [emailUser, setEmailUser] = useState<{ id: string; email: string; verified: boolean; displayName?: string | null; profilePicture?: string | null } | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authMessage, setAuthMessage] = useState('');
   useEffect(() => {
@@ -1780,9 +1781,15 @@ function AccountSettingsPage() {
             <div className="account-setting-block">
               <h2>{discordUser ? 'Signed in with Discord' : 'Signed in with email or Google'}</h2>
               {discordUser ? (
-                <p>Welcome, {discordUser.displayName || discordUser.username} (@{discordUser.username}).</p>
+                <div className="account-provider-identity">
+                  {discordUser.avatarUrl && <img src={discordUser.avatarUrl} alt="Discord profile picture" referrerPolicy="no-referrer" />}
+                  <p>Welcome, {discordUser.displayName || discordUser.username} (@{discordUser.username}).</p>
+                </div>
               ) : (
-                <p>Signed in as {emailUser?.email}{emailUser?.verified ? ' · Email verified' : ' · Email not verified'}.</p>
+                <div className="account-provider-identity">
+                  {emailUser?.profilePicture && <img src={emailUser.profilePicture} alt="Google profile picture" referrerPolicy="no-referrer" />}
+                  <p>{emailUser?.displayName && <>Welcome, {emailUser.displayName}. </>}Signed in as {emailUser?.email}{emailUser?.verified ? ' · Email verified' : ' · Email not verified'}.</p>
+                </div>
               )}
               <button type="button" className="button-secondary" onClick={signOut}>Sign out</button>
             </div>
