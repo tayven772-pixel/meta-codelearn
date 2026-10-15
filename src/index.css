@@ -62,6 +62,9 @@ body {
 }
 button, input, select, textarea { font: inherit; }
 button, a, select { -webkit-tap-highlight-color: transparent; }
+/* Let taps reach the actual control instead of its decorative icon. */
+button svg, a svg { pointer-events: none; }
+button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
 a { color: inherit; text-decoration: none; }
 button { color: inherit; }
 ::selection { color: #fcf8ed; background: #2563eb; }
@@ -565,6 +568,48 @@ button { color: inherit; }
   .exercise { padding: 16px; }
   .lesson-nav { flex-wrap: wrap; }
 }
+/* Touchscreens should activate buttons on the first tap, not hover first. */
+@media (hover: none) {
+  .button-primary:hover { transform: none; background: #2563eb; }
+  .language-card:hover, .play-card:hover, .play-hub-card:hover { transform: none; }
+}
+.button-primary:active { transform: scale(.985); }
+
+.quiz-section {
+  margin-top: 24px;
+  padding: clamp(17px, 3vw, 25px);
+  border: 1px solid #d7d3c4;
+  border-radius: 10px;
+  background: #f9f6ed;
+}
+.quiz-heading { display: flex; align-items: center; gap: 9px; color: #1d4ed8; font: 500 10px var(--app-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+.quiz-heading svg { width: 17px; height: 17px; }
+.quiz-section h2 { margin: 10px 0 7px; font: 600 24px var(--app-font-serif); }
+.quiz-intro { margin: 0 0 18px; color: #676c65; font-size: 12px; line-height: 1.7; }
+.quiz-question { margin: 0 0 15px; padding: 0 0 15px; border: 0; border-bottom: 1px solid #e2ddce; }
+.quiz-question legend { margin-bottom: 10px; font-size: 12px; font-weight: 700; line-height: 1.6; }
+.quiz-options { display: grid; gap: 7px; }
+.quiz-option { display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px; border: 1px solid #d7d3c4; border-radius: 7px; background: #f2eee2; cursor: pointer; font-size: 11px; line-height: 1.55; }
+.quiz-option input { margin-top: 2px; accent-color: #2563eb; }
+.quiz-option:has(input:checked) { border-color: #2563eb; background: #eaf1ff; }
+.quiz-option.is-correct { border-color: #71947a; background: #e3eee2; }
+.quiz-option.is-incorrect { border-color: #d58b83; background: #fff0ed; }
+.quiz-explanation { margin: 8px 0 0; color: #586456; font-size: 11px; line-height: 1.6; }
+.quiz-result { display: flex; align-items: flex-start; gap: 9px; margin: 13px 0; padding: 12px; border-radius: 7px; font-size: 12px; line-height: 1.6; }
+.quiz-result svg { flex: 0 0 auto; width: 17px; height: 17px; }
+.quiz-result.passed { background: #e3eee2; color: #355b41; }
+.quiz-result.retry { background: #fff0ed; color: #8d352c; }
+.quiz-section .button-primary { min-height: 40px; font-size: 11px; }
+:root[data-theme='dark'] .quiz-section { border-color: #384352; background: #1d2530; color: #f1eee7; }
+:root[data-theme='dark'] .quiz-intro, :root[data-theme='dark'] .quiz-explanation { color: #b5bcc6; }
+:root[data-theme='dark'] .quiz-question { border-color: #384352; }
+:root[data-theme='dark'] .quiz-option { border-color: #465263; background: #222b36; color: #e0e5df; }
+:root[data-theme='dark'] .quiz-option:has(input:checked) { border-color: #60a5fa; background: #172554; }
+:root[data-theme='dark'] .quiz-option.is-correct { border-color: #547b60; background: #20352e; }
+:root[data-theme='dark'] .quiz-option.is-incorrect { border-color: #92554f; background: #3a2525; }
+:root[data-theme='dark'] .quiz-result.passed { background: #20352e; color: #c0dfc7; }
+:root[data-theme='dark'] .quiz-result.retry { background: #3a2525; color: #fecaca; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
   .site-fact-copy { animation: none; }
