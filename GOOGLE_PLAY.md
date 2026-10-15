@@ -39,7 +39,7 @@ Google Play approval cannot be guaranteed by source code alone; Play Console dec
 
 ## Blocking items before claiming store readiness
 
-- Implement and test a genuine in-app account deletion flow for accounts created in Meta CodeLearn, and a usable external deletion path where required. The current `/delete-account` page is informational and does not itself delete an account.
+- End-to-end test the new in-app account deletion endpoint and UI, including session invalidation and deletion of associated database rows. The current `/delete-account` page is email-request based, so confirm that the external deletion resource meets current Play policy and improve it if necessary.
 - Confirm the actual Android package ID and persistent signing identity from the currently distributed APK before publishing an update.
 - Test the installed APK against the intended production website and verify that login, logout, and project flows work.
 
