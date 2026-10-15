@@ -18,6 +18,7 @@ export type Lesson = {
   acceptedAnswers: string[];
   hint: string;
   solutionExplanation: string;
+  quiz: { question: string; options: string[]; answerIndex: number; explanation: string }[];
   nextLessonId: string | null;
 };
 
@@ -136,6 +137,7 @@ export const lessons: Lesson[] = [
     acceptedAnswers: ['print("Hello, learner!")', "print('Hello, learner!')", 'console.log("Hello, learner!");', "console.log('Hello, learner!');", 'System.out.println("Hello, learner!");', 'printf("Hello, learner!\\n");', 'std::cout << "Hello, learner!\\n";', 'Console.WriteLine("Hello, learner!");', 'fmt.Println("Hello, learner!")', 'println!("Hello, learner!");', "SELECT 'Hello, learner!';", 'puts "Hello, learner!"', '<h1>Hello, learner!</h1>'],
     hint: 'Look at the example above. Keep the same print or log instruction and replace its message with “Hello, learner!”.',
     solutionExplanation: 'You passed a text value to the language’s output instruction. The surrounding quotes mark the text as a string; the print or log command makes it visible.',
+    quiz: [{"question":"Which Python instruction displays text?","options":["input()","print()","return"],"answerIndex":1,"explanation":"print() sends a value to the output area."},{"question":"What do quotation marks usually identify in this example?","options":["A text string","A loop","A condition"],"answerIndex":0,"explanation":"Quotation marks wrap text values, commonly called strings."},{"question":"What is output mainly used for?","options":["Repeating code","Showing information","Naming a variable"],"answerIndex":1,"explanation":"Output lets a program show information to a person or another system."}],
     nextLessonId: 'values',
   },
   {
@@ -146,6 +148,7 @@ export const lessons: Lesson[] = [
     acceptedAnswers: ['score = 12', 'let score = 12;', 'const score = 12;', 'let score: number = 12;', 'int score = 12;', 'var score = 12;', 'score := 12', 'let score = 12;', 'SELECT 12 AS score;', 'score = 12;', '<p>12</p>'],
     hint: 'Start with the name score, then use an equals sign and the number 12. In some languages, include a type such as int or number.',
     solutionExplanation: 'The name score now refers to the numeric value 12. The equals sign assigns the value; it does not mean “is equal to” in the algebra sense here.',
+    quiz: [{"question":"What is a variable?","options":["A named reference to a value","A kind of loop","A syntax error"],"answerIndex":0,"explanation":"Variables give values names so programs can use them later."},{"question":"After score = 12, what value is assigned to score?","options":["The text 'score'","12","Nothing; it only compares"],"answerIndex":1,"explanation":"The assignment gives the variable score the number 12."},{"question":"In let name = 'Mina', which part is the variable name?","options":["Mina","let","name"],"answerIndex":2,"explanation":"name is the identifier that refers to the assigned value."}],
     nextLessonId: 'conditions',
   },
   {
@@ -156,6 +159,7 @@ export const lessons: Lesson[] = [
     acceptedAnswers: ['if score > 10: print("Great job!")', 'if score > 10: print(\'Great job!\')', 'if (score > 10) { console.log("Great job!"); }', 'if (score > 10) { console.log(\'Great job!\'); }', 'if (score > 10) { Console.WriteLine("Great job!"); }', 'if score > 10 { fmt.Println("Great job!") }', 'if score > 10 { println!("Great job!"); }'],
     hint: 'Use the greater-than operator >, then put your output line inside the if block. The braces or indentation mark that block.',
     solutionExplanation: 'The condition score > 10 evaluates to true or false. The output only runs when the comparison is true.',
+    quiz: [{"question":"What does a conditional help a program do?","options":["Choose a path based on a condition","Store every value in a list","Repeat forever"],"answerIndex":0,"explanation":"A condition evaluates to true or false and determines which branch runs."},{"question":"Which operator commonly means 'greater than'?","options":["=","<",">"],"answerIndex":2,"explanation":"The > operator compares whether the left value is greater than the right."},{"question":"When does the true branch of an if statement run?","options":["When the condition is true","Only when the program closes","Every time, regardless of the condition"],"answerIndex":0,"explanation":"The true branch runs only when its condition evaluates to true."}],
     nextLessonId: 'loops',
   },
   {
@@ -166,6 +170,7 @@ export const lessons: Lesson[] = [
     acceptedAnswers: ['for number in range(1, 4): print(number)', 'for (let number = 1; number <= 3; number++) { console.log(number); }', 'for (let number = 1; number <= 3; number++) { console.log(number) }', 'for (int number = 1; number <= 3; number++) { System.out.println(number); }', 'for number := 1; number <= 3; number++ { fmt.Println(number) }', 'for number in 1..=3 { println!("{number}"); }', 'for number in 1..3 puts number end'],
     hint: 'Use the example loop as your pattern. Check whether your language’s ending number is included in its range.',
     solutionExplanation: 'The loop starts at 1 and advances until it has handled 3. One loop body does the output work for each number.',
+    quiz: [{"question":"When is a loop useful?","options":["When instructions need to repeat","Only when naming a variable","To style a web page"],"answerIndex":0,"explanation":"Loops repeat a block of instructions without duplicating the code."},{"question":"In Python, what numbers does range(1, 4) produce?","options":["1, 2, 3, 4","1, 2, 3","0, 1, 2, 3, 4"],"answerIndex":1,"explanation":"The start is included and the stop value 4 is excluded."},{"question":"Why should a loop have a clear stopping condition?","options":["To avoid unintended endless repetition","To make every variable a string","To hide the output"],"answerIndex":0,"explanation":"A stopping rule helps the loop finish when its work is done."}],
     nextLessonId: 'functions',
   },
   {
@@ -176,6 +181,7 @@ export const lessons: Lesson[] = [
     acceptedAnswers: ['def double(number): return number * 2', 'function double(number) { return number * 2; }', 'function double(number: number): number { return number * 2; }', 'int double(int number) { return number * 2; }', 'func double(number int) int { return number * 2 }', 'fn double(number: i32) -> i32 { number * 2 }', 'def double(number) number * 2 end'],
     hint: 'Give it a name, accept one parameter, then return parameter × 2. The return keyword sends the answer back.',
     solutionExplanation: 'The function describes a reusable rule. Calling double(4), for example, returns 8 without rewriting the multiplication.',
+    quiz: [{"question":"What is a function?","options":["A reusable named block of behavior","A list of unrelated values","A comparison operator"],"answerIndex":0,"explanation":"Functions package useful work so it can be called again."},{"question":"What is a parameter used for?","options":["To provide an input to a function","To stop the whole program","To choose a page color"],"answerIndex":0,"explanation":"Parameters name the inputs a function can receive."},{"question":"What does return commonly do?","options":["Repeats the function automatically","Sends a result back to the caller","Creates a loop"],"answerIndex":1,"explanation":"return gives a result back to the code that called the function."}],
     nextLessonId: 'collections',
   },
   {
@@ -186,6 +192,7 @@ export const lessons: Lesson[] = [
     acceptedAnswers: ['tools = ["pen", "notebook"]', 'let tools = ["pen", "notebook"];', 'const tools = ["pen", "notebook"];', 'let tools: string[] = ["pen", "notebook"];', 'String[] tools = {"pen", "notebook"};', 'string[] tools = { "pen", "notebook" };', 'tools := []string{"pen", "notebook"}', 'let tools = ["pen", "notebook"];'],
     hint: 'Use square brackets around the items and separate them with a comma. Each text value needs quotes.',
     solutionExplanation: 'The two values live in one ordered collection called tools. In an array-style collection, tools[0] would refer to “pen”.',
+    quiz: [{"question":"Why use a collection such as a list or array?","options":["To keep multiple values together","To replace every function","To make conditions unnecessary"],"answerIndex":0,"explanation":"Collections group related values under one variable or structure."},{"question":"What is the first index in many programming languages?","options":["1","-1","0"],"answerIndex":2,"explanation":"Many lists and arrays start counting positions at index 0."},{"question":"If colors = ['red', 'green', 'blue'], what does colors[0] usually refer to?","options":["red","green","blue"],"answerIndex":0,"explanation":"Index 0 refers to the first item, which is red."}],
     nextLessonId: null,
   },
 ];
