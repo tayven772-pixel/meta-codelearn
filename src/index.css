@@ -1834,16 +1834,12 @@ html[data-reduced-motion='true'] *::after {
 }
 
 
-/* Consistent blue feedback for interactive icons across mouse, touch, and keyboard. */
-:where(button, a, [role="button"], [tabindex]):is(:hover, :active, :focus-visible, [aria-pressed="true"], [aria-current="page"], .selected, .active) svg {
+/* Consistent blue feedback for interactive icons across mouse, touch, and keyboard.
+   Preserve white icons on filled primary actions and keep provider logos unchanged. */
+:where(button:not(.button-primary), a:not(.button-primary), [role="button"]:not(.button-primary), [tabindex]:not(.button-primary)):is(:hover, :active, :focus-visible, [aria-pressed="true"], [aria-current="page"], .selected, .active) svg:not(.login-google svg) {
   color: #2563eb;
 }
 
-:root[data-theme='dark'] :where(button, a, [role="button"], [tabindex]):is(:hover, :active, :focus-visible, [aria-pressed="true"], [aria-current="page"], .selected, .active) svg {
+:root[data-theme='dark'] :where(button:not(.button-primary), a:not(.button-primary), [role="button"]:not(.button-primary), [tabindex]:not(.button-primary)):is(:hover, :active, :focus-visible, [aria-pressed="true"], [aria-current="page"], .selected, .active) svg:not(.login-google svg) {
   color: #60a5fa;
-}
-
-/* Keep the icon feedback visible when SVGs define their own stroke or fill. */
-:where(button, a, [role="button"], [tabindex]):is(:hover, :active, :focus-visible, [aria-pressed="true"], [aria-current="page"], .selected, .active) svg :is(path, line, polyline, polygon, circle, rect) {
-  stroke: currentColor;
 }
