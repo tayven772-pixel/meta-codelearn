@@ -77,6 +77,9 @@ if (!userColumns.has('avatar_png')) {
 if (!userColumns.has('google_sub')) {
   db.exec('ALTER TABLE users ADD COLUMN google_sub TEXT');
 }
+if (!userColumns.has('google_picture')) {
+  db.exec('ALTER TABLE users ADD COLUMN google_picture TEXT');
+}
 db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique
   ON users(username)
@@ -101,7 +104,13 @@ const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const randomToken = () => crypto.randomBytes(32).toString('base64url');
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 const validEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
-const publicUser = (user) => ({ id: user.id, email: user.email, verified: Boolean(user.verified_at) });
+const publicUser = (user) => ({
+  id: user.id,
+  email: user.email,
+  verified: Boolean(user.verified_at),
+  displayName: user.display_name || null,
+  profilePicture: user.google_picture || (user.avatar_png ? `data:image/png;base64,${Buffer.from(user.avatar_png).toString('base64')}` : null),
+});
 
 async function sendVerification(email, token) {
   const link = `${appOrigin}/verify-email?token=${encodeURIComponent(token)}`;
@@ -369,12 +378,19 @@ app.get('/api/auth/google/callback', async (req, res) => {
     const googleSub = String(profile?.sub || '');
     const email = normalizeEmail(profile?.email);
     const emailVerified = profile?.email_verified === true;
+    const googlePicture = typeof profile?.picture === 'string' && profile.picture.startsWith('https://')
+      ? profile.picture.slice(0, 2048)
+      : null;
 
     if (!googleSub || !validEmail(email) || !emailVerified) {
       return res.redirect(`${appOrigin}/sign-in?google=error`);
     }
 
     let user = db.prepare('SELECT * FROM users WHERE google_sub=?').get(googleSub);
+    if (user) {
+      db.prepare('UPDATE users SET google_picture=? WHERE id=?').run(googlePicture, user.id);
+      user = db.prepare('SELECT * FROM users WHERE id=?').get(user.id);
+    }
 
     if (!user) {
       user = db.prepare('SELECT * FROM users WHERE email=? COLLATE NOCASE').get(email);
@@ -385,22 +401,23 @@ app.get('/api/auth/google/callback', async (req, res) => {
 
       if (user) {
         db.prepare(
-          'UPDATE users SET google_sub=?, verified_at=COALESCE(verified_at, ?) WHERE id=?'
-        ).run(googleSub, new Date().toISOString(), user.id);
+          'UPDATE users SET google_sub=?, google_picture=?, verified_at=COALESCE(verified_at, ?) WHERE id=?'
+        ).run(googleSub, googlePicture, new Date().toISOString(), user.id);
         user = db.prepare('SELECT * FROM users WHERE id=?').get(user.id);
       } else {
         const encodedPassword = await passwordHash(randomToken());
         const displayName = String(profile?.name || '').trim().slice(0, 40) || null;
         const result = db.prepare(`
-          INSERT INTO users(email, password_hash, verified_at, created_at, display_name, google_sub)
-          VALUES(?, ?, ?, ?, ?, ?)
+          INSERT INTO users(email, password_hash, verified_at, created_at, display_name, google_sub, google_picture)
+          VALUES(?, ?, ?, ?, ?, ?, ?)
         `).run(
           email,
           encodedPassword,
           new Date().toISOString(),
           new Date().toISOString(),
           displayName,
-          googleSub
+          googleSub,
+          googlePicture
         );
         user = db.prepare('SELECT * FROM users WHERE id=?').get(Number(result.lastInsertRowid));
       }
