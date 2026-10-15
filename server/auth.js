@@ -96,6 +96,8 @@ const mailer = nodemailer.createTransport({
   auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_APP_PASSWORD },
 });
 app.disable('x-powered-by');
+// Trust only the local reverse proxy so rate limits use the real client IP.
+app.set('trust proxy', 'loopback');
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '2mb' }));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, limit: 100, standardHeaders: true, legacyHeaders: false }));
