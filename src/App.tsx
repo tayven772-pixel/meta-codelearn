@@ -658,6 +658,14 @@ function ProjectsPage() {
   const [showCreator, setShowCreator] = useState(false);
   const [projectName, setProjectName] = useState('');
   const [projectType, setProjectType] = useState('Blank');
+  const [projectSearch, setProjectSearch] = useState('');
+  const [projectTypeFilter, setProjectTypeFilter] = useState('All');
+  const visibleProjects = projects.filter((project) => {
+    const matchesSearch = project.name.toLowerCase().includes(projectSearch.trim().toLowerCase());
+    const matchesType = projectTypeFilter === 'All' || project.type === projectTypeFilter;
+    return matchesSearch && matchesType;
+  });
+  const projectTypes = Array.from(new Set(projects.map((project) => project.type))).sort((a, b) => a.localeCompare(b));
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [aiError, setAiError] = useState('');
@@ -751,21 +759,55 @@ function ProjectsPage() {
           </div>
 
           {projects.length ? (
-            <div className="simple-project-grid">
-              {projects.map((project) => (
-                <button
-                  type="button"
-                  className="simple-project-card"
-                  key={project.id}
-                  onClick={() => setLocation(`/projects/${project.id}`)}
-                  aria-label={`Open ${project.name}`}
-                >
-                  <span className="simple-project-icon"><FolderKanban aria-hidden="true" /></span>
-                  <strong>{project.name}</strong>
-                  <small>{project.type}</small>
-                </button>
-              ))}
-            </div>
+            <>
+              <div className="project-list-filters">
+                <label>
+                  <span className="sr-only">Search your projects</span>
+                  <input
+                    type="search"
+                    value={projectSearch}
+                    onChange={(event) => setProjectSearch(event.target.value)}
+                    placeholder="Search projects…"
+                    aria-label="Search your projects"
+                  />
+                </label>
+                <label>
+                  <span className="sr-only">Filter by project type</span>
+                  <select
+                    value={projectTypeFilter}
+                    onChange={(event) => setProjectTypeFilter(event.target.value)}
+                    aria-label="Filter by project type"
+                  >
+                    <option value="All">All types</option>
+                    {projectTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+                  </select>
+                </label>
+              </div>
+              {visibleProjects.length ? (
+                <div className="simple-project-grid">
+                  {visibleProjects.map((project) => (
+                    <button
+                      type="button"
+                      className="simple-project-card"
+                      key={project.id}
+                      onClick={() => setLocation(`/projects/${project.id}`)}
+                      aria-label={`Open ${project.name}`}
+                    >
+                      <span className="simple-project-icon"><FolderKanban aria-hidden="true" /></span>
+                      <strong>{project.name}</strong>
+                      <small>{project.type}</small>
+                      {project.updatedAt && <small>Updated {new Date(project.updatedAt).toLocaleDateString()}</small>}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="projects-empty-minimal">
+                  <Search aria-hidden="true" />
+                  <span>No projects match those filters. Try another search or choose All types.</span>
+                  <button type="button" className="button-secondary" onClick={() => { setProjectSearch(''); setProjectTypeFilter('All'); }}>Clear filters</button>
+                </div>
+              )}
+            </>
           ) : (
             <div className="projects-empty-minimal">
               <FolderKanban aria-hidden="true" />
