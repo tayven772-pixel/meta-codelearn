@@ -221,6 +221,32 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ ok: true });
 });
 
+app.post('/api/auth/delete-account', (req, res) => {
+  const user = sessionUser(req);
+  const discordUser = readSession(req);
+
+  if (!user && !discordUser) {
+    return res.status(401).json({ error: 'Please sign in before deleting your Meta account.' });
+  }
+
+  if (user) {
+    db.prepare('DELETE FROM users WHERE id=?').run(user.id);
+  }
+
+  res.clearCookie('meta_session', {
+    httpOnly: true,
+    secure: appOrigin.startsWith('https://'),
+    sameSite: 'lax',
+    path: '/',
+  });
+  clearCookie(res, COOKIE_NAME);
+  return res.json({
+    ok: true,
+    deletedMetaAccount: Boolean(user),
+    clearedDiscordSession: Boolean(discordUser),
+  });
+});
+
 
 
 // Profile API: only the account owning the active email session can edit it.
