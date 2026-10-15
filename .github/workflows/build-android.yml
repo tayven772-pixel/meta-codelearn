@@ -32,7 +32,7 @@ jobs:
           distribution: temurin
           java-version: '21'
       - name: Install dependencies
-        run: npm install
+        run: npm ci
       - name: Build web app
         run: npm run build
       - name: Sync Android project
@@ -76,13 +76,16 @@ jobs:
         run: ./gradlew assembleRelease
       - name: Publish APK to website
         run: |
+          # Base the APK artifact commit on the latest main, not the older build checkout.
+          git fetch origin main
+          git checkout -B main origin/main
           mkdir -p public/downloads
           cp android/app/build/outputs/apk/release/app-release.apk public/downloads/Meta-latest.apk
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f public/downloads/Meta-latest.apk
           git commit -m "Update downloadable Meta APK [skip ci]" || exit 0
-          git push
+          git push origin main
       - uses: actions/upload-artifact@v4
         with:
           name: Meta-Android-APK
