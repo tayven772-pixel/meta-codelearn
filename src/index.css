@@ -1832,3 +1832,18 @@ html[data-reduced-motion='true'] *::after {
   .profile-editor-body { padding: 14px; }
   .profile-field { max-width: 100%; }
 }
+
+
+/* Consistent blue feedback for interactive icons across mouse, touch, and keyboard. */
+:where(button, a, [role="button"], [tabindex]):is(:hover, :active, :focus-visible, [aria-pressed="true"], [aria-current="page"], .selected, .active) svg {
+  color: #2563eb;
+}
+
+:root[data-theme='dark'] :where(button, a, [role="button"], [tabindex]):is(:hover, :active, :focus-visible, [aria-pressed="true"], [aria-current="page"], .selected, .active) svg {
+  color: #60a5fa;
+}
+
+/* Keep the icon feedback visible when SVGs define their own stroke or fill. */
+:where(button, a, [role="button"], [tabindex]):is(:hover, :active, :focus-visible, [aria-pressed="true"], [aria-current="page"], .selected, .active) svg :is(path, line, polyline, polygon, circle, rect) {
+  stroke: currentColor;
+}
