@@ -1604,8 +1604,14 @@ function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isRegistering, setIsRegistering] = useState(window.location.pathname.startsWith('/sign-up'));
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('');
-  const [messageType, setMessageType] = useState<'success' | 'error'>('error');
+  const [message, setMessage] = useState(() =>
+    new URLSearchParams(window.location.search).get('account') === 'deleted'
+      ? 'Your Meta account data has been deleted.'
+      : ''
+  );
+  const [messageType, setMessageType] = useState<'success' | 'error'>(() =>
+    new URLSearchParams(window.location.search).get('account') === 'deleted' ? 'success' : 'error'
+  );
 
   async function handleEmailSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1786,8 +1792,12 @@ function AccountSettingsPage() {
       if (!response.ok || !data.ok) {
         throw new Error(data.error || 'Could not delete your Meta account.');
       }
-      for (const key of ['meta-progress-v1', 'code-atlas-progress-v1', 'meta-projects-v2', 'meta-projects-v1']) {
-        localStorage.removeItem(key);
+      try {
+        for (const key of ['meta-progress-v1', 'code-atlas-progress-v1', 'meta-projects-v2', 'meta-projects-v1']) {
+          localStorage.removeItem(key);
+        }
+      } catch {
+        // The server account is already deleted even if browser storage is unavailable.
       }
       window.location.assign('/sign-in?account=deleted');
     } catch (error) {
