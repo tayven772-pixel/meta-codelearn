@@ -1,0 +1,166 @@
+name: Auto-deploy to VPS
+
+# Deploys production on every push to main.
+# The heavy lifting happens ON THE VPS: it pulls main, installs, builds and
+# restarts the auth service, then the static build is published to the web root.
+#
+# Required repository secrets (Settings > Secrets and variables > Actions):
+#   VPS_HOST         - hostname or IP of the VPS
+#   VPS_USER         - SSH user (must have passwordless sudo for the deploy commands)
+#   VPS_SSH_KEY      - private half of the deploy key (ed25519), full PEM block
+#   VPS_KNOWN_HOSTS  - optional; output of `ssh-keyscan -H <host>`. Strongly recommended.
+#   VPS_PORT         - optional; defaults to 22
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never let two deploys run at the same time; queue instead of cancelling,
+# so a half-finished publish can never be interrupted.
+concurrency:
+  group: production-vps-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy main to VPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check required secrets
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -eu
+          missing=0
+          for name in VPS_HOST VPS_USER VPS_SSH_KEY; do
+            eval "value=\${$name:-}"
+            if [ -z "$value" ]; then
+              echo "::error::Missing repository secret $name (Settings > Secrets and variables > Actions)."
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+          echo "All required secrets are present."
+
+      - name: Configure SSH
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -eu
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          if [ -n "${VPS_KNOWN_HOSTS:-}" ]; then
+            printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+            chmod 600 "$HOME/.ssh/known_hosts"
+            echo "HOST_KEY_MODE=strict" >> "$GITHUB_ENV"
+          else
+            echo "::warning::VPS_KNOWN_HOSTS is not set. Falling back to Trust On First Use (accept-new). Set VPS_KNOWN_HOSTS to pin the host key."
+            echo "HOST_KEY_MODE=accept-new" >> "$GITHUB_ENV"
+          fi
+
+      - name: Deploy on the VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          set -eu
+          PORT="${VPS_PORT:-22}"
+          if [ "$HOST_KEY_MODE" = "strict" ]; then
+            HOST_KEY_OPT="-o StrictHostKeyChecking=yes"
+          else
+            HOST_KEY_OPT="-o StrictHostKeyChecking=accept-new"
+          fi
+          ssh -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes -o BatchMode=yes \
+            $HOST_KEY_OPT -p "$PORT" \
+            "$VPS_USER@$VPS_HOST" "bash -s" <<'REMOTE'
+          set -eu
+
+          APP_DIR=/opt/meta-codelearn
+          WEB_ROOT=/var/www/html
+          SERVICE=meta-codelearn-auth.service
+          HEALTH_URL=http://127.0.0.1:3001/api/health
+
+          echo "==> Preflight"
+          command -v git >/dev/null 2>&1 || { echo "ERROR: git is not installed on the VPS"; exit 1; }
+          command -v npm >/dev/null 2>&1 || { echo "ERROR: npm is not installed on the VPS"; exit 1; }
+          command -v curl >/dev/null 2>&1 || { echo "ERROR: curl is not installed on the VPS"; exit 1; }
+          node -e 'const major = Number(process.versions.node.split(".")[0]); if (major < 20) { console.error("Node " + process.versions.node + " is too old; the build needs Node 20+"); process.exit(1); }' \
+            || { echo "ERROR: Node 20 or newer is required on the VPS"; exit 1; }
+          echo "node $(node -v) / npm $(npm -v)"
+
+          test -d "$APP_DIR/.git" || { echo "ERROR: $APP_DIR is not a git checkout"; exit 1; }
+          cd "$APP_DIR"
+
+          echo "==> Fetch origin/main"
+          git fetch --prune origin main
+          BEFORE=$(git rev-parse HEAD)
+          TARGET=$(git rev-parse origin/main)
+          echo "current: $BEFORE"
+          echo "target:  $TARGET"
+
+          if [ "$BEFORE" = "$TARGET" ]; then
+            echo "Already at origin/main; rebuilding to guarantee the published site matches it."
+          elif git merge-base --is-ancestor "$BEFORE" "$TARGET"; then
+            git merge --ff-only "$TARGET"
+          else
+            echo "WARNING: the checkout has commits that are not on origin/main. They will be replaced:"
+            git log --oneline "$TARGET..$BEFORE" || true
+            git reset --hard "$TARGET"
+          fi
+          echo "deploying $(git rev-parse --short HEAD) $(git log -1 --pretty=%s)"
+
+          echo "==> Install, type-check and build"
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          node --check server/auth.js
+          npm run build
+          test -s dist/index.html || { echo "ERROR: build produced no dist/index.html"; exit 1; }
+
+          echo "==> Publish static site"
+          STAMP=$(date +%Y%m%d-%H%M%S)
+          BACKUP="$WEB_ROOT.backup-$STAMP"
+          sudo -n cp -a "$WEB_ROOT" "$BACKUP" || { echo "ERROR: could not back up $WEB_ROOT (is passwordless sudo configured?)"; exit 1; }
+          sudo -n cp -a "$APP_DIR/dist/." "$WEB_ROOT/" || { echo "ERROR: could not publish to $WEB_ROOT"; exit 1; }
+          echo "published to $WEB_ROOT (backup: $BACKUP)"
+
+          echo "==> Restart auth service"
+          sudo -n systemctl restart "$SERVICE" || { echo "ERROR: could not restart $SERVICE"; exit 1; }
+          i=1
+          while [ "$i" -le 15 ]; do
+            if curl --fail --silent "$HEALTH_URL" >/dev/null 2>&1; then
+              echo "auth service healthy"
+              break
+            fi
+            if [ "$i" -eq 15 ]; then
+              echo "ERROR: $HEALTH_URL did not become healthy after restart"
+              echo "Roll the site back with: sudo cp -a \"$BACKUP/.\" $WEB_ROOT/"
+              exit 1
+            fi
+            i=$((i + 1))
+            sleep 1
+          done
+
+          echo "==> Deployed $(git rev-parse --short HEAD) $(git log -1 --pretty=%s)"
+          echo "Backup kept at $BACKUP"
+          REMOTE
+
+      - name: Report
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "Deploy finished for ${{ github.sha }}."
+          else
+            echo "Deploy failed for ${{ github.sha }}. The previous build stays live unless the publish step already ran; roll back with the newest /var/www/html.backup-* directory."
+          fi
