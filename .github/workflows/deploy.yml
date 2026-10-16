@@ -10,6 +10,11 @@ name: Auto-deploy to VPS
 #   VPS_SSH_KEY      - private half of the deploy key (ed25519), full PEM block
 #   VPS_KNOWN_HOSTS  - optional; output of `ssh-keyscan -H <host>`. Strongly recommended.
 #   VPS_PORT         - optional; defaults to 22
+#
+# No sudo is needed when /var/www/html is writable by VPS_USER, and the auth
+# service is only restarted when server/auth.js actually changed since the last
+# successful deploy. Otherwise VPS_USER needs passwordless sudo for cp and for
+# restarting the auth service; the log prints the exact one-line fix if it is missing.
 
 on:
   push:
@@ -91,6 +96,9 @@ jobs:
           WEB_ROOT=/var/www/html
           SERVICE=meta-codelearn-auth.service
           HEALTH_URL=http://127.0.0.1:3001/api/health
+          BACKUP_ROOT="$HOME/meta-web-backups"
+          MARKER="$HOME/.meta-deployed-sha"
+          SUDOERS_FIX="echo '$(id -un) ALL=(ALL) NOPASSWD: /usr/bin/cp, /bin/cp, /usr/bin/systemctl restart $SERVICE' | sudo tee /etc/sudoers.d/meta-deploy >/dev/null && sudo chmod 0440 /etc/sudoers.d/meta-deploy && sudo visudo -cf /etc/sudoers.d/meta-deploy"
 
           echo "==> Preflight"
           command -v git >/dev/null 2>&1 || { echo "ERROR: git is not installed on the VPS"; exit 1; }
@@ -99,6 +107,24 @@ jobs:
           node -e 'const major = Number(process.versions.node.split(".")[0]); if (major < 20) { console.error("Node " + process.versions.node + " is too old; the build needs Node 20+"); process.exit(1); }' \
             || { echo "ERROR: Node 20 or newer is required on the VPS"; exit 1; }
           echo "node $(node -v) / npm $(npm -v)"
+          echo "user: $(id -un) | app dir: $APP_DIR | web root: $WEB_ROOT"
+
+          if [ -w "$WEB_ROOT" ]; then
+            PUBLISH_MODE=direct
+            echo "publish mode: direct - $WEB_ROOT is writable by $(id -un), so no sudo is needed"
+          else
+            PUBLISH_MODE=sudo
+            echo "publish mode: sudo - $WEB_ROOT is not writable by $(id -un)"
+          fi
+
+          PROBE_DIR=$(mktemp -d)
+          : > "$PROBE_DIR/src"
+          if sudo -n cp -a "$PROBE_DIR/src" "$PROBE_DIR/dst" >/dev/null 2>&1; then
+            echo "sudo -n cp: allowed"
+          else
+            echo "sudo -n cp: NOT allowed (passwordless sudo is not configured for cp)"
+          fi
+          rm -rf "$PROBE_DIR"
 
           test -d "$APP_DIR/.git" || { echo "ERROR: $APP_DIR is not a git checkout"; exit 1; }
           cd "$APP_DIR"
@@ -121,6 +147,22 @@ jobs:
           fi
           echo "deploying $(git rev-parse --short HEAD) $(git log -1 --pretty=%s)"
 
+          # Only restart the auth service when server/auth.js really changed since the last
+          # successful deploy, so a static-only deploy never needs sudo.
+          LAST_DEPLOYED=$(cat "$MARKER" 2>/dev/null || true)
+          [ -n "$LAST_DEPLOYED" ] || LAST_DEPLOYED="$BEFORE"
+          AUTH_CHANGED=0
+          if git cat-file -e "$LAST_DEPLOYED^{commit}" 2>/dev/null; then
+            if ! git diff --quiet "$LAST_DEPLOYED" "$TARGET" -- server/auth.js; then
+              AUTH_CHANGED=1
+            fi
+          fi
+          if [ "$AUTH_CHANGED" = "1" ]; then
+            echo "server/auth.js changed since $LAST_DEPLOYED: the auth service will be restarted"
+          else
+            echo "server/auth.js unchanged since $LAST_DEPLOYED: the auth service will be left running"
+          fi
+
           echo "==> Install, type-check and build"
           npm ci --no-audit --no-fund
           npx tsc --noEmit
@@ -128,30 +170,62 @@ jobs:
           npm run build
           test -s dist/index.html || { echo "ERROR: build produced no dist/index.html"; exit 1; }
 
-          echo "==> Publish static site"
+          echo "==> Back up the current site"
           STAMP=$(date +%Y%m%d-%H%M%S)
-          BACKUP="$WEB_ROOT.backup-$STAMP"
-          sudo -n cp -a "$WEB_ROOT" "$BACKUP" || { echo "ERROR: could not back up $WEB_ROOT (is passwordless sudo configured?)"; exit 1; }
-          sudo -n cp -a "$APP_DIR/dist/." "$WEB_ROOT/" || { echo "ERROR: could not publish to $WEB_ROOT"; exit 1; }
-          echo "published to $WEB_ROOT (backup: $BACKUP)"
+          BACKUP="$BACKUP_ROOT/$STAMP"
+          mkdir -p "$BACKUP"
+          if [ -d "$WEB_ROOT" ]; then
+            cp -a "$WEB_ROOT/." "$BACKUP/" || { echo "ERROR: could not back up $WEB_ROOT"; exit 1; }
+          fi
+          echo "backup: $BACKUP"
 
-          echo "==> Restart auth service"
-          sudo -n systemctl restart "$SERVICE" || { echo "ERROR: could not restart $SERVICE"; exit 1; }
-          i=1
-          while [ "$i" -le 15 ]; do
-            if curl --fail --silent "$HEALTH_URL" >/dev/null 2>&1; then
-              echo "auth service healthy"
-              break
-            fi
-            if [ "$i" -eq 15 ]; then
-              echo "ERROR: $HEALTH_URL did not become healthy after restart"
-              echo "Roll the site back with: sudo cp -a \"$BACKUP/.\" $WEB_ROOT/"
+          echo "==> Publish static site"
+          if [ "$PUBLISH_MODE" = "direct" ]; then
+            cp -a "$APP_DIR/dist/." "$WEB_ROOT/" || { echo "::error::could not publish to $WEB_ROOT"; exit 1; }
+          else
+            if ! sudo -n cp -a "$APP_DIR/dist/." "$WEB_ROOT/"; then
+              echo "::error::could not publish to $WEB_ROOT - passwordless sudo is not configured on the VPS"
+              echo "Run this ONCE on the VPS, then re-run the workflow:"
+              echo "  $SUDOERS_FIX"
+              echo "Or hand the web root to the deploy user instead:"
+              echo "  sudo chown -R $(id -un):www-data $WEB_ROOT"
               exit 1
             fi
-            i=$((i + 1))
-            sleep 1
-          done
+          fi
+          echo "published to $WEB_ROOT"
 
+          if [ "$AUTH_CHANGED" = "1" ]; then
+            echo "==> Restart auth service"
+            if ! sudo -n systemctl restart "$SERVICE"; then
+              echo "::error::the site was published, but $SERVICE could not be restarted - passwordless sudo is not configured on the VPS"
+              echo "Run this ONCE on the VPS, then re-run the workflow:"
+              echo "  $SUDOERS_FIX"
+              exit 1
+            fi
+            i=1
+            while [ "$i" -le 15 ]; do
+              if curl --fail --silent "$HEALTH_URL" >/dev/null 2>&1; then
+                echo "auth service healthy"
+                break
+              fi
+              if [ "$i" -eq 15 ]; then
+                echo "ERROR: $HEALTH_URL did not become healthy after restart"
+                echo "Roll the site back with: cp -a \"$BACKUP/.\" $WEB_ROOT/"
+                exit 1
+              fi
+              i=$((i + 1))
+              sleep 1
+            done
+          else
+            echo "==> Auth service left running (no server/auth.js change); health check only"
+            if curl --fail --silent "$HEALTH_URL" >/dev/null 2>&1; then
+              echo "auth service healthy"
+            else
+              echo "WARNING: $HEALTH_URL is not answering (the static site was published anyway)"
+            fi
+          fi
+
+          git rev-parse HEAD > "$MARKER"
           echo "==> Deployed $(git rev-parse --short HEAD) $(git log -1 --pretty=%s)"
           echo "Backup kept at $BACKUP"
           REMOTE
