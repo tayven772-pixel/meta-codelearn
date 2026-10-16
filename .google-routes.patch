@@ -1,0 +1,119 @@
+app.get('/api/auth/google', (req, res) => {
+  if (!googleOAuth) {
+    return res.status(503).send('Google sign-in is not configured.');
+  }
+
+  const state = randomToken();
+  res.cookie('meta_google_oauth_state', state, {
+    httpOnly: true,
+    secure: appOrigin.startsWith('https://'),
+    sameSite: 'lax',
+    path: '/api/auth/google',
+    maxAge: 10 * 60 * 1000,
+  });
+
+  res.setHeader('Cache-Control', 'no-store');
+  const url = googleOAuth.generateAuthUrl({
+    access_type: 'online',
+    scope: ['openid', 'email', 'profile'],
+    state,
+    prompt: 'select_account',
+  });
+
+  return res.redirect(url);
+});
+
+app.get('/api/auth/google/callback', async (req, res) => {
+  const stateCookie = String(req.headers.cookie || '')
+    .split(';')
+    .map(value => value.trim())
+    .find(value => value.startsWith('meta_google_oauth_state='))
+    ?.slice('meta_google_oauth_state='.length);
+
+  const clearStateCookie = () => res.clearCookie(
+    'meta_google_oauth_state',
+    {
+      httpOnly: true,
+      secure: appOrigin.startsWith('https://'),
+      sameSite: 'lax',
+      path: '/api/auth/google',
+    }
+  );
+
+  const receivedState = String(req.query.state || '');
+  if (
+    !stateCookie ||
+    !receivedState ||
+    stateCookie.length !== receivedState.length ||
+    !crypto.timingSafeEqual(Buffer.from(stateCookie), Buffer.from(receivedState))
+  ) {
+    clearStateCookie();
+    return res.status(400).send('Google sign-in could not be verified. Please try again.');
+  }
+
+  clearStateCookie();
+
+  if (req.query.error || !req.query.code || !googleOAuth) {
+    return res.redirect(`${appOrigin}/sign-in?google=error`);
+  }
+
+  try {
+    const { tokens } = await googleOAuth.getToken(String(req.query.code));
+    if (!tokens.id_token) {
+      return res.redirect(`${appOrigin}/sign-in?google=error`);
+    }
+
+    const ticket = await googleOAuth.verifyIdToken({
+      idToken: tokens.id_token,
+      audience: googleClientId,
+    });
+    const profile = ticket.getPayload();
+
+    const googleSub = String(profile?.sub || '');
+    const email = normalizeEmail(profile?.email);
+    const emailVerified = profile?.email_verified === true;
+
+    if (!googleSub || !validEmail(email) || !emailVerified) {
+      return res.redirect(`${appOrigin}/sign-in?google=error`);
+    }
+
+    let user = db.prepare('SELECT * FROM users WHERE google_sub=?').get(googleSub);
+
+    if (!user) {
+      user = db.prepare('SELECT * FROM users WHERE email=? COLLATE NOCASE').get(email);
+
+      if (user && user.google_sub && user.google_sub !== googleSub) {
+        return res.redirect(`${appOrigin}/sign-in?google=error`);
+      }
+
+      if (user) {
+        db.prepare(
+          'UPDATE users SET google_sub=?, verified_at=COALESCE(verified_at, ?) WHERE id=?'
+        ).run(googleSub, new Date().toISOString(), user.id);
+        user = db.prepare('SELECT * FROM users WHERE id=?').get(user.id);
+      } else {
+        const encodedPassword = await passwordHash(randomToken());
+        const displayName = String(profile?.name || '').trim().slice(0, 40) || null;
+        const result = db.prepare(`
+          INSERT INTO users(email, password_hash, verified_at, created_at, display_name, google_sub)
+          VALUES(?, ?, ?, ?, ?, ?)
+        `).run(
+          email,
+          encodedPassword,
+          new Date().toISOString(),
+          new Date().toISOString(),
+          displayName,
+          googleSub
+        );
+        user = db.prepare('SELECT * FROM users WHERE id=?').get(Number(result.lastInsertRowid));
+      }
+    }
+
+    setSession(res, user.id);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.redirect(`${appOrigin}/user-portal`);
+  } catch (error) {
+    console.error('Google sign-in failed:', error?.message || 'unknown error');
+    return res.redirect(`${appOrigin}/sign-in?google=error`);
+  }
+});
