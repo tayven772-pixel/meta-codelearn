@@ -981,6 +981,7 @@ function ProjectPage() {
   const [fileCreateError, setFileCreateError] = useState('');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [autoCorrecting, setAutoCorrecting] = useState(false);
   const [error, setError] = useState('');
   const [showProjectHints] = useState(() => {
     try {
@@ -1140,6 +1141,57 @@ function ProjectPage() {
     }
   };
 
+  const autoCorrectActiveFile = async () => {
+    if (!activeFile || autoCorrecting || sending) return;
+    const originalCode = currentFiles[activeFile] || '';
+    setAutoCorrecting(true);
+    setError('');
+    try {
+      const response = await fetch('/api/coach', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          message: [
+            'AUTO-CORRECT REQUEST. Inspect only the active file listed below and automatically correct errors you can confidently identify.',
+            'Preserve the intended behavior, style, and existing features.',
+            'Return the full corrected active file in project.files. Keep every other file byte-for-byte unchanged.',
+            'Do not make speculative rewrites. If you cannot confidently fix an issue, leave that part unchanged and explain it in reply.',
+            'In reply, briefly list what you corrected. Do not wrap file contents in markdown fences.',
+            'Active file: ' + activeFile,
+            'Project type: ' + project.type,
+          ].join('\n'),
+          track: 'Project Builder',
+          project: { ...project, files: currentFiles },
+          history: [],
+          activeFile,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error || 'Auto-correct could not complete.');
+      const correctedCode = payload?.project?.files?.[activeFile];
+      if (typeof correctedCode !== 'string') {
+        throw new Error('Meta could not return a corrected version of this file. Your original code was kept.');
+      }
+      if (correctedCode === originalCode) {
+        setError(payload.reply || 'No confident corrections were found. Your file was not changed.');
+        return;
+      }
+      updateFiles({ ...currentFiles, [activeFile]: correctedCode });
+      const note = typeof payload.reply === 'string' && payload.reply.trim()
+        ? payload.reply.trim()
+        : 'Auto-correct applied. Review the changes before continuing.';
+      setProjects((current) => current.map((item) =>
+        item.id === project.id
+          ? { ...item, messages: [...(item.messages || []), { role: 'assistant' as const, content: note }], updatedAt: Date.now() }
+          : item
+      ));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Auto-correct could not complete. Your original file was kept.');
+    } finally {
+      setAutoCorrecting(false);
+    }
+  };
+
   const htmlEntries = fileEntries.filter(([path]) => /\.html?$/i.test(path));
   const preferredHtmlPath = /\.html?$/i.test(activeFile) && currentFiles[activeFile] !== undefined
     ? activeFile
@@ -1234,6 +1286,7 @@ function ProjectPage() {
         </header>
 
         <section className="project-editor-body">
+          {error && <p className="project-auto-correct-status" role="status">{error}</p>}
           {activeTab === 'files' && (
             <div className="code-workspace">
               <aside className="file-sidebar">
@@ -1262,6 +1315,7 @@ function ProjectPage() {
                       <div>
                         <button type="button" className="editor-text-button" onClick={() => downloadFile(activeFile, currentFiles[activeFile] || '')}>Download file</button>
                         <button type="button" className="editor-text-button" onClick={() => { setMessage(`Review ${activeFile} in my ${project.type} project. First explain what this code does. Check for bugs, errors, missing pieces, and improvements. If something is wrong, show a corrected code example and explain exactly what to change and why, step by step. Do not modify or replace any project files yet; wait for me to approve a fix.`); setError(''); setActiveTab('chat'); }} title="Get a code review and step-by-step fix instructions"><Lightbulb aria-hidden="true" /> Explain / fix</button>
+                        <button type="button" className="editor-text-button" onClick={() => void autoCorrectActiveFile()} disabled={autoCorrecting || sending} title="Automatically fix confidently identified errors in this file"><Sparkles aria-hidden="true" /> {autoCorrecting ? 'Correcting…' : 'Auto-correct'}</button>
                         <button type="button" className="editor-text-button danger-text" onClick={deleteActiveFile}>Delete</button>
                       </div>
                     </div>
