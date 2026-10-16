@@ -713,7 +713,7 @@ function PlayPage() {
               <p className="sidebar-title"><span>Main functions</span></p>
               {selected.mainFunctions.map((item) => <span className="skill-chip" key={item}>{item}</span>)}
               <p className="sidebar-title"><span>Skills in this track</span></p>
-              {selected.skills.map((skill) => <span className="skill-chip" key={skill}>{skill}</span>)
+              {selected.skills.map((skill) => <span className="skill-chip" key={skill}>{skill}</span>)}
               <div className="play-note">
                 <strong>Build-first rule</strong>
                 <span>Hints explain the next move, but Meta does not hand you the full final project before you try it.</span>
