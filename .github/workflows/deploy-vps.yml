@@ -86,14 +86,17 @@ jobs:
         run: |
           set -eu
           STAGING="/tmp/meta-codelearn-dist-$DEPLOY_SHA"
-          ssh -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" "set -eu
-            test -s '$STAGING/index.html'
-            sudo -n nginx -t
-            BACKUP='/var/www/html.backup-$DEPLOY_SHA-'\$(date +%Y%m%d-%H%M%S)
-            sudo -n cp -a /var/www/html \"\$BACKUP\"
-            sudo -n cp -a '$STAGING/.' /var/www/html/
-            sudo -n nginx -t
-            sudo -n systemctl reload nginx
-            rm -rf '$STAGING'
-            echo 'Website deployed successfully. Backup: '\"\$BACKUP\"
-          "
+          ssh -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" "bash -s -- '$STAGING' '$DEPLOY_SHA'" <<'REMOTE'
+          set -eu
+          STAGING="$1"
+          DEPLOY_SHA="$2"
+          test -s "$STAGING/index.html"
+          sudo -n nginx -t
+          BACKUP="/var/www/html.backup-$DEPLOY_SHA-$(date +%Y%m%d-%H%M%S)"
+          sudo -n cp -a /var/www/html "$BACKUP"
+          sudo -n cp -a "$STAGING/." /var/www/html/
+          sudo -n nginx -t
+          sudo -n systemctl reload nginx
+          rm -rf "$STAGING"
+          echo "Website deployed successfully. Backup: $BACKUP"
+          REMOTE
