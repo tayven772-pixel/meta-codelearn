@@ -2232,7 +2232,7 @@ function AccountSettingsPage() {
                 </div>
               )}
               <button type="button" className="button-secondary" onClick={signOut}>Sign out</button>
-              {emailUser?.email.toLowerCase() === 'metasupport43@gmail.com' && (
+              {emailUser?.email.trim().toLowerCase() === 'metasupport43@gmail.com' && (
                 <Link href="/admin" className="button-secondary">Open content publishing</Link>
               )}
             </div>
@@ -2738,6 +2738,16 @@ function AdminPublishingPage() {
           <h1>Content publishing</h1>
           <p>Create drafts, preview your writing, and publish announcements or learning resources without editing source code.</p>
         </div>
+        <section className="admin-publishing-guide" aria-label="How to publish content">
+          <h2>How to publish</h2>
+          <ol>
+            <li>Choose <strong>New draft</strong> in the Content library.</li>
+            <li>Add a title and a short URL slug, using lowercase letters and hyphens (for example, <code>new-course-update</code>).</li>
+            <li>Choose <strong>Announcement</strong> for news, or <strong>Learning resource</strong> for a tip or guide. Add a short summary and the full body.</li>
+            <li>Select <strong>Save draft</strong> to keep it private, or <strong>Publish content</strong> to show it in the Updates &amp; new learning section on the home page.</li>
+          </ol>
+          <p>Publishing here adds a home-page update; it does not create or edit a lesson inside the structured lesson tracks.</p>
+        </section>
         <p className="admin-publishing-status" role="status">{adminStatus}</p>
         {allowed && (
           <div className="admin-publishing-layout">
