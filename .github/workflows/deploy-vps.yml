@@ -111,6 +111,10 @@ jobs:
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
           }
+          NGINX
+          fi
+          if ! sudo -n grep -Fq 'location = /api/auth/admin/content' "$NGINX_SNIPPET"; then
+            sudo -n tee -a "$NGINX_SNIPPET" >/dev/null <<'NGINX'
           location = /api/auth/admin/content {
             proxy_pass http://127.0.0.1:3001/api/auth/admin/content;
             proxy_http_version 1.1;
@@ -121,7 +125,11 @@ jobs:
           }
           NGINX
           fi
-          if ! sudo -n grep -q '^META_ADMIN_EMAILS=' /etc/meta-codelearn-auth.env; then
+          if sudo -n grep -q '^META_ADMIN_EMAILS=' /etc/meta-codelearn-auth.env; then
+            if ! sudo -n sed -n 's/^META_ADMIN_EMAILS=//p' /etc/meta-codelearn-auth.env | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -Fqx 'metasupport43@gmail.com'; then
+              sudo -n sed -i '/^META_ADMIN_EMAILS=/ s/$/,metasupport43@gmail.com/' /etc/meta-codelearn-auth.env
+            fi
+          else
             printf '%s\n' 'META_ADMIN_EMAILS=metasupport43@gmail.com' | sudo -n tee -a /etc/meta-codelearn-auth.env >/dev/null
           fi
           if ! sudo -n nginx -t; then
