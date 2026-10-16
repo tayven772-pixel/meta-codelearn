@@ -159,11 +159,29 @@ type MetaProject = {
 };
 
 const PROJECTS_KEY = 'meta-projects-v2';
+const ACTIVE_ACCOUNT_KEY = 'meta-active-account-v1';
+
+function currentAccountScope(): string {
+  try {
+    return localStorage.getItem(ACTIVE_ACCOUNT_KEY) || 'guest';
+  } catch {
+    return 'guest';
+  }
+}
+
+function projectsStorageKey(): string {
+  const scope = currentAccountScope();
+  return scope === 'guest' ? PROJECTS_KEY : `${PROJECTS_KEY}:${scope}`;
+}
 
 function readProjects(): MetaProject[] {
+  const storageKey = projectsStorageKey();
   try {
-    const next = localStorage.getItem(PROJECTS_KEY);
+    const next = localStorage.getItem(storageKey);
     if (next) return JSON.parse(next) as MetaProject[];
+    // Only migrate the old v1 project format for guest data. Signed-in accounts
+    // never silently inherit another account's or the browser's existing projects.
+    if (currentAccountScope() !== 'guest') return [];
     const legacy = localStorage.getItem('meta-projects-v1');
     if (!legacy) return [];
     const migrated = (JSON.parse(legacy) as Array<{ id: string; name: string; type: string }>).map((project) => ({
@@ -173,7 +191,7 @@ function readProjects(): MetaProject[] {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     }));
-    localStorage.setItem(PROJECTS_KEY, JSON.stringify(migrated));
+    localStorage.setItem(storageKey, JSON.stringify(migrated));
     return migrated;
   } catch {
     return [];
@@ -182,7 +200,7 @@ function readProjects(): MetaProject[] {
 
 function writeProjects(projects: MetaProject[]) {
   try {
-    localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+    localStorage.setItem(projectsStorageKey(), JSON.stringify(projects));
   } catch {
     // Keep projects in memory when storage is unavailable.
   }
@@ -305,7 +323,7 @@ function readProgress(storageKey: string): Progress {
 
 function useProgress() {
   const isLoaded = true;
-  const storageKey = `${PROGRESS_KEY}:guest`;
+  const storageKey = `${PROGRESS_KEY}:${currentAccountScope()}`;
   const [snapshot, setSnapshot] = useState(() => ({
     storageKey,
     progress: readProgress(storageKey),
@@ -2008,6 +2026,7 @@ function AccountSettingsPage() {
   const [authLoading, setAuthLoading] = useState(true);
   const [authMessage, setAuthMessage] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  const [importStatus, setImportStatus] = useState('');
   useEffect(() => {
     let active = true;
     async function checkSessions() {
@@ -2048,15 +2067,80 @@ function AccountSettingsPage() {
       }
       setDiscordUser(null);
       setEmailUser(null);
+      try { localStorage.removeItem(ACTIVE_ACCOUNT_KEY); } catch { /* ignore unavailable storage */ }
       setAuthMessage('You have signed out.');
       window.location.assign('/sign-in');
     } catch {
       setAuthMessage('Could not sign out right now. Please try again.');
     }
   }
+  function importBrowserWork() {
+    const scope = currentAccountScope();
+    if (scope === 'guest') {
+      setImportStatus('Sign in first, then choose which account should receive a copy of your existing browser work.');
+      return;
+    }
+    try {
+      const progressTargetKey = `${PROGRESS_KEY}:${scope}`;
+      const progressTarget = readProgress(progressTargetKey);
+      const sourceProgress = ['meta-progress-v1:guest', 'meta-progress-v1', LEGACY_PROGRESS_KEY]
+        .map(key => {
+          try { return JSON.parse(localStorage.getItem(key) || 'null') as Progress | null; } catch { return null; }
+        })
+        .filter((value): value is Progress => Boolean(value && Array.isArray(value.completedLessonIds)));
+      const completedLessonIds = Array.from(new Set([
+        ...progressTarget.completedLessonIds,
+        ...sourceProgress.flatMap(value => value.completedLessonIds || []),
+      ]));
+      const completedQuizLessonIds = Array.from(new Set([
+        ...(progressTarget.completedQuizLessonIds || []),
+        ...sourceProgress.flatMap(value => value.completedQuizLessonIds || []),
+      ]));
+      const importedProgress: Progress = {
+        ...sourceProgress[0],
+        ...progressTarget,
+        completedLessonIds,
+        completedQuizLessonIds,
+        skillLevel: progressTarget.skillLevel || sourceProgress.find(value => value.skillLevel)?.skillLevel,
+      };
+      localStorage.setItem(progressTargetKey, JSON.stringify(importedProgress));
+
+      const projectTargetKey = projectsStorageKey();
+      const existingTargetProjects = (() => {
+        try { return JSON.parse(localStorage.getItem(projectTargetKey) || '[]') as MetaProject[]; } catch { return []; }
+      })();
+      const sourceProjects = ['meta-projects-v2', 'meta-projects-v1'].flatMap(key => {
+        try {
+          const value = JSON.parse(localStorage.getItem(key) || '[]');
+          return Array.isArray(value) ? value as MetaProject[] : [];
+        } catch { return []; }
+      });
+      const mergedProjects = [...existingTargetProjects];
+      const knownIds = new Set(existingTargetProjects.map(project => project.id));
+      for (const project of sourceProjects) {
+        if (!knownIds.has(project.id)) {
+          mergedProjects.push({
+            ...project,
+            files: project.files || {},
+            messages: project.messages || [],
+            createdAt: project.createdAt || Date.now(),
+            updatedAt: project.updatedAt || Date.now(),
+          });
+          knownIds.add(project.id);
+        }
+      }
+      localStorage.setItem(projectTargetKey, JSON.stringify(mergedProjects));
+      setImportStatus(`Copied ${completedLessonIds.length} completed lessons and ${mergedProjects.length} projects into this account. Your original browser data was kept unchanged.`);
+      window.setTimeout(() => window.location.reload(), 900);
+    } catch {
+      setImportStatus('Could not copy the browser data. Check available device storage and try again.');
+    }
+  }
+
   async function deleteAccount() {
+    const scope = currentAccountScope();
     const confirmed = window.confirm(
-      'Delete your Meta account data and clear saved learning progress and projects on this browser? This cannot be undone and does not delete your Google or Discord account.'
+      'Delete this Meta account and its saved learning progress/projects on this browser? Other accounts and the original guest/browser data will be left untouched. This cannot be undone and does not delete your Google or Discord account.'
     );
     if (!confirmed || isDeleting) return;
     setIsDeleting(true);
@@ -2071,9 +2155,12 @@ function AccountSettingsPage() {
         throw new Error(data.error || 'Could not delete your Meta account.');
       }
       try {
-        for (const key of ['meta-progress-v1', 'code-atlas-progress-v1', 'meta-projects-v2', 'meta-projects-v1']) {
-          localStorage.removeItem(key);
+        localStorage.removeItem(`${PROGRESS_KEY}:${scope}`);
+        localStorage.removeItem(`${PROJECTS_KEY}:${scope}`);
+        if (scope === 'guest') {
+          for (const key of ['meta-progress-v1', 'code-atlas-progress-v1', 'meta-projects-v1']) localStorage.removeItem(key);
         }
+        localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
       } catch {
         // The server account is already deleted even if browser storage is unavailable.
       }
@@ -2125,8 +2212,15 @@ function AccountSettingsPage() {
             </button>
           </section>
           <div className="account-setting-block">
-            <h2>Your local data</h2>
-            <p>Lesson progress and project data currently remain on this browser. Discord sign-in does not yet sync learning data between devices.</p>
+            <h2>Your learning data</h2>
+            <p>Projects and lesson progress are kept in separate browser storage for each signed-in Meta account. Your old browser data remains untouched until you choose to copy it.</p>
+            {(discordUser || emailUser) && currentAccountScope() !== 'guest' && (
+              <div className="account-data-import">
+                <p>Have projects or completed lessons from before account separation? Copy them into the account you are signed into now. This merges data without deleting the original browser copy.</p>
+                <button type="button" className="button-secondary" onClick={importBrowserWork}>Copy existing browser work into this account</button>
+                {importStatus && <p role="status" className="account-email">{importStatus}</p>}
+              </div>
+            )}
             <div className="account-setting-links">
               <Link href="/privacy" className="button-secondary">Read privacy policy</Link>
             </div>
@@ -2652,34 +2746,40 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
-
     const emailCheck = fetch('/api/auth/me', { credentials: 'same-origin' })
-      .then(response => response.ok)
-      .catch(() => false);
-
+      .then(async response => {
+        if (!response.ok) return null;
+        const data = await response.json().catch(() => ({}));
+        return data?.user?.id != null ? `email-${String(data.user.id)}` : null;
+      })
+      .catch(() => null);
     const discordCheck = fetch('/api/auth/discord/me', { credentials: 'same-origin' })
-      .then(response => response.ok ? response.json() : null)
-      .then(data => Boolean(data?.authenticated))
-      .catch(() => false);
+      .then(async response => {
+        if (!response.ok) return null;
+        const data = await response.json().catch(() => ({}));
+        return data?.authenticated && data?.user?.id != null ? `discord-${String(data.user.id)}` : null;
+      })
+      .catch(() => null);
 
-    Promise.all([emailCheck, discordCheck]).then(([emailSignedIn, discordSignedIn]) => {
-      if (active) setStatus(emailSignedIn || discordSignedIn ? 'signed-in' : 'signed-out');
+    Promise.all([emailCheck, discordCheck]).then(([emailScope, discordScope]) => {
+      if (!active) return;
+      const scope = emailScope || discordScope;
+      try {
+        if (scope) localStorage.setItem(ACTIVE_ACCOUNT_KEY, scope);
+        else localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
+      } catch {
+        // If storage is blocked, the page still works with guest-only local state.
+      }
+      setStatus(scope ? 'signed-in' : 'signed-out');
     });
-
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, []);
 
-  if (status === 'checking') {
-    return <main className="page-container"><p>Checking sign-in…</p></main>;
-  }
-
+  if (status === 'checking') return <main className="page-container"><p>Checking sign-in…</p></main>;
   if (status === 'signed-out') {
     const next = window.location.pathname + window.location.search;
     return <Redirect to={`/sign-in?next=${encodeURIComponent(next)}`} />;
   }
-
   return <>{children}</>;
 }
 
