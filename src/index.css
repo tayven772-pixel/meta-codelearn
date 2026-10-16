@@ -2013,3 +2013,135 @@ html[data-reduced-motion='true'] *::after {
 .account-data-import { display: grid; gap: 10px; margin-top: 12px; padding: 14px; border: 1px solid hsl(var(--border)); border-radius: 10px; background: hsl(var(--background) / .75); }
 .account-data-import > p { margin: 0; color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 1.7; }
 .account-data-import button { justify-self: start; }
+
+
+/* Light theme: carry the forest-green accent through controls and learning states,
+   while keeping surfaces warm beige and body text dark for contrast. */
+:root[data-theme='light'] button:focus-visible,
+:root[data-theme='light'] a:focus-visible,
+:root[data-theme='light'] select:focus-visible,
+:root[data-theme='light'] input:focus-visible,
+:root[data-theme='light'] textarea:focus-visible,
+:root:not([data-theme='dark']) button:focus-visible,
+:root:not([data-theme='dark']) a:focus-visible,
+:root:not([data-theme='dark']) select:focus-visible,
+:root:not([data-theme='dark']) input:focus-visible,
+:root:not([data-theme='dark']) textarea:focus-visible { outline-color: #4b7957; }
+:root[data-theme='light'] ::selection, :root:not([data-theme='dark']) ::selection { background: #356c50; }
+:root[data-theme='light'] .top-links a:hover,
+:root:not([data-theme='dark']) .top-links a:hover,
+:root[data-theme='light'] .theme-toggle:hover,
+:root:not([data-theme='dark']) .theme-toggle:hover,
+:root[data-theme='light'] .auth-copy h1 em,
+:root:not([data-theme='dark']) .auth-copy h1 em,
+:root[data-theme='light'] .hero h1 em,
+:root:not([data-theme='dark']) .hero h1 em,
+:root[data-theme='light'] .exercise-heading,
+:root:not([data-theme='dark']) .exercise-heading,
+:root[data-theme='light'] .quiz-heading,
+:root:not([data-theme='dark']) .quiz-heading,
+:root[data-theme='light'] .play-hub-kicker,
+:root:not([data-theme='dark']) .play-hub-kicker,
+:root[data-theme='light'] .play-open,
+:root:not([data-theme='dark']) .play-open,
+:root[data-theme='light'] .workspace-plan-link,
+:root:not([data-theme='dark']) .workspace-plan-link,
+:root[data-theme='light'] .policy-link,
+:root:not([data-theme='dark']) .policy-link,
+:root[data-theme='light'] .footer-links a:hover,
+:root:not([data-theme='dark']) .footer-links a:hover,
+:root[data-theme='light'] .project-bottom-tabs button.active,
+:root:not([data-theme='dark']) .project-bottom-tabs button.active,
+:root[data-theme='light'] .project-download-button,
+:root:not([data-theme='dark']) .project-download-button,
+:root[data-theme='light'] .icon-only-button:hover,
+:root:not([data-theme='dark']) .icon-only-button:hover { color: #356c50; }
+:root[data-theme='light'] .eyebrow, :root:not([data-theme='dark']) .eyebrow,
+:root[data-theme='light'] .section-kicker, :root:not([data-theme='dark']) .section-kicker,
+:root[data-theme='light'] .play-hub-kicker, :root:not([data-theme='dark']) .play-hub-kicker { color: #356c50; }
+:root[data-theme='light'] .eyebrow-line, :root:not([data-theme='dark']) .eyebrow-line { background: #6c9c78; }
+:root[data-theme='light'] .search-input:focus,
+:root:not([data-theme='dark']) .search-input:focus,
+:root[data-theme='light'] .filter-select:focus,
+:root:not([data-theme='dark']) .filter-select:focus,
+:root[data-theme='light'] .answer-input:focus,
+:root:not([data-theme='dark']) .answer-input:focus,
+:root[data-theme='light'] .profile-input:focus,
+:root:not([data-theme='dark']) .profile-input:focus,
+:root[data-theme='light'] .settings-select:focus,
+:root:not([data-theme='dark']) .settings-select:focus,
+:root[data-theme='light'] .project-create-card input:focus,
+:root:not([data-theme='dark']) .project-create-card input:focus,
+:root[data-theme='light'] .project-create-card select:focus,
+:root:not([data-theme='dark']) .project-create-card select:focus,
+:root[data-theme='light'] .login-input-wrap:focus-within,
+:root:not([data-theme='dark']) .login-input-wrap:focus-within { border-color: #6c9c78; box-shadow: 0 0 0 3px rgb(53 108 80 / .13); }
+:root[data-theme='light'] .feedback.try-again, :root:not([data-theme='dark']) .feedback.try-again { background: #e4ead9; color: #355b45; }
+:root[data-theme='light'] .sidebar-lesson.active .lesson-index,
+:root:not([data-theme='dark']) .sidebar-lesson.active .lesson-index,
+:root[data-theme='light'] .project-ai-composer button,
+:root:not([data-theme='dark']) .project-ai-composer button,
+:root[data-theme='light'] .project-tab-chat-composer button,
+:root:not([data-theme='dark']) .project-tab-chat-composer button,
+:root[data-theme='light'] .new-file-inline button,
+:root:not([data-theme='dark']) .new-file-inline button,
+:root[data-theme='light'] .project-message.user p,
+:root:not([data-theme='dark']) .project-message.user p,
+:root[data-theme='light'] .settings-switch input:checked + .settings-switch-track,
+:root:not([data-theme='dark']) .settings-switch input:checked + .settings-switch-track { background: #356c50; }
+:root[data-theme='light'] .quiz-option input, :root:not([data-theme='dark']) .quiz-option input { accent-color: #356c50; }
+:root[data-theme='light'] .quiz-option:has(input:checked),
+:root:not([data-theme='dark']) .quiz-option:has(input:checked),
+:root[data-theme='light'] .play-card-icon,
+:root:not([data-theme='dark']) .play-card-icon,
+:root[data-theme='light'] .mission-step > span,
+:root:not([data-theme='dark']) .mission-step > span,
+:root[data-theme='light'] .skill-chip,
+:root:not([data-theme='dark']) .skill-chip,
+:root[data-theme='light'] .play-note,
+:root:not([data-theme='dark']) .play-note,
+:root[data-theme='light'] .new-project-icon,
+:root:not([data-theme='dark']) .new-project-icon,
+:root[data-theme='light'] .pricing-badge,
+:root:not([data-theme='dark']) .pricing-badge,
+:root[data-theme='light'] .simple-project-icon,
+:root:not([data-theme='dark']) .simple-project-icon,
+:root[data-theme='light'] .project-files-drawer > summary span,
+:root:not([data-theme='dark']) .project-files-drawer > summary span,
+:root[data-theme='light'] .file-list-item.active,
+:root:not([data-theme='dark']) .file-list-item.active { background: #e3ead9; color: #355b45; border-color: #c8d6c1; }
+:root[data-theme='light'] .play-outcome,
+:root:not([data-theme='dark']) .play-outcome { border-left-color: #6c9c78; background: #f0eee1; color: #435548; }
+:root[data-theme='light'] .concept-quote,
+:root:not([data-theme='dark']) .concept-quote { border-left-color: #6c9c78; }
+:root[data-theme='light'] .play-card:hover,
+:root:not([data-theme='dark']) .play-card:hover,
+:root[data-theme='light'] .play-hub-card:hover,
+:root:not([data-theme='dark']) .play-hub-card:hover,
+:root[data-theme='light'] .language-card:hover,
+:root:not([data-theme='dark']) .language-card:hover,
+:root[data-theme='light'] .new-project-card:hover,
+:root:not([data-theme='dark']) .new-project-card:hover,
+:root[data-theme='light'] .simple-project-card:hover,
+:root:not([data-theme='dark']) .simple-project-card:hover,
+:root[data-theme='light'] .template-card:hover,
+:root:not([data-theme='dark']) .template-card:hover,
+:root[data-theme='light'] .skill-level-option:hover,
+:root:not([data-theme='dark']) .skill-level-option:hover { border-color: #78a98a; }
+:root[data-theme='light'] .pricing-card.featured,
+:root:not([data-theme='dark']) .pricing-card.featured { border-color: #78a98a; }
+:root[data-theme='light'] .workspace-empty > svg,
+:root:not([data-theme='dark']) .workspace-empty > svg,
+:root[data-theme='light'] .projects-empty-minimal svg,
+:root:not([data-theme='dark']) .projects-empty-minimal svg,
+:root[data-theme='light'] .project-chat-empty svg,
+:root:not([data-theme='dark']) .project-chat-empty svg,
+:root[data-theme='light'] .editor-empty svg,
+:root:not([data-theme='dark']) .editor-empty svg { color: #6c9c78; }
+.admin-publishing-guide { margin: 0 0 18px; padding: 18px 20px; border: 1px solid hsl(var(--border)); border-radius: 12px; background: hsl(var(--card)); }
+.admin-publishing-guide h2 { margin: 0 0 10px; font: 600 21px var(--app-font-serif); }
+.admin-publishing-guide ol { margin: 0; padding-left: 22px; color: hsl(var(--foreground)); font-size: 12px; line-height: 1.8; }
+.admin-publishing-guide li { padding-left: 3px; margin: 4px 0; }
+.admin-publishing-guide p { margin: 12px 0 0; color: hsl(var(--muted-foreground)); font-size: 11px; line-height: 1.7; }
+.admin-publishing-guide code { padding: 2px 5px; border-radius: 4px; background: hsl(var(--muted)); color: hsl(var(--foreground)); }
+
