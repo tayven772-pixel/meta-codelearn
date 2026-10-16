@@ -1109,13 +1109,80 @@ function ProjectPage() {
     }
   };
 
-  const htmlFile = currentFiles['index.html'] || currentFiles['src/index.html'] || '';
-  const cssFile = currentFiles['style.css'] || currentFiles['styles.css'] || currentFiles['src/index.css'] || '';
-  const jsFile = currentFiles['script.js'] || currentFiles['src/main.js'] || currentFiles['src/main.ts'] || '';
+  const htmlEntries = fileEntries.filter(([path]) => /\.html?$/i.test(path));
+  const preferredHtmlPath = /\.html?$/i.test(activeFile) && currentFiles[activeFile] !== undefined
+    ? activeFile
+    : currentFiles['index.html'] !== undefined
+      ? 'index.html'
+      : currentFiles['src/index.html'] !== undefined
+        ? 'src/index.html'
+        : htmlEntries[0]?.[0] || '';
+  const htmlFile = preferredHtmlPath ? currentFiles[preferredHtmlPath] || '' : '';
   const previewDocument = htmlFile
-    ? htmlFile
-        .replace('</head>', `<style>${cssFile}</style></head>`)
-        .replace('</body>', `<script>${jsFile.replace(/<\/script>/gi, '<\\/script>')}</script></body>`)
+    ? (() => {
+        const resolveAssetPath = (htmlPath: string, assetUrl: string) => {
+          const cleanUrl = assetUrl.split(/[?#]/, 1)[0].replace(/^\.\//, '');
+          if (!cleanUrl || /^(?:[a-z]+:|\/|#)/i.test(cleanUrl)) return '';
+          const directory = htmlPath.includes('/') ? htmlPath.slice(0, htmlPath.lastIndexOf('/') + 1) : '';
+          const candidates = [
+            directory + cleanUrl,
+            cleanUrl,
+            cleanUrl.split('/').pop() || '',
+          ];
+          return candidates.find((candidate) => Object.prototype.hasOwnProperty.call(currentFiles, candidate)) || '';
+        };
+        let documentHtml = htmlFile;
+        let linkedCssCount = 0;
+        let linkedJsCount = 0;
+        documentHtml = documentHtml.replace(
+          /<link\b([^>]*?)href=(["'])([^"']+\.css(?:\?[^"']*)?(?:#[^"']*)?)\2([^>]*)>/gi,
+          (tag, _before: string, _quote: string, href: string, _after: string) => {
+            const assetPath = resolveAssetPath(preferredHtmlPath, href);
+            const css = assetPath ? currentFiles[assetPath] : undefined;
+            if (css === undefined) return tag;
+            linkedCssCount += 1;
+            return '<style data-preview-source="' + assetPath + '">' + css.replace(/<\/style/gi, '<\\/style') + '</style>';
+          },
+        );
+        documentHtml = documentHtml.replace(
+          /<script\b([^>]*?)src=(["'])([^"']+\.(?:m?js)(?:\?[^"']*)?(?:#[^"']*)?)\2([^>]*)>\s*<\/script>/gi,
+          (tag, _before: string, _quote: string, src: string, _after: string) => {
+            const assetPath = resolveAssetPath(preferredHtmlPath, src);
+            const js = assetPath ? currentFiles[assetPath] : undefined;
+            if (js === undefined) return tag;
+            linkedJsCount += 1;
+            return '<script>' + js.replace(/<\/script/gi, '<\\/script') + '</script>';
+          },
+        );
+        const cssFallbackPath = [
+          preferredHtmlPath.replace(/\.html?$/i, '.css'),
+          'style.css',
+          'styles.css',
+          'src/index.css',
+        ].find((path) => Object.prototype.hasOwnProperty.call(currentFiles, path));
+        const jsFallbackPath = [
+          preferredHtmlPath.replace(/\.html?$/i, '.js'),
+          'script.js',
+          'src/main.js',
+        ].find((path) => Object.prototype.hasOwnProperty.call(currentFiles, path));
+        const cssFallback = linkedCssCount === 0 && cssFallbackPath
+          ? '<style>' + (currentFiles[cssFallbackPath] || '').replace(/<\/style/gi, '<\\/style') + '</style>'
+          : '';
+        const jsFallback = linkedJsCount === 0 && jsFallbackPath
+          ? '<script>' + (currentFiles[jsFallbackPath] || '').replace(/<\/script/gi, '<\\/script') + '</script>'
+          : '';
+        if (cssFallback) {
+          documentHtml = documentHtml.includes('</head>')
+            ? documentHtml.replace('</head>', cssFallback + '</head>')
+            : cssFallback + documentHtml;
+        }
+        if (jsFallback) {
+          documentHtml = documentHtml.includes('</body>')
+            ? documentHtml.replace('</body>', jsFallback + '</body>')
+            : documentHtml + jsFallback;
+        }
+        return documentHtml;
+      })()
     : '';
 
   return (
