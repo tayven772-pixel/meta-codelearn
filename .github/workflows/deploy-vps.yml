@@ -1,0 +1,102 @@
+name: Deploy Meta CodeLearn to VPS
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_deploy:
+        description: Type "deploy" to publish the current main branch to the VPS
+        required: true
+        type: choice
+        options:
+          - cancel
+          - deploy
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-vps-deploy
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: inputs.confirm_deploy == 'deploy'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Type-check frontend
+        run: npx tsc --noEmit
+
+      - name: Check authentication server syntax
+        run: node --check server/auth.js
+
+      - name: Build production website
+        run: npm run build
+
+      - name: Verify build output
+        run: test -s dist/index.html
+
+      - name: Configure SSH
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -eu
+          test -n "$VPS_SSH_KEY" || { echo "Missing repository secret VPS_SSH_KEY"; exit 1; }
+          test -n "$VPS_KNOWN_HOSTS" || { echo "Missing repository secret VPS_KNOWN_HOSTS"; exit 1; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Upload built site to temporary staging directory
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          DEPLOY_SHA: ${{ github.sha }}
+        run: |
+          set -eu
+          test -n "$VPS_HOST" || { echo "Missing repository secret VPS_HOST"; exit 1; }
+          test -n "$VPS_USER" || { echo "Missing repository secret VPS_USER"; exit 1; }
+          STAGING="/tmp/meta-codelearn-dist-$DEPLOY_SHA"
+          SSH="ssh -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          $SSH "$VPS_USER@$VPS_HOST" "mkdir -p '$STAGING'"
+          scp -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -r dist/. "$VPS_USER@$VPS_HOST:$STAGING/"
+
+      - name: Back up and publish site
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          DEPLOY_SHA: ${{ github.sha }}
+        run: |
+          set -eu
+          STAGING="/tmp/meta-codelearn-dist-$DEPLOY_SHA"
+          ssh -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" "bash -s -- '$STAGING' '$DEPLOY_SHA'" <<'REMOTE'
+          set -eu
+          STAGING="$1"
+          DEPLOY_SHA="$2"
+          test -s "$STAGING/index.html"
+          sudo -n nginx -t
+          BACKUP="/var/www/html.backup-$DEPLOY_SHA-$(date +%Y%m%d-%H%M%S)"
+          sudo -n cp -a /var/www/html "$BACKUP"
+          sudo -n cp -a "$STAGING/." /var/www/html/
+          sudo -n nginx -t
+          sudo -n systemctl reload nginx
+          rm -rf "$STAGING"
+          echo "Website deployed successfully. Backup: $BACKUP"
+          REMOTE
