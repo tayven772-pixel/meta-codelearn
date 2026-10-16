@@ -2232,6 +2232,9 @@ function AccountSettingsPage() {
                 </div>
               )}
               <button type="button" className="button-secondary" onClick={signOut}>Sign out</button>
+              {emailUser?.email.toLowerCase() === 'metasupport43@gmail.com' && (
+                <Link href="/admin" className="button-secondary">Open content publishing</Link>
+              )}
             </div>
           ) : (
             <div className="account-setting-block">
