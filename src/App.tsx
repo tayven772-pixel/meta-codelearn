@@ -47,6 +47,9 @@ type PlayTrack = {
   id: string;
   title: string;
   shortTitle: string;
+  codeLabel: string;
+  usedFor: string;
+  mainFunctions: string[];
   description: string;
   outcome: string;
   skills: string[];
@@ -58,6 +61,9 @@ const playTracks: PlayTrack[] = [
     id: 'games',
     title: 'Game Development',
     shortTitle: 'Games',
+    codeLabel: 'JavaScript / HTML / CSS',
+    usedFor: 'Browser games and interactive web projects.',
+    mainFunctions: ['Input and controls', 'Game state and scoring', 'Collision checks', 'Loops and timers'],
     description: 'Learn loops, input, state, collisions, scoring, and game logic by building small playable projects.',
     outcome: 'Build a playable browser game from a blank project.',
     skills: ['Game loops', 'Input', 'State', 'Collision logic'],
@@ -67,6 +73,9 @@ const playTracks: PlayTrack[] = [
     id: 'websites',
     title: 'Website Development',
     shortTitle: 'Websites',
+    codeLabel: 'HTML / CSS / JavaScript',
+    usedFor: 'Web pages, layouts, forms, and interactive interfaces.',
+    mainFunctions: ['Page structure', 'Responsive styling', 'Events and buttons', 'Form validation'],
     description: 'Build responsive pages while learning HTML, CSS, JavaScript, layout, components, and accessibility.',
     outcome: 'Publish a responsive multi-section website.',
     skills: ['HTML', 'CSS', 'Responsive design', 'JavaScript'],
@@ -76,6 +85,9 @@ const playTracks: PlayTrack[] = [
     id: 'apps',
     title: 'App Development',
     shortTitle: 'Apps',
+    codeLabel: 'JavaScript / TypeScript (plus HTML and CSS)',
+    usedFor: 'App-style interfaces, navigation, and saved user data.',
+    mainFunctions: ['UI state', 'Navigation', 'Input validation', 'Local persistence'],
     description: 'Turn ideas into useful apps with interfaces, navigation, saved data, validation, and mobile-first design.',
     outcome: 'Build an installable app-style project with persistent data.',
     skills: ['UI state', 'Navigation', 'Forms', 'Persistence'],
@@ -85,6 +97,9 @@ const playTracks: PlayTrack[] = [
     id: 'roblox',
     title: 'Roblox Studio',
     shortTitle: 'Roblox',
+    codeLabel: 'Luau (Roblox Studio)',
+    usedFor: 'Roblox game scripts, parts, player actions, and gameplay systems.',
+    mainFunctions: ['Variables and functions', 'Events such as Touched', 'Players and characters', 'Parts, UI, and ModuleScripts'],
     description: 'Learn Luau through Roblox-style gameplay systems, interactions, UI, events, and reusable modules.',
     outcome: 'Build a small Roblox gameplay system you understand line by line.',
     skills: ['Luau', 'Events', 'Parts', 'ModuleScripts'],
@@ -94,6 +109,9 @@ const playTracks: PlayTrack[] = [
     id: 'mcbe',
     title: 'Minecraft Bedrock Add-ons',
     shortTitle: 'MCBE',
+    codeLabel: 'JSON + JavaScript (Bedrock Script API)',
+    usedFor: 'Bedrock add-ons: behavior/resource packs, item and entity definitions, and supported scripting.',
+    mainFunctions: ['Pack manifests', 'JSON definitions', 'Events and commands through supported APIs', 'Custom items and entities'],
     description: 'Learn Bedrock behavior/resource pack structure, JSON, Script API basics, custom items, entities, and gameplay systems.',
     outcome: 'Build a working .mcaddon-ready project structure.',
     skills: ['Manifests', 'JSON', 'Script API', 'Behavior packs'],
@@ -103,6 +121,9 @@ const playTracks: PlayTrack[] = [
     id: 'mcje',
     title: 'Minecraft Java Edition',
     shortTitle: 'MCJE',
+    codeLabel: 'Minecraft Java commands + JSON',
+    usedFor: 'Java Edition datapacks, functions, predicates, loot tables, and resource packs.',
+    mainFunctions: ['Functions and commands', 'Predicates', 'Loot tables', 'Advancements and resource-pack JSON'],
     description: 'Learn Java Edition commands, datapacks, resource packs, and the concepts behind server-side gameplay systems.',
     outcome: 'Build a reusable Java Edition datapack project.',
     skills: ['Datapacks', 'Functions', 'Predicates', 'Resource packs'],
@@ -112,6 +133,9 @@ const playTracks: PlayTrack[] = [
     id: 'mcje-mods',
     title: 'Minecraft Java Mods',
     shortTitle: 'MCJE Mods',
+    codeLabel: 'Java (mod loader APIs)',
+    usedFor: 'Minecraft Java mods with a compatible loader and game version.',
+    mainFunctions: ['Registries', 'Events', 'Custom items and blocks', 'Mod configuration'],
     description: 'Learn Java mod structure, registries, events, items, blocks, and gameplay features with a guided modding path.',
     outcome: 'Build a small Java mod with a custom gameplay feature.',
     skills: ['Java', 'Registries', 'Events', 'Items & blocks'],
@@ -652,7 +676,9 @@ function PlayPage() {
                 <Link href={`/play/${track.id}`} className="play-hub-card" key={track.id}>
                   <span className="play-hub-kicker">{track.shortTitle}</span>
                   <h2>{track.title}</h2>
+                  <p className="play-code-label">[{track.codeLabel}]</p>
                   <p>{track.description}</p>
+                  <p className="play-track-purpose"><strong>For:</strong> {track.usedFor}</p>
                   <span className="play-outcome">{track.outcome}</span>
                   <span className="play-open">Start track <ArrowRight aria-hidden="true" /></span>
                 </Link>
@@ -681,8 +707,13 @@ function PlayPage() {
               <Link href="/learn/output" className="button-primary">Start with the coding foundation <ArrowRight aria-hidden="true" /></Link>
             </article>
             <aside className="play-track-sidebar">
+              <p className="sidebar-title"><span>Code and purpose</span></p>
+              <p className="play-code-label">[{selected.codeLabel}]</p>
+              <p><strong>What it is for:</strong> {selected.usedFor}</p>
+              <p className="sidebar-title"><span>Main functions</span></p>
+              {selected.mainFunctions.map((item) => <span className="skill-chip" key={item}>{item}</span>)}
               <p className="sidebar-title"><span>Skills in this track</span></p>
-              {selected.skills.map((skill) => <span className="skill-chip" key={skill}>{skill}</span>)}
+              {selected.skills.map((skill) => <span className="skill-chip" key={skill}>{skill}</span>)
               <div className="play-note">
                 <strong>Build-first rule</strong>
                 <span>Hints explain the next move, but Meta does not hand you the full final project before you try it.</span>
