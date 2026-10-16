@@ -77,7 +77,7 @@ jobs:
           SSH="ssh -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
           $SSH "$VPS_USER@$VPS_HOST" "mkdir -p '$STAGING'"
           scp -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -r dist/. "$VPS_USER@$VPS_HOST:$STAGING/"
-          scp -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes server/auth.js "$VPS_USER@$VPS_HOST:$STAGING/server-auth.js"
+          scp -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes server/auth.js "$VPS_USER@$VPS_HOST:/tmp/meta-codelearn-auth-$DEPLOY_SHA.js"
 
       - name: Back up and publish site
         env:
@@ -92,14 +92,15 @@ jobs:
           STAGING="$1"
           DEPLOY_SHA="$2"
           test -s "$STAGING/index.html"
-          test -s "$STAGING/server-auth.js"
+          AUTH_STAGE="/tmp/meta-codelearn-auth-$DEPLOY_SHA.js"
+          test -s "$AUTH_STAGE"
           sudo -n nginx -t
           BACKUP="/var/www/html.backup-$DEPLOY_SHA-$(date +%Y%m%d-%H%M%S)"
           AUTH_BACKUP="/opt/meta-codelearn/server/auth.js.backup-$DEPLOY_SHA"
           sudo -n cp -a /var/www/html "$BACKUP"
           sudo -n cp -a /opt/meta-codelearn/server/auth.js "$AUTH_BACKUP"
           sudo -n cp -a "$STAGING/." /var/www/html/
-          sudo -n cp -a "$STAGING/server-auth.js" /opt/meta-codelearn/server/auth.js
+          sudo -n cp -a "$AUTH_STAGE" /opt/meta-codelearn/server/auth.js
           sudo -n nginx -t
           sudo -n systemctl reload nginx
           if ! sudo -n systemctl restart meta-codelearn-auth.service; then
@@ -115,5 +116,6 @@ jobs:
             exit 1
           fi
           rm -rf "$STAGING"
+          rm -f "$AUTH_STAGE"
           echo "Website and auth server deployed. Website backup: $BACKUP; auth backup: $AUTH_BACKUP"
           REMOTE
