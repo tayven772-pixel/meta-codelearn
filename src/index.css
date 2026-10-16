@@ -2008,3 +2008,8 @@ html[data-reduced-motion='true'] *::after {
 .admin-status-pill.published { background: hsl(var(--primary) / .13); color: hsl(var(--primary)); }
 :root[data-theme='dark'] .admin-content-list-item.selected { background: #123b50; }
 @media (max-width: 760px) { .admin-publishing-layout { grid-template-columns: minmax(0, 1fr); } .admin-publishing-page { padding-top: 28px; } }
+
+/* Account-scoped data migration panel */
+.account-data-import { display: grid; gap: 10px; margin-top: 12px; padding: 14px; border: 1px solid hsl(var(--border)); border-radius: 10px; background: hsl(var(--background) / .75); }
+.account-data-import > p { margin: 0; color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 1.7; }
+.account-data-import button { justify-self: start; }
