@@ -2135,7 +2135,7 @@ function AccountSettingsPage() {
         ...sourceProgress.flatMap(value => value.completedQuizLessonIds || []),
       ]));
       const importedProgress: Progress = {
-        ...sourceProgress[0],
+        ...(sourceProgress[0] || {}),
         ...progressTarget,
         completedLessonIds,
         completedQuizLessonIds,
@@ -2803,13 +2803,14 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
     Promise.all([emailCheck, discordCheck]).then(([emailScope, discordScope]) => {
       if (!active) return;
       const scope = emailScope || discordScope;
+      const previousScope = currentAccountScope();
       try {
         if (scope) localStorage.setItem(ACTIVE_ACCOUNT_KEY, scope);
         else localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
       } catch {
         // If storage is blocked, the page still works with guest-only local state.
       }
-      if (scope !== currentAccountScope()) window.dispatchEvent(new CustomEvent(ACCOUNT_SCOPE_EVENT));
+      if ((scope || 'guest') !== previousScope) window.dispatchEvent(new CustomEvent(ACCOUNT_SCOPE_EVENT));
       setStatus(scope ? 'signed-in' : 'signed-out');
     });
     return () => { active = false; };
