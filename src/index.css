@@ -61,7 +61,7 @@ body {
     hsl(var(--background));
 }
 button, input, select, textarea { font: inherit; }
-button, a, select { -webkit-tap-highlight-color: transparent; }
+button, a, select { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 /* Let taps reach the actual control instead of its decorative icon. */
 button svg, a svg { pointer-events: none; }
 button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
@@ -1887,4 +1887,15 @@ html[data-reduced-motion='true'] *::after {
 
 :root[data-theme='dark'] :where(button:not(.button-primary), a:not(.button-primary), [role="button"]:not(.button-primary), [tabindex]:not(.button-primary)):is(:hover, :active, :focus-visible, [aria-pressed="true"], [aria-current="page"], .selected, .active) svg:not(.login-google svg) {
   color: #60a5fa;
+}
+
+
+/* Prevent sticky hover transforms from shifting touch targets after the first tap.
+   Keep controls responsive to a single tap on Android and other touch devices. */
+@media (hover: none), (pointer: coarse) {
+  button:hover,
+  a:hover,
+  [role="button"]:hover {
+    transform: none !important;
+  }
 }
