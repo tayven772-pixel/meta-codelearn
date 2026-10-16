@@ -5,6 +5,7 @@ import { Link, Redirect, Route, Router as WouterRouter, Switch, useLocation, use
 import {
   ArrowLeft,
   ArrowRight,
+  Bell,
   BookOpen,
   Check,
   ClipboardCheck,
@@ -31,7 +32,19 @@ import {
   Play,
   Search,
   Sparkles,
+  Crown,
+  Menu,
+  Palette,
+  Shield,
+  Star,
   Sun,
+  Tag,
+  Trash2,
+  TrendingUp,
+  User,
+  Wallet,
+  X,
+  Zap,
 } from 'lucide-react';
 import { languageFor, languages, lessonFor, lessons, type LearnerSkillLevel, type Lesson, type Progress } from './data/academy';
 import { getProgressionStats, learnerSkillLevels } from './data/progression';
@@ -212,35 +225,88 @@ const META_STRIPE_TEST_LINKS: Record<string, string> = {
   pro: 'https://buy.stripe.com/test_00w14f4580Tu8iRg2leEo01',
 };
 
-const aiPlans = [
+type Plan = {
+  id: 'free' | 'builder' | 'pro';
+  name: string;
+  price: string;
+  cadence: string;
+  monthly: number;
+  annual: number | null;
+  aiCredits: number;
+  projects: number;
+  description: string;
+  bestFor: string;
+  features: string[];
+  cta: string;
+  featured?: boolean;
+};
+
+const aiPlans: Plan[] = [
   {
     id: 'free',
     name: 'Free',
     price: '$0',
     cadence: 'forever',
+    monthly: 0,
+    annual: 0,
     aiCredits: 40,
     projects: 3,
     description: 'Learn, try the agent, and keep a few active projects.',
+    bestFor: 'Trying Meta out and learning the foundations.',
+    features: [
+      'All 6 foundation lessons with quizzes',
+      'All 7 Lesson Play build tracks',
+      '40 AI credits every month',
+      'Up to 3 active projects',
+      'Levels, XP, and milestone rewards',
+      'Progress saved to your account',
+    ],
+    cta: 'Start free',
   },
   {
     id: 'builder',
     name: 'Builder',
     price: '$4.99',
     cadence: 'per month',
+    monthly: 4.99,
+    annual: 49,
     aiCredits: 500,
     projects: 25,
     description: 'For learners building websites, games, apps, and Minecraft projects regularly.',
+    bestFor: 'Weekly project work with room to experiment.',
+    features: [
+      'Everything in Free',
+      '500 AI credits every month',
+      'Up to 25 active projects',
+      'Project-aware AI context',
+      'Faster AI responses',
+      'Email support',
+    ],
+    cta: 'Choose Builder',
+    featured: true,
   },
   {
     id: 'pro',
     name: 'Pro',
     price: '$9.99',
     cadence: 'per month',
+    monthly: 9.99,
+    annual: 99,
     aiCredits: 2000,
     projects: -1,
     description: 'For heavier project work with a much larger AI allowance.',
+    bestFor: 'Shipping real projects and long AI sessions.',
+    features: [
+      'Everything in Builder',
+      '2,000 AI credits every month',
+      'Unlimited active projects',
+      'Largest AI context window',
+      'Priority AI queue',
+      'Priority support',
+    ],
+    cta: 'Choose Pro',
   },
-] as const;
+];
 
 
 
@@ -448,21 +514,93 @@ function useProgress() {
   return { progress, complete, completeQuiz, setSkillLevel };
 }
 
+const NAV_LINKS = [
+  { href: '/', label: 'Explore', icon: Compass },
+  { href: '/play', label: 'Lessons', icon: BookOpen },
+  { href: '/projects', label: 'Projects', icon: FolderKanban },
+  { href: '/pricing', label: 'Pricing', icon: Tag },
+];
+
 function Header({ progressCount }: { progressCount: number }) {
+  const [location] = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const completion = Math.round((progressCount / lessons.length) * 100);
+
+  useEffect(() => { setMenuOpen(false); }, [location]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setMenuOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
+
+  const isActive = (href: string) => (href === '/' ? location === '/' : location.startsWith(href));
+
   return (
     <header className="topbar">
-      <Link href="/" className="brand" data-testid="link-academy-home">
+      <Link href="/" className="brand" data-testid="link-academy-home" aria-label="Meta home">
         <span className="brand-mark"><Code2 aria-hidden="true" /></span>
-        <span>meta</span>
+        <span className="brand-word">meta</span>
       </Link>
-      <nav className="top-links" aria-label="Main navigation">
-        <Link href="/" data-testid="link-explore">Explore</Link>
-        <span className="top-progress" data-testid="status-lessons-completed">
+
+      <nav className="top-nav" aria-label="Primary">
+        {NAV_LINKS.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={`top-nav-link${isActive(item.href) ? ' is-active' : ''}`}
+            aria-current={isActive(item.href) ? 'page' : undefined}
+            data-testid={`nav-${item.label.toLowerCase()}`}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+
+      <div className="top-actions">
+        <span className="top-progress" data-testid="status-lessons-completed" title={`${progressCount} of ${lessons.length} lessons complete`}>
           <span className="progress-dot" />
-          {progressCount} / {lessons.length} lessons
+          <span className="top-progress-text">{progressCount} / {lessons.length} lessons</span>
+          <span className="top-progress-track" aria-hidden="true"><span className="top-progress-fill" style={{ width: `${completion}%` }} /></span>
         </span>
         <ThemeToggle />
-      </nav>
+        <Link href="/pricing" className="nav-cta" data-testid="link-nav-upgrade">Get Meta Pro</Link>
+        <button
+          type="button"
+          className="mobile-menu-button"
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
+          data-testid="button-mobile-menu"
+        >
+          {menuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
+        </button>
+      </div>
+
+      {menuOpen && (
+        <div className="mobile-nav-panel">
+          <nav className="mobile-nav-links" aria-label="Mobile navigation">
+            {NAV_LINKS.map((item) => (
+              <Link key={item.href} href={item.href} className="mobile-nav-link" onClick={() => setMenuOpen(false)}>
+                <item.icon aria-hidden="true" />
+                <span>{item.label}</span>
+                <ArrowRight aria-hidden="true" />
+              </Link>
+            ))}
+            <Link href="/settings" className="mobile-nav-link" onClick={() => setMenuOpen(false)}>
+              <Settings aria-hidden="true" />
+              <span>Settings</span>
+              <ArrowRight aria-hidden="true" />
+            </Link>
+            <Link href="/sign-in" className="mobile-nav-link" onClick={() => setMenuOpen(false)}>
+              <LockKeyhole aria-hidden="true" />
+              <span>Sign in</span>
+              <ArrowRight aria-hidden="true" />
+            </Link>
+          </nav>
+        </div>
+      )}
     </header>
   );
 }
@@ -475,13 +613,21 @@ function AppShell({ children, showBottomNav = true, showHeader = true }: { child
       {children}
       {showBottomNav && (
         <nav className="bottom-workspace-nav" aria-label="Main navigation">
-          <Link href="/projects" className="bottom-workspace-button" aria-label="Projects" data-testid="button-projects">
-            <FolderKanban aria-hidden="true" />
-            <span>Projects</span>
+          <Link href="/" className="bottom-workspace-button" aria-label="Explore" data-testid="button-home">
+            <Compass aria-hidden="true" />
+            <span>Explore</span>
           </Link>
           <Link href="/play" className="bottom-workspace-button" aria-label="Lessons" data-testid="button-lessons">
             <BookOpen aria-hidden="true" />
             <span>Lessons</span>
+          </Link>
+          <Link href="/projects" className="bottom-workspace-button" aria-label="Projects" data-testid="button-projects">
+            <FolderKanban aria-hidden="true" />
+            <span>Projects</span>
+          </Link>
+          <Link href="/pricing" className="bottom-workspace-button" aria-label="Plans and pricing" data-testid="button-pricing">
+            <Tag aria-hidden="true" />
+            <span>Plans</span>
           </Link>
           <Link href="/settings" className="bottom-workspace-button" aria-label="Settings" data-testid="button-settings">
             <Settings aria-hidden="true" />
@@ -520,8 +666,14 @@ function HomePage() {
             <p className="hero-copy">Programming makes more sense when you can see the same idea in different languages. Start with the shared foundations, then follow the syntax wherever your curiosity goes.</p>
             <div className="hero-actions">
               <a href="#learning-path" className="button-primary" data-testid="button-start-learning">Start with lesson one <ArrowRight aria-hidden="true" /></a>
+              <Link href="/pricing" className="button-ghost" data-testid="link-hero-pricing">See plans &amp; pricing <Tag aria-hidden="true" /></Link>
               <a href="#language-library" className="text-link" data-testid="link-browse-languages">Browse languages <ArrowRight aria-hidden="true" /></a>
             </div>
+            <ul className="hero-trust">
+              <li><Check aria-hidden="true" /> Free lessons, no card required</li>
+              <li><Check aria-hidden="true" /> 12 language paths &amp; 7 build tracks</li>
+              <li><Check aria-hidden="true" /> AI plans from $4.99/month</li>
+            </ul>
           </div>
           <div className="hero-visual" aria-label="A sample code card showing a greeting in Python">
             <span className="hero-note">FIG. 01 / THE FIRST OUTPUT</span>
@@ -605,6 +757,7 @@ function HomePage() {
           </div>
         </section>
 
+        <PricingTeaser />
 
         <LessonPlaySection />
 
@@ -633,8 +786,41 @@ function HomePage() {
         </section>
         <ProgressionSection progress={progress} onSkillLevelChange={setSkillLevel} />
         <footer className="footer">
-          <span>META — LEARN THE IDEA, THEN THE CODE.</span>
-          <span className="footer-links"><Link href="/privacy">Privacy</Link><Link href="/delete-account">Delete account</Link><a href="mailto:metasupport43@gmail.com">Support</a></span>
+          <div className="footer-grid">
+            <div className="footer-brand">
+              <Link href="/" className="brand" aria-label="Meta home">
+                <span className="brand-mark"><Code2 aria-hidden="true" /></span>
+                <span className="brand-word">meta</span>
+              </Link>
+              <p>Learn the idea, then the code. Free, hands-on programming lessons for games, websites, apps, Roblox, and Minecraft.</p>
+              <Link href="/pricing" className="footer-cta" data-testid="link-footer-pricing">Compare plans <ArrowRight aria-hidden="true" /></Link>
+            </div>
+            <nav className="footer-col" aria-label="Learn">
+              <h3>Learn</h3>
+              <Link href="/play">Lesson Play</Link>
+              <a href="/#language-library">Language library</a>
+              <a href="/#learning-path">First six lessons</a>
+              <Link href="/projects">Projects</Link>
+            </nav>
+            <nav className="footer-col" aria-label="Account">
+              <h3>Account</h3>
+              <Link href="/pricing">Plans &amp; pricing</Link>
+              <Link href="/settings">Settings</Link>
+              <Link href="/account">Account &amp; privacy</Link>
+              <Link href="/sign-in">Sign in</Link>
+            </nav>
+            <nav className="footer-col" aria-label="Company">
+              <h3>Company</h3>
+              <Link href="/privacy">Privacy policy</Link>
+              <Link href="/delete-account">Delete account</Link>
+              <a href="/downloads/Meta-latest.apk" download="Meta.apk">Android app (APK)</a>
+              <a href="mailto:metasupport43@gmail.com">Support</a>
+            </nav>
+          </div>
+          <div className="footer-base">
+            <span>© {new Date().getFullYear()} Meta — Learn the idea, then the code.</span>
+            <span>Built for curious minds.</span>
+          </div>
         </footer>
       </main>
     </AppShell>
@@ -1531,6 +1717,25 @@ function ProjectPage() {
   );
 }
 
+function readFlag(key: string, fallback: boolean) {
+  try {
+    const value = localStorage.getItem(key);
+    return value === null ? fallback : value === 'true';
+  } catch {
+    return fallback;
+  }
+}
+
+const SETTINGS_SECTIONS = [
+  { id: 'profile', label: 'Profile', icon: User },
+  { id: 'plan', label: 'Plan & billing', icon: CreditCard },
+  { id: 'notifications', label: 'Notifications', icon: Bell },
+  { id: 'appearance', label: 'Appearance', icon: Palette },
+  { id: 'editor', label: 'Editor & projects', icon: Settings },
+  { id: 'privacy', label: 'Privacy & data', icon: Shield },
+  { id: 'support', label: 'Support', icon: CircleHelp },
+];
+
 function SettingsPage() {
   const { theme, toggleTheme } = useTheme();
   const [defaultTab, setDefaultTab] = useState<'files' | 'preview' | 'chat'>(() => {
@@ -1548,20 +1753,17 @@ function SettingsPage() {
       return 'medium';
     }
   });
-  const [reducedMotion, setReducedMotion] = useState(() => {
-    try {
-      return localStorage.getItem('meta-reduced-motion') === 'true';
-    } catch {
-      return false;
-    }
-  });
-  const [showProjectHints, setShowProjectHints] = useState(() => {
-    try {
-      return localStorage.getItem('meta-project-hints') !== 'false';
-    } catch {
-      return true;
-    }
-  });
+  const [reducedMotion, setReducedMotion] = useState(() => readFlag('meta-reduced-motion', false));
+  const [showProjectHints, setShowProjectHints] = useState(() => readFlag('meta-project-hints', true));
+  const [notifyLessons, setNotifyLessons] = useState(() => readFlag('meta-notify-lessons', true));
+  const [notifyProduct, setNotifyProduct] = useState(() => readFlag('meta-notify-product', true));
+  const [notifyCommunity, setNotifyCommunity] = useState(() => readFlag('meta-notify-community', false));
+  const [notifyBilling, setNotifyBilling] = useState(() => readFlag('meta-notify-billing', true));
+  const [activeSection, setActiveSection] = useState('profile');
+  const [toast, setToast] = useState('');
+  const [planName, setPlanName] = useState('Free');
+  const [creditLimit, setCreditLimit] = useState(40);
+  const [creditsUsed, setCreditsUsed] = useState<number | null>(null);
 
   const [profile, setProfile] = useState<{
     email: string;
@@ -1594,6 +1796,43 @@ function SettingsPage() {
     return () => { active = false; };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    fetch('/api/auth/me', { credentials: 'same-origin' })
+      .then(response => (response.ok ? response.json() : null))
+      .then(data => {
+        if (!active || !data?.user) return;
+        const rawPlan = typeof data.user.plan === 'string' && data.user.plan ? data.user.plan : 'Free';
+        setPlanName(rawPlan.charAt(0).toUpperCase() + rawPlan.slice(1));
+        if (typeof data.user.aiCredits === 'number' && data.user.aiCredits > 0) setCreditLimit(data.user.aiCredits);
+        if (typeof data.user.aiCreditsUsed === 'number') setCreditsUsed(data.user.aiCreditsUsed);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(''), 2600);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  const flash = (message: string) => setToast(message);
+
+  useEffect(() => {
+    const onScroll = () => {
+      let current = SETTINGS_SECTIONS[0].id;
+      for (const section of SETTINGS_SECTIONS) {
+        const element = document.getElementById(section.id);
+        if (element && element.getBoundingClientRect().top <= 160) current = section.id;
+      }
+      setActiveSection(current);
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!profile) return;
@@ -1621,6 +1860,7 @@ function SettingsPage() {
       if (!response.ok) throw new Error(data.error || 'Could not save your profile.');
       setProfile(data.profile);
       setProfileMessage('Profile saved successfully.');
+      flash('Profile saved.');
     } catch (error) {
       setProfileMessage(error instanceof Error ? error.message : 'Could not save your profile.');
     } finally {
@@ -1656,21 +1896,60 @@ function SettingsPage() {
   useEffect(() => {
     const sizes: Record<string, string> = { small: '11px', medium: '12px', large: '14px' };
     document.documentElement.style.setProperty('--meta-editor-font-size', sizes[editorSize] || sizes.medium);
-    localStorage.setItem('meta-editor-font-size', editorSize);
+    try { localStorage.setItem('meta-editor-font-size', editorSize); } catch { /* storage may be unavailable */ }
   }, [editorSize]);
 
   useEffect(() => {
     document.documentElement.dataset.reducedMotion = reducedMotion ? 'true' : 'false';
-    localStorage.setItem('meta-reduced-motion', String(reducedMotion));
+    try { localStorage.setItem('meta-reduced-motion', String(reducedMotion)); } catch { /* storage may be unavailable */ }
   }, [reducedMotion]);
 
-  useEffect(() => {
-    localStorage.setItem('meta-default-project-tab', defaultTab);
-  }, [defaultTab]);
+  useEffect(() => { try { localStorage.setItem('meta-default-project-tab', defaultTab); } catch { /* storage may be unavailable */ } }, [defaultTab]);
+  useEffect(() => { try { localStorage.setItem('meta-project-hints', String(showProjectHints)); } catch { /* storage may be unavailable */ } }, [showProjectHints]);
+  useEffect(() => { try { localStorage.setItem('meta-notify-lessons', String(notifyLessons)); } catch { /* storage may be unavailable */ } }, [notifyLessons]);
+  useEffect(() => { try { localStorage.setItem('meta-notify-product', String(notifyProduct)); } catch { /* storage may be unavailable */ } }, [notifyProduct]);
+  useEffect(() => { try { localStorage.setItem('meta-notify-community', String(notifyCommunity)); } catch { /* storage may be unavailable */ } }, [notifyCommunity]);
+  useEffect(() => { try { localStorage.setItem('meta-notify-billing', String(notifyBilling)); } catch { /* storage may be unavailable */ } }, [notifyBilling]);
 
-  useEffect(() => {
-    localStorage.setItem('meta-project-hints', String(showProjectHints));
-  }, [showProjectHints]);
+  function exportData() {
+    const scope = currentAccountScope();
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      account: scope,
+      progress: readProgress(`${PROGRESS_KEY}:${scope}`),
+      projects: readProjects(),
+      preferences: {
+        theme,
+        defaultTab,
+        editorSize,
+        reducedMotion,
+        showProjectHints,
+        notifications: { notifyLessons, notifyProduct, notifyCommunity, notifyBilling },
+      },
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `meta-data-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    flash('Your data export has been downloaded.');
+  }
+
+  function resetLocalProgress() {
+    if (!window.confirm('Reset all lesson progress stored on this device? This cannot be undone.')) return;
+    const storageKey = `${PROGRESS_KEY}:${currentAccountScope()}`;
+    try {
+      localStorage.removeItem(storageKey);
+      window.dispatchEvent(new CustomEvent(PROGRESS_EVENT, { detail: { storageKey } }));
+    } catch { /* storage may be unavailable */ }
+    flash('Local progress cleared.');
+  }
+
+  const usagePercent = creditsUsed === null ? 0 : Math.min(100, Math.round((creditsUsed / Math.max(creditLimit, 1)) * 100));
 
   return (
     <AppShell>
@@ -1679,222 +1958,528 @@ function SettingsPage() {
           <div>
             <p className="section-kicker">Settings</p>
             <h1>Make Meta yours</h1>
-            <p>Control appearance, project behavior, editor preferences, and account options.</p>
+            <p>Profile, plan, notifications, appearance, editor behavior, and privacy — everything in one place, grouped so you can find it fast.</p>
           </div>
+          <Link href="/account" className="button-secondary" data-testid="link-account-security">Account &amp; security</Link>
         </section>
 
-        <section className="settings-group profile-settings">
-          <div className="settings-group-head">
-            <h2>Your profile</h2>
-            <p>Update the details shown on your Meta account.</p>
-          </div>
-          {profileLoading ? (
-            <div className="profile-editor-body"><p>Loading your profile…</p></div>
-          ) : profile ? (
-            <form className="profile-editor-body" onSubmit={saveProfile}>
-              <div className="profile-picture-row">
-                <div className="profile-avatar-preview">
-                  {(profile.avatarPng || profile.googlePicture)
-                    ? <img src={profile.avatarPng || profile.googlePicture || ''} alt="Your profile picture" referrerPolicy="no-referrer" />
-                    : <span>{(profile.displayName || profile.username || profile.email || 'M').slice(0, 1).toUpperCase()}</span>}
-                </div>
-                <div className="profile-picture-controls">
-                  <strong>Profile picture</strong>
-                  <span>Google picture shown by default when available. Upload a PNG to override it (max 1 MB).</span>
-                  <input className="profile-file-input" type="file" accept="image/png,.png" onChange={chooseProfilePicture} aria-label="Upload PNG profile picture" />
-                  {profile.avatarPng && (
-                    <button type="button" className="button-secondary" onClick={() => {
-                      setProfile(current => current ? { ...current, avatarPng: null } : current);
-                      setProfileMessage('Custom picture removed. Save your profile to use your Google picture or initials.');
-                    }}>Remove picture</button>
-                  )}
+        <div className="settings-layout">
+          <nav className="settings-nav" aria-label="Settings sections">
+            {SETTINGS_SECTIONS.map((section) => (
+              <a
+                key={section.id}
+                href={`#${section.id}`}
+                className={`settings-nav-link${activeSection === section.id ? ' is-active' : ''}`}
+                aria-current={activeSection === section.id ? 'true' : undefined}
+                data-testid={`settings-nav-${section.id}`}
+              >
+                <section.icon aria-hidden="true" />
+                <span>{section.label}</span>
+              </a>
+            ))}
+          </nav>
+
+          <div className="settings-panels">
+            <section className="settings-card" id="profile" aria-labelledby="settings-profile-heading">
+              <div className="settings-card-head">
+                <div>
+                  <h2 id="settings-profile-heading"><User aria-hidden="true" /> Your profile</h2>
+                  <p>Update the details shown on your Meta account.</p>
                 </div>
               </div>
-              <label className="profile-field">
-                <span>Display name</span>
-                <input className="profile-input" type="text" required minLength={1} maxLength={40}
-                  autoComplete="nickname" value={profile.displayName}
-                  onChange={event => setProfile(current => current ? { ...current, displayName: event.target.value } : current)}
-                  placeholder="Your display name" />
-              </label>
-              <label className="profile-field">
-                <span>Username <small>(optional)</small></span>
-                <input className="profile-input" type="text" minLength={3} maxLength={20}
-                  pattern="[A-Za-z0-9_]{3,20}" title="Use 3–20 letters, numbers, or underscores."
-                  autoComplete="username" value={profile.username}
-                  onChange={event => setProfile(current => current ? { ...current, username: event.target.value } : current)}
-                  placeholder="e.g. MetaBuilder_1" />
-                <small>3–20 characters: letters, numbers, and underscores.</small>
-              </label>
-              <label className="profile-field">
-                <span>Account email</span>
-                <input className="profile-input" type="email" value={profile.email} readOnly />
-              </label>
-              {profileMessage && <p className="profile-status" role="status">{profileMessage}</p>}
-              <div className="profile-save-row">
-                <button className="button-primary" type="submit" disabled={profileSaving}>
-                  {profileSaving ? 'Saving…' : 'Save profile'}
-                </button>
+              {profileLoading ? (
+                <div className="settings-body"><p className="profile-status">Loading your profile…</p></div>
+              ) : profile ? (
+                <form className="profile-editor-body" onSubmit={saveProfile}>
+                  <div className="profile-picture-row">
+                    <div className="profile-avatar-preview">
+                      {(profile.avatarPng || profile.googlePicture)
+                        ? <img src={profile.avatarPng || profile.googlePicture || ''} alt="Your profile picture" referrerPolicy="no-referrer" />
+                        : <span>{(profile.displayName || profile.username || profile.email || 'M').slice(0, 1).toUpperCase()}</span>}
+                    </div>
+                    <div className="profile-picture-controls">
+                      <strong>Profile picture</strong>
+                      <span>Google picture shown by default when available. Upload a PNG to override it (max 1 MB).</span>
+                      <input className="profile-file-input" type="file" accept="image/png,.png" onChange={chooseProfilePicture} aria-label="Upload PNG profile picture" />
+                      {profile.avatarPng && (
+                        <button type="button" className="button-secondary" onClick={() => {
+                          setProfile(current => current ? { ...current, avatarPng: null } : current);
+                          setProfileMessage('Custom picture removed. Save your profile to use your Google picture or initials.');
+                        }}>Remove picture</button>
+                      )}
+                    </div>
+                  </div>
+                  <label className="profile-field">
+                    <span>Display name</span>
+                    <input className="profile-input" type="text" required minLength={1} maxLength={40}
+                      autoComplete="nickname" value={profile.displayName}
+                      onChange={event => setProfile(current => current ? { ...current, displayName: event.target.value } : current)}
+                      placeholder="Your display name" />
+                  </label>
+                  <label className="profile-field">
+                    <span>Username <small>(optional)</small></span>
+                    <input className="profile-input" type="text" minLength={3} maxLength={20}
+                      pattern="[A-Za-z0-9_]{3,20}" title="Use 3–20 letters, numbers, or underscores."
+                      autoComplete="username" value={profile.username}
+                      onChange={event => setProfile(current => current ? { ...current, username: event.target.value } : current)}
+                      placeholder="e.g. MetaBuilder_1" />
+                    <small>3–20 characters: letters, numbers, and underscores.</small>
+                  </label>
+                  <label className="profile-field">
+                    <span>Account email</span>
+                    <input className="profile-input" type="email" value={profile.email} readOnly />
+                  </label>
+                  {profileMessage && <p className="profile-status" role="status">{profileMessage}</p>}
+                  <div className="profile-save-row">
+                    <button className="button-primary" type="submit" disabled={profileSaving}>
+                      {profileSaving ? 'Saving…' : 'Save profile'}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="settings-body">
+                  <p className="profile-status" role="status">{profileMessage || 'Please sign in with your Meta email account to edit this profile.'}</p>
+                  <div className="settings-inline-actions">
+                    <Link href="/sign-in" className="button-secondary">Go to sign in</Link>
+                  </div>
+                  <p className="settings-note">If you signed in with Discord, profile editing through Discord is not connected yet.</p>
+                </div>
+              )}
+            </section>
+
+            <section className="settings-card" id="plan" aria-labelledby="settings-plan-heading">
+              <div className="settings-card-head">
+                <div>
+                  <h2 id="settings-plan-heading"><CreditCard aria-hidden="true" /> Plan &amp; billing</h2>
+                  <p>See what you are on, how much AI allowance is left, and where to change it.</p>
+                </div>
               </div>
-            </form>
-          ) : (
-            <div className="profile-editor-body">
-              <p className="profile-status" role="status">{profileMessage || 'Please sign in with your Meta email account to edit this profile.'}</p>
-              <Link href="/sign-in" className="button-secondary">Go to sign in</Link>
-              <p className="profile-help">If you signed in with Discord, profile editing through Discord is not connected yet.</p>
-            </div>
-          )}
-        </section>
-        <section className="settings-group">
-          <div className="settings-group-head">
-            <h2>Appearance</h2>
-            <p>Change how Meta looks and feels.</p>
-          </div>
+              <div className="settings-body">
+                <div className="plan-summary">
+                  <div className="plan-summary-main">
+                    <span className="plan-summary-name"><Crown aria-hidden="true" /> {planName} plan</span>
+                    {creditsUsed === null ? (
+                      <p className="settings-note">{creditLimit.toLocaleString()} AI credits refresh every month. Usage tracking appears here once you start using the project agent.</p>
+                    ) : (
+                      <>
+                        <div className="usage-bar" role="progressbar" aria-valuenow={usagePercent} aria-valuemin={0} aria-valuemax={100} aria-label="AI credits used this month">
+                          <span className="usage-fill" style={{ width: `${usagePercent}%` }} />
+                        </div>
+                        <div className="usage-meta">
+                          <span>{creditsUsed.toLocaleString()} used</span>
+                          <span>{Math.max(creditLimit - creditsUsed, 0).toLocaleString()} left of {creditLimit.toLocaleString()}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <div className="settings-inline-actions">
+                    <Link href="/pricing" className="button-primary" data-testid="link-settings-upgrade">Compare plans</Link>
+                  </div>
+                </div>
+              </div>
+              <div className="settings-rows">
+                <div className="settings-row">
+                  <div>
+                    <strong>Lessons and build tracks</strong>
+                    <span>Always included on every plan, including Free.</span>
+                  </div>
+                  <span className="reward-state">Included</span>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Billing &amp; invoices</strong>
+                    <span>Open Stripe to update a card, change plan, or download receipts.</span>
+                  </div>
+                  <a className="button-secondary" href="mailto:metasupport43@gmail.com?subject=Meta%20billing%20request">Request billing help</a>
+                </div>
+              </div>
+            </section>
 
-          <div className="settings-row">
-            <div>
-              <strong>Dark mode</strong>
-              <span>Use the darker Meta theme.</span>
-            </div>
-            <label className="settings-switch">
-              <input type="checkbox" checked={theme === 'dark'} onChange={toggleTheme} aria-label="Dark mode" />
-              <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
-            </label>
-          </div>
+            <section className="settings-card" id="notifications" aria-labelledby="settings-notify-heading">
+              <div className="settings-card-head">
+                <div>
+                  <h2 id="settings-notify-heading"><Bell aria-hidden="true" /> Notifications</h2>
+                  <p>Choose which updates you want to hear about. Everything is off until you opt in.</p>
+                </div>
+              </div>
+              <div className="settings-rows">
+                <div className="settings-row">
+                  <div>
+                    <strong>Learning reminders</strong>
+                    <span>A nudge when you have not finished a lesson in a while.</span>
+                  </div>
+                  <label className="settings-switch">
+                    <input type="checkbox" checked={notifyLessons} onChange={(event) => { setNotifyLessons(event.target.checked); flash('Preference saved.'); }} aria-label="Learning reminders" />
+                    <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
+                  </label>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>New lessons &amp; features</strong>
+                    <span>Hear when a new language path or build track lands.</span>
+                  </div>
+                  <label className="settings-switch">
+                    <input type="checkbox" checked={notifyProduct} onChange={(event) => { setNotifyProduct(event.target.checked); flash('Preference saved.'); }} aria-label="New lessons and features" />
+                    <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
+                  </label>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Community &amp; Discord</strong>
+                    <span>Invites to community builds and shared project challenges.</span>
+                  </div>
+                  <label className="settings-switch">
+                    <input type="checkbox" checked={notifyCommunity} onChange={(event) => { setNotifyCommunity(event.target.checked); flash('Preference saved.'); }} aria-label="Community and Discord" />
+                    <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
+                  </label>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Billing &amp; plan changes</strong>
+                    <span>Receipts, renewals, and anything that affects your credits.</span>
+                  </div>
+                  <label className="settings-switch">
+                    <input type="checkbox" checked={notifyBilling} onChange={(event) => { setNotifyBilling(event.target.checked); flash('Preference saved.'); }} aria-label="Billing and plan changes" />
+                    <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
+                  </label>
+                </div>
+              </div>
+            </section>
 
-          <div className="settings-row">
-            <div>
-              <strong>Reduced motion</strong>
-              <span>Reduce animations and movement across the site.</span>
-            </div>
-            <label className="settings-switch">
-              <input type="checkbox" checked={reducedMotion} onChange={(event) => setReducedMotion(event.target.checked)} aria-label="Reduced motion" />
-              <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
-            </label>
-          </div>
-        </section>
+            <section className="settings-card" id="appearance" aria-labelledby="settings-appearance-heading">
+              <div className="settings-card-head">
+                <div>
+                  <h2 id="settings-appearance-heading"><Palette aria-hidden="true" /> Appearance</h2>
+                  <p>Change how Meta looks and reads while you work.</p>
+                </div>
+              </div>
+              <div className="settings-rows">
+                <div className="settings-row">
+                  <div>
+                    <strong>Dark mode</strong>
+                    <span>Use the darker Meta theme. Your choice is remembered on this device.</span>
+                  </div>
+                  <label className="settings-switch">
+                    <input type="checkbox" checked={theme === 'dark'} onChange={() => { toggleTheme(); flash('Theme updated.'); }} aria-label="Dark mode" />
+                    <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
+                  </label>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Reduced motion</strong>
+                    <span>Reduce animations and movement across the site.</span>
+                  </div>
+                  <label className="settings-switch">
+                    <input type="checkbox" checked={reducedMotion} onChange={(event) => { setReducedMotion(event.target.checked); flash('Preference saved.'); }} aria-label="Reduced motion" />
+                    <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
+                  </label>
+                </div>
+              </div>
+            </section>
 
-        <section className="settings-group">
-          <div className="settings-group-head">
-            <h2>Projects & editor</h2>
-            <p>Choose how your coding workspace opens and behaves.</p>
-          </div>
+            <section className="settings-card" id="editor" aria-labelledby="settings-editor-heading">
+              <div className="settings-card-head">
+                <div>
+                  <h2 id="settings-editor-heading"><Settings aria-hidden="true" /> Editor &amp; projects</h2>
+                  <p>Choose how your coding workspace opens and behaves.</p>
+                </div>
+              </div>
+              <div className="settings-rows">
+                <div className="settings-row">
+                  <div>
+                    <strong>Open projects on</strong>
+                    <span>The first tab you see when opening a project.</span>
+                  </div>
+                  <select className="settings-select" value={defaultTab} onChange={(event) => { setDefaultTab(event.target.value as 'files' | 'preview' | 'chat'); flash('Preference saved.'); }} aria-label="Default project tab">
+                    <option value="chat">Chat</option>
+                    <option value="files">Files</option>
+                    <option value="preview">Preview</option>
+                  </select>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Editor text size</strong>
+                    <span>Change the font size used while coding.</span>
+                  </div>
+                  <select className="settings-select" value={editorSize} onChange={(event) => { setEditorSize(event.target.value); flash('Preference saved.'); }} aria-label="Editor text size">
+                    <option value="small">Small</option>
+                    <option value="medium">Medium</option>
+                    <option value="large">Large</option>
+                  </select>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Project helper hints</strong>
+                    <span>Show small hints in empty project screens and editor areas.</span>
+                  </div>
+                  <label className="settings-switch">
+                    <input type="checkbox" checked={showProjectHints} onChange={(event) => { setShowProjectHints(event.target.checked); flash('Preference saved.'); }} aria-label="Project helper hints" />
+                    <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
+                  </label>
+                </div>
+              </div>
+            </section>
 
-          <div className="settings-row">
-            <div>
-              <strong>Open projects on</strong>
-              <span>Choose the first tab you see when opening a project.</span>
-            </div>
-            <select className="settings-select" value={defaultTab} onChange={(event) => setDefaultTab(event.target.value as 'files' | 'preview' | 'chat')}>
-              <option value="chat">Chat</option>
-              <option value="files">Files</option>
-              <option value="preview">Preview</option>
-            </select>
-          </div>
+            <section className="settings-card" id="privacy" aria-labelledby="settings-privacy-heading">
+              <div className="settings-card-head">
+                <div>
+                  <h2 id="settings-privacy-heading"><Shield aria-hidden="true" /> Privacy &amp; data</h2>
+                  <p>You own your work. Take a copy of it, clear it, or close your account.</p>
+                </div>
+              </div>
+              <div className="settings-rows">
+                <div className="settings-row">
+                  <div>
+                    <strong>Export my data</strong>
+                    <span>Download your progress, projects, and preferences as a JSON file.</span>
+                  </div>
+                  <button type="button" className="button-secondary" onClick={exportData} data-testid="button-export-data">Export data</button>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Reset progress on this device</strong>
+                    <span>Clears completed lessons, quizzes, and XP stored in this browser only.</span>
+                  </div>
+                  <button type="button" className="button-secondary settings-danger" onClick={resetLocalProgress} data-testid="button-reset-progress">Reset progress</button>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Privacy policy</strong>
+                    <span>What Meta collects, why, and how to have it removed.</span>
+                  </div>
+                  <Link href="/privacy" className="button-secondary">Read policy</Link>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Delete my account</strong>
+                    <span>Permanently removes your account and everything stored with it.</span>
+                  </div>
+                  <Link href="/delete-account" className="button-secondary settings-danger" data-testid="link-delete-account">Delete account</Link>
+                </div>
+              </div>
+            </section>
 
-          <div className="settings-row">
-            <div>
-              <strong>Editor text size</strong>
-              <span>Change the font size used while coding.</span>
-            </div>
-            <select className="settings-select" value={editorSize} onChange={(event) => setEditorSize(event.target.value)}>
-              <option value="small">Small</option>
-              <option value="medium">Medium</option>
-              <option value="large">Large</option>
-            </select>
+            <section className="settings-card" id="support" aria-labelledby="settings-support-heading">
+              <div className="settings-card-head">
+                <div>
+                  <h2 id="settings-support-heading"><CircleHelp aria-hidden="true" /> Support &amp; app</h2>
+                  <p>Get help, or take Meta with you on Android.</p>
+                </div>
+              </div>
+              <div className="settings-rows">
+                <div className="settings-row">
+                  <div>
+                    <strong>Email support</strong>
+                    <span>Questions, bugs, or billing — we usually reply within a couple of days.</span>
+                  </div>
+                  <a className="button-secondary" href="mailto:metasupport43@gmail.com">Contact support</a>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Download Meta for Android</strong>
+                    <span>Get the latest APK build. Android may ask you to allow installs from your browser.</span>
+                  </div>
+                  <a className="button-primary" href="/downloads/Meta-latest.apk" download="Meta.apk">
+                    <Download aria-hidden="true" /> Download APK
+                  </a>
+                </div>
+              </div>
+            </section>
           </div>
+        </div>
 
-          <div className="settings-row">
-            <div>
-              <strong>Project helper hints</strong>
-              <span>Show small hints in empty project screens and editor areas.</span>
-            </div>
-            <label className="settings-switch">
-              <input type="checkbox" checked={showProjectHints} onChange={(event) => setShowProjectHints(event.target.checked)} aria-label="Project helper hints" />
-              <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
-            </label>
-          </div>
-        </section>
-
-        <section className="settings-group">
-          <div className="settings-group-head">
-            <h2>Android app</h2>
-            <p>Install Meta directly on your Android phone.</p>
-          </div>
-          <div className="settings-row">
-            <div>
-              <strong>Download Meta APK</strong>
-              <span>Get the latest Android build. Android may ask you to allow installs from your browser.</span>
-            </div>
-            <a className="button-primary" href="/downloads/Meta-latest.apk" download="Meta.apk">
-              <Download aria-hidden="true" /> Download APK
-            </a>
-          </div>
-        </section>
-
-        <section className="settings-group">
-          <div className="settings-group-head">
-            <h2>Account & billing</h2>
-            <p>Manage your plan, account, and privacy options.</p>
-          </div>
-
-          <div className="settings-row">
-            <div><strong>AI plan</strong><span>View AI credits, project limits, and upgrade options.</span></div>
-            <Link href="/pricing" className="button-secondary">View plans</Link>
-          </div>
-
-          <div className="settings-row">
-            <div>
-              <strong>Account & privacy</strong>
-              <span>Manage your profile, privacy, sign-in, and account deletion.</span>
-            </div>
-            <Link href="/account" className="button-secondary">Account settings</Link>
-          </div>
-        </section>
+        {toast && <div className="settings-toast" role="status" aria-live="polite">{toast}</div>}
       </main>
     </AppShell>
   );
 }
 
+function PricingTeaser() {
+  return (
+    <section className="section pricing-teaser" id="plans" aria-labelledby="pricing-teaser-heading">
+      <div className="section-heading">
+        <div>
+          <p className="section-kicker">Plans &amp; pricing</p>
+          <h2 id="pricing-teaser-heading">Learning is free. AI help scales with you.</h2>
+          <p className="section-sub">Every lesson, quiz, and build track stays open on the free plan. Upgrade only when you want more AI credits and more active projects.</p>
+        </div>
+        <Link href="/pricing" className="text-link" data-testid="link-open-pricing">Compare all plans <ArrowRight aria-hidden="true" /></Link>
+      </div>
+      <div className="teaser-grid">
+        {aiPlans.map((plan) => (
+          <Link href="/pricing" key={plan.id} className={`teaser-card${plan.featured ? ' featured' : ''}`} data-testid={`teaser-plan-${plan.id}`}>
+            {plan.featured && <span className="teaser-flag">Most popular</span>}
+            <strong>{plan.name}</strong>
+            <span className="teaser-price">{plan.price}<small>{plan.cadence}</small></span>
+            <span className="teaser-desc">{plan.description}</span>
+            <span className="teaser-meta"><Zap aria-hidden="true" /> {plan.aiCredits.toLocaleString()} AI credits / month</span>
+            <span className="teaser-meta"><FolderKanban aria-hidden="true" /> {plan.projects < 0 ? 'Unlimited projects' : `${plan.projects} active projects`}</span>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+const PLAN_MATRIX: { label: string; free: string | boolean; builder: string | boolean; pro: string | boolean; highlight?: boolean }[] = [
+  { label: 'Foundation lessons & quizzes', free: 'All 6', builder: 'All 6', pro: 'All 6' },
+  { label: 'Lesson Play build tracks', free: 'All 7', builder: 'All 7', pro: 'All 7' },
+  { label: 'AI credits per month', free: '40', builder: '500', pro: '2,000', highlight: true },
+  { label: 'Active projects', free: '3', builder: '25', pro: 'Unlimited' },
+  { label: 'Project-aware AI context', free: true, builder: true, pro: true },
+  { label: 'Priority AI queue', free: false, builder: false, pro: true },
+  { label: 'Support', free: 'Community', builder: 'Email', pro: 'Priority email' },
+];
+
+const PLAN_FAQ: { q: string; a: string }[] = [
+  { q: 'Do I have to pay to learn?', a: 'No. Every foundation lesson, quiz, and Lesson Play build track is free forever. Paid plans only add AI credits and more active projects — the teaching itself is never behind a paywall.' },
+  { q: 'What exactly is an AI credit?', a: 'Roughly one AI request inside a project: asking the project agent to write, explain, or fix code. Credits are shared across your whole account, while each project keeps its own conversation context.' },
+  { q: 'What happens when I run out of credits?', a: 'Nothing is lost. Your projects, files, and progress stay exactly where they are. AI requests simply pause until your credits refresh at the start of the next month, or until you move to a larger plan.' },
+  { q: 'Can I cancel any time?', a: 'Yes. Cancel from Settings → Plan & billing and you keep full access until the end of the period you already paid for. There is no cancellation fee and no lock-in.' },
+  { q: 'Is there an annual option?', a: 'Annual billing is being finalised. Monthly checkout is available right now, and the annual price is shown above so you can see the saving before you decide.' },
+];
+
+function matrixCell(value: string | boolean) {
+  if (typeof value === 'boolean') {
+    return value ? <Check aria-label="Included" /> : <span className="cell-none" aria-label="Not included">—</span>;
+  }
+  return value;
+}
+
 function PricingPage() {
+  const [annual, setAnnual] = useState(false);
+  const yearlySaving = (plan: Plan) => (plan.annual && plan.monthly ? Math.round((1 - plan.annual / (plan.monthly * 12)) * 100) : 0);
+
   return (
     <AppShell>
-      <main className="workspace-page">
-        <section className="workspace-head pricing-head">
-          <div>
-            <p className="section-kicker">Meta AI plans</p>
-            <h1>Pay for AI usage, not basic learning.</h1>
-            <p>Lessons stay available. Paid plans increase AI project credits and the number of projects you can keep active.</p>
+      <main className="workspace-page pricing-page">
+        <section className="pricing-hero" aria-labelledby="pricing-heading">
+          <p className="section-kicker">Plans &amp; pricing</p>
+          <h1 id="pricing-heading">Pay for AI usage.<br /><em>Never for learning.</em></h1>
+          <p className="pricing-lede">Every lesson, quiz, and build track is free forever. Paid plans only add AI credits and more active projects — and you can cancel any time.</p>
+          <div className="billing-toggle" role="group" aria-label="Billing period">
+            <button type="button" className={annual ? '' : 'is-active'} aria-pressed={!annual} onClick={() => setAnnual(false)} data-testid="toggle-monthly">Monthly</button>
+            <button type="button" className={annual ? 'is-active' : ''} aria-pressed={annual} onClick={() => setAnnual(true)} data-testid="toggle-annual">
+              Annual <span className="save-pill">Save ~17%</span>
+            </button>
           </div>
+          <ul className="pricing-trust">
+            <li><Check aria-hidden="true" /> No card needed for Free</li>
+            <li><Check aria-hidden="true" /> Cancel any time</li>
+            <li><Check aria-hidden="true" /> Lessons stay free forever</li>
+          </ul>
         </section>
-        <section className="pricing-grid">
+
+        <section className="plan-grid" aria-label="Plan comparison">
           {aiPlans.map((plan) => (
-            <article className={`pricing-card${plan.id === 'builder' ? ' featured' : ''}`} key={plan.id}>
-              {plan.id === 'builder' && <span className="pricing-badge">Recommended</span>}
-              <h2>{plan.name}</h2>
-              <div className="pricing-price"><strong>{plan.price}</strong><span>{plan.cadence}</span></div>
-              <p>{plan.description}</p>
-              <ul>
-                <li><Check aria-hidden="true" /> {plan.aiCredits.toLocaleString()} AI credits / month</li>
-                <li><Check aria-hidden="true" /> {plan.projects < 0 ? 'Unlimited projects' : `${plan.projects} active projects`}</li>
-                <li><Check aria-hidden="true" /> Project-aware AI context</li>
-                <li><Check aria-hidden="true" /> Lessons and Lesson Play included</li>
+            <article className={`plan-card${plan.featured ? ' featured' : ''}`} key={plan.id} data-testid={`plan-card-${plan.id}`}>
+              {plan.featured && <span className="plan-flag"><Star aria-hidden="true" /> Most popular</span>}
+              <header className="plan-head">
+                <h2>{plan.name}</h2>
+                <p>{plan.bestFor}</p>
+              </header>
+              <div className="plan-price">
+                <strong>{annual && plan.annual ? `$${(plan.annual / 12).toFixed(2)}` : plan.price}</strong>
+                <span>{plan.id === 'free' ? 'forever' : '/ month'}</span>
+              </div>
+              {annual && plan.annual ? (
+                <p className="plan-billing">Billed ${plan.annual} once a year — you save {yearlySaving(plan)}%</p>
+              ) : plan.monthly ? (
+                <p className="plan-billing">Billed monthly, cancel any time.</p>
+              ) : (
+                <p className="plan-billing">No payment details required.</p>
+              )}
+              <ul className="plan-features">
+                {plan.features.map((feature) => (
+                  <li key={feature}><Check aria-hidden="true" /> {feature}</li>
+                ))}
               </ul>
               {plan.id === 'free' ? (
-                <button type="button" className="button-secondary">Current/free plan</button>
+                <Link href="/sign-up" className="plan-cta secondary" data-testid="plan-cta-free">Start free</Link>
+              ) : annual ? (
+                <button type="button" className="plan-cta secondary" disabled title="Annual checkout opens soon — monthly billing is available now.">Annual opens soon</button>
               ) : (
-                <a
-                  className="button-primary"
-                  href={META_STRIPE_TEST_LINKS[plan.id]}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Choose {plan.name}
-                </a>
+                <a className="plan-cta primary" href={META_STRIPE_TEST_LINKS[plan.id]} target="_blank" rel="noreferrer" data-testid={`plan-cta-${plan.id}`}>{plan.cta}</a>
               )}
+              <p className="plan-foot">{plan.description}</p>
             </article>
           ))}
         </section>
+
+        <section className="pricing-explainer" aria-label="How plans work">
+          <article className="explainer-card">
+            <Zap aria-hidden="true" />
+            <h3>Credits are account-wide</h3>
+            <p>Your monthly AI allowance is shared across every project you own, so a quiet week leaves more credits for a busy one.</p>
+          </article>
+          <article className="explainer-card">
+            <FolderKanban aria-hidden="true" />
+            <h3>Context stays per project</h3>
+            <p>Each project keeps its own conversation and files, so the AI always answers with the right code in front of it.</p>
+          </article>
+          <article className="explainer-card">
+            <Shield aria-hidden="true" />
+            <h3>Your work is never held hostage</h3>
+            <p>If a plan lapses, your projects and progress stay intact. Nothing is deleted and no lesson is ever locked.</p>
+          </article>
+        </section>
+
+        <section className="compare-section" aria-labelledby="compare-heading">
+          <div className="section-heading">
+            <div>
+              <p className="section-kicker">Side by side</p>
+              <h2 id="compare-heading">Compare every plan.</h2>
+              <p className="section-sub">The full breakdown, with no asterisks.</p>
+            </div>
+          </div>
+          <div className="compare-scroll">
+            <table className="compare-table">
+              <caption className="sr-only">Feature comparison of the Free, Builder, and Pro plans</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Feature</th>
+                  <th scope="col">Free</th>
+                  <th scope="col">Builder</th>
+                  <th scope="col">Pro</th>
+                </tr>
+              </thead>
+              <tbody>
+                {PLAN_MATRIX.map((row) => (
+                  <tr key={row.label}>
+                    <th scope="row">{row.label}</th>
+                    <td>{matrixCell(row.free)}</td>
+                    <td className={row.highlight ? 'is-featured' : undefined}>{matrixCell(row.builder)}</td>
+                    <td>{matrixCell(row.pro)}</td>
+                  </tr>
+                ))}
+                <tr>
+                  <th scope="row">Monthly price</th>
+                  <td>$0</td>
+                  <td className="is-featured">$4.99</td>
+                  <td>$9.99</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="faq-section" aria-labelledby="faq-heading">
+          <div className="section-heading">
+            <div>
+              <p className="section-kicker">Questions</p>
+              <h2 id="faq-heading">Plans, answered.</h2>
+            </div>
+          </div>
+          <div className="faq-list">
+            {PLAN_FAQ.map((item) => (
+              <details className="faq-item" key={item.q}>
+                <summary>{item.q} <ArrowRight aria-hidden="true" /></summary>
+                <p>{item.a}</p>
+              </details>
+            ))}
+          </div>
+        </section>
+
         <p className="pricing-note">AI credits are account-wide, while each project keeps its own AI context. Stripe checkout is connected in test mode right now; live charging will be enabled only after the live Stripe account is connected and verified.</p>
       </main>
     </AppShell>
