@@ -2542,8 +2542,8 @@ function tipFor(lessonId: string): string {
 
 
 function AdminPublishingPage() {
-  type ContentItem = { id: number; title: string; slug: string; content_type: 'announcement' | 'lesson'; summary: string; body: string; status: 'draft' | 'published'; updated_at?: string };
-  const empty = { title: '', slug: '', content_type: 'announcement' as const, summary: '', body: '', status: 'draft' as const };
+  type ContentItem = { id?: number; title: string; slug: string; content_type: 'announcement' | 'lesson'; summary: string; body: string; status: 'draft' | 'published'; updated_at?: string };
+  const empty: ContentItem = { title: '', slug: '', content_type: 'announcement', summary: '', body: '', status: 'draft' };
   const [items, setItems] = useState<ContentItem[]>([]);
   const [draft, setDraft] = useState<ContentItem | typeof empty>(empty);
   const [adminStatus, setAdminStatus] = useState('Checking administrator access…');
