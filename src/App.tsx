@@ -1230,6 +1230,7 @@ function ProjectPage() {
                       <span>{activeFile}</span>
                       <div>
                         <button type="button" className="editor-text-button" onClick={() => downloadFile(activeFile, currentFiles[activeFile] || '')}>Download file</button>
+                        <button type="button" className="editor-text-button" onClick={() => { setMessage(`Review ${activeFile} in my ${project.type} project. First explain what this code does. Check for bugs, errors, missing pieces, and improvements. If something is wrong, show a corrected code example and explain exactly what to change and why, step by step. Do not modify or replace any project files yet; wait for me to approve a fix.`); setError(''); setActiveTab('chat'); }} title="Get a code review and step-by-step fix instructions"><Lightbulb aria-hidden="true" /> Explain / fix</button>
                         <button type="button" className="editor-text-button danger-text" onClick={deleteActiveFile}>Delete</button>
                       </div>
                     </div>
