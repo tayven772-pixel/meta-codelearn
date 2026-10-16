@@ -2232,19 +2232,59 @@ html[data-reduced-motion='true'] *::after {
 /* Bottom tab bar: five destinations, mobile only. */
 @media (max-width: 899px) {
   .bottom-workspace-nav {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
-    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    /* Reset the desktop pill layout: the base rule centres the bar with
+       left:50% + translateX(-50%) and spaces items with gap:18px. Without
+       these three resets the full-width bar is shifted half a screen left
+       and its five items overflow narrow phones. */
+    transform: none;
+    gap: 0;
+    width: 100%;
+    max-width: 100vw;
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: stretch;
     border-top: 1px solid hsl(var(--border));
     background: hsl(var(--background) / .97);
     backdrop-filter: blur(16px);
     padding-bottom: env(safe-area-inset-bottom);
   }
   .bottom-workspace-button {
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 4px; min-height: 60px; border: 0; background: transparent;
-    color: hsl(var(--muted-foreground)); font-size: 10px; font-weight: 700; text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    /* min-width was 58px in the base rule: 5 x 58 + 4 x 18 gap = 362px,
+       wider than a 360px phone. Let each cell shrink instead. */
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 58px;
+    padding: 6px 2px;
+    box-sizing: border-box;
+    border: 0;
+    background: transparent;
+    color: hsl(var(--muted-foreground));
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.1;
+    text-align: center;
+    overflow: hidden;
   }
-  .bottom-workspace-button svg { width: 20px; height: 20px; }
+  .bottom-workspace-button span {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .bottom-workspace-button svg { flex: 0 0 auto; width: 20px; height: 20px; }
   .bottom-workspace-button:hover, .bottom-workspace-button:focus-visible { color: var(--brand); }
   .home-main .footer { padding-bottom: 92px; }
   .workspace-page { padding-bottom: 96px; }
@@ -2551,3 +2591,9 @@ html[data-reduced-motion='true'] *::after {
 :root[data-theme='dark'] .settings-toast { background: #1e2632; color: #e8eef6; }
 :root[data-theme='dark'] .settings-card-head { background: rgb(255 255 255 / .03); }
 :root[data-theme='dark'] .settings-danger { color: #f2a196; border-color: #5d3a36 !important; }
+
+/* Very narrow phones: tighten the tab bar further so five tabs always fit. */
+@media (max-width: 360px) {
+  .bottom-workspace-button { font-size: 9px; padding: 5px 1px; gap: 2px; }
+  .bottom-workspace-button svg { width: 18px; height: 18px; }
+}
