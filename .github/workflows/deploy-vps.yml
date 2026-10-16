@@ -77,6 +77,7 @@ jobs:
           SSH="ssh -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
           $SSH "$VPS_USER@$VPS_HOST" "mkdir -p '$STAGING'"
           scp -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -r dist/. "$VPS_USER@$VPS_HOST:$STAGING/"
+          scp -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes server/auth.js "$VPS_USER@$VPS_HOST:/tmp/meta-codelearn-auth-$DEPLOY_SHA.js"
 
       - name: Back up and publish site
         env:
@@ -91,12 +92,61 @@ jobs:
           STAGING="$1"
           DEPLOY_SHA="$2"
           test -s "$STAGING/index.html"
-          sudo -n nginx -t
+          AUTH_STAGE="/tmp/meta-codelearn-auth-$DEPLOY_SHA.js"
+          test -s "$AUTH_STAGE"
           BACKUP="/var/www/html.backup-$DEPLOY_SHA-$(date +%Y%m%d-%H%M%S)"
+          AUTH_BACKUP="/opt/meta-codelearn/server/auth.js.backup-$DEPLOY_SHA"
+          NGINX_SNIPPET="/etc/nginx/snippets/meta-codelearn-auth.conf"
+          NGINX_BACKUP="$NGINX_SNIPPET.backup-$DEPLOY_SHA"
           sudo -n cp -a /var/www/html "$BACKUP"
+          sudo -n cp -a /opt/meta-codelearn/server/auth.js "$AUTH_BACKUP"
+          sudo -n cp -a "$NGINX_SNIPPET" "$NGINX_BACKUP"
+          if ! sudo -n grep -Fq 'location = /api/auth/content' "$NGINX_SNIPPET"; then
+            sudo -n tee -a "$NGINX_SNIPPET" >/dev/null <<'NGINX'
+          location = /api/auth/content {
+            proxy_pass http://127.0.0.1:3001/api/auth/content;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+          }
+          location = /api/auth/admin/content {
+            proxy_pass http://127.0.0.1:3001/api/auth/admin/content;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+          }
+          NGINX
+          fi
+          if ! sudo -n grep -q '^META_ADMIN_EMAILS=' /etc/meta-codelearn-auth.env; then
+            printf '%s\n' 'META_ADMIN_EMAILS=metasupport43@gmail.com' | sudo -n tee -a /etc/meta-codelearn-auth.env >/dev/null
+          fi
+          if ! sudo -n nginx -t; then
+            sudo -n cp -a "$NGINX_BACKUP" "$NGINX_SNIPPET"
+            sudo -n nginx -t || true
+            echo "Nginx configuration test failed; the previous auth proxy snippet was restored."
+            exit 1
+          fi
           sudo -n cp -a "$STAGING/." /var/www/html/
+          sudo -n cp -a "$AUTH_STAGE" /opt/meta-codelearn/server/auth.js
           sudo -n nginx -t
           sudo -n systemctl reload nginx
+          if ! sudo -n systemctl restart meta-codelearn-auth.service; then
+            sudo -n cp -a "$AUTH_BACKUP" /opt/meta-codelearn/server/auth.js
+            sudo -n systemctl restart meta-codelearn-auth.service || true
+            echo "Auth service restart failed; previous auth server file restored."
+            exit 1
+          fi
+          if ! curl --fail --silent --show-error http://127.0.0.1:3001/api/health >/dev/null; then
+            sudo -n cp -a "$AUTH_BACKUP" /opt/meta-codelearn/server/auth.js
+            sudo -n systemctl restart meta-codelearn-auth.service || true
+            echo "Auth health check failed; previous auth server file restored."
+            exit 1
+          fi
           rm -rf "$STAGING"
-          echo "Website deployed successfully. Backup: $BACKUP"
+          rm -f "$AUTH_STAGE"
+          echo "Website and auth server deployed. Website backup: $BACKUP; auth backup: $AUTH_BACKUP; Nginx snippet backup: $NGINX_BACKUP"
           REMOTE
