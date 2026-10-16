@@ -62,6 +62,20 @@ db.exec(`
     expires_at INTEGER NOT NULL
   );
 `);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS site_content (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    content_type TEXT NOT NULL CHECK(content_type IN ('announcement','lesson')),
+    summary TEXT NOT NULL DEFAULT '',
+    body TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','published')),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    published_at TEXT
+  );
+`);
 const userColumns = new Set(
   db.prepare('PRAGMA table_info(users)').all().map(column => column.name)
 );
@@ -242,6 +256,99 @@ app.get('/api/auth/me', (req, res) => {
   if (!user) return res.status(401).json({ error: 'Not signed in.' });
   res.json({ user: publicUser(user) });
 });
+
+// Content publishing API. Administrator privileges are granted only by server environment,
+// never by a client-supplied email or role field.
+const adminEmails = new Set(
+  String(process.env.META_ADMIN_EMAILS || '')
+    .split(',')
+    .map(value => normalizeEmail(value))
+    .filter(Boolean)
+);
+function requireAdmin(req, res) {
+  const user = sessionUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Please sign in to manage site content.' });
+    return null;
+  }
+  if (!adminEmails.has(normalizeEmail(user.email))) {
+    res.status(403).json({ error: 'This account is not authorized to publish site content.' });
+    return null;
+  }
+  return user;
+}
+function contentDto(row) {
+  return {
+    id: row.id, title: row.title, slug: row.slug, content_type: row.content_type,
+    summary: row.summary, body: row.body, status: row.status,
+    created_at: row.created_at, updated_at: row.updated_at, published_at: row.published_at
+  };
+}
+app.get('/api/auth/content', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const items = db.prepare(
+    "SELECT id,title,slug,content_type,summary,body,status,created_at,updated_at,published_at FROM site_content WHERE status='published' ORDER BY published_at DESC, id DESC LIMIT 30"
+  ).all();
+  res.json({ items: items.map(contentDto) });
+});
+app.get('/api/auth/admin/content', (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  res.setHeader('Cache-Control', 'no-store');
+  const items = db.prepare(
+    'SELECT id,title,slug,content_type,summary,body,status,created_at,updated_at,published_at FROM site_content ORDER BY updated_at DESC, id DESC'
+  ).all();
+  res.json({ items: items.map(contentDto) });
+});
+function validateContent(body) {
+  const title = typeof body?.title === 'string' ? body.title.trim() : '';
+  const slug = typeof body?.slug === 'string' ? body.slug.trim().toLowerCase() : '';
+  const contentType = body?.content_type;
+  const summary = typeof body?.summary === 'string' ? body.summary.trim() : '';
+  const content = typeof body?.body === 'string' ? body.body.trim() : '';
+  const status = body?.status;
+  if (!title || title.length > 120) return { error: 'Title is required and must be at most 120 characters.' };
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 100) return { error: 'Use a URL slug with lowercase letters, numbers, and single hyphens.' };
+  if (!['announcement', 'lesson'].includes(contentType)) return { error: 'Choose an allowed content type.' };
+  if (summary.length > 280) return { error: 'Summary must be 280 characters or fewer.' };
+  if (!content || content.length > 12000) return { error: 'Body is required and must be at most 12,000 characters.' };
+  if (!['draft', 'published'].includes(status)) return { error: 'Choose draft or published status.' };
+  return { value: { title, slug, content_type: contentType, summary, body: content, status } };
+}
+function saveContent(req, res, existingId = null) {
+  if (!requireAdmin(req, res)) return;
+  const checked = validateContent(req.body);
+  if (checked.error) return res.status(400).json({ error: checked.error });
+  const item = checked.value;
+  const now = new Date().toISOString();
+  const publishedAt = item.status === 'published' ? now : null;
+  try {
+    let id = existingId;
+    if (existingId !== null) {
+      const previous = db.prepare('SELECT id,published_at FROM site_content WHERE id=?').get(existingId);
+      if (!previous) return res.status(404).json({ error: 'Content item not found.' });
+      const finalPublishedAt = item.status === 'published' ? (previous.published_at || now) : null;
+      db.prepare('UPDATE site_content SET title=?,slug=?,content_type=?,summary=?,body=?,status=?,updated_at=?,published_at=? WHERE id=?')
+        .run(item.title, item.slug, item.content_type, item.summary, item.body, item.status, now, finalPublishedAt, existingId);
+    } else {
+      const result = db.prepare('INSERT INTO site_content(title,slug,content_type,summary,body,status,created_at,updated_at,published_at) VALUES(?,?,?,?,?,?,?,?,?)')
+        .run(item.title, item.slug, item.content_type, item.summary, item.body, item.status, now, now, publishedAt);
+      id = Number(result.lastInsertRowid);
+    }
+    const row = db.prepare('SELECT id,title,slug,content_type,summary,body,status,created_at,updated_at,published_at FROM site_content WHERE id=?').get(id);
+    return res.status(existingId === null ? 201 : 200).json({ item: contentDto(row) });
+  } catch (error) {
+    if (String(error?.code || '').startsWith('SQLITE_CONSTRAINT')) return res.status(409).json({ error: 'That URL slug is already in use.' });
+    console.error('Content save failed:', error?.message || 'unknown error');
+    return res.status(500).json({ error: 'Could not save site content.' });
+  }
+}
+app.post('/api/auth/admin/content', (req, res) => saveContent(req, res));
+app.put('/api/auth/admin/content', (req, res) => {
+  const id = Number(req.body?.id);
+  if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'A valid content ID is required for updates.' });
+  return saveContent(req, res, id);
+});
+
 app.post('/api/auth/logout', (req, res) => {
   const token = String(req.headers.cookie || '').split(';').map(v => v.trim()).find(v => v.startsWith('meta_session='))?.slice('meta_session='.length);
   if (token) {

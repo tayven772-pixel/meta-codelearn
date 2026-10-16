@@ -484,6 +484,8 @@ function HomePage() {
           </div>
         </section>
 
+        <PublishedContentSection />
+
         <section className="section" id="language-library" aria-labelledby="library-heading">
           <div className="section-heading">
             <div>
@@ -583,6 +585,42 @@ function HomePage() {
   );
 }
 
+
+
+function PublishedContentSection() {
+  const [items, setItems] = useState<Array<{ id: number; title: string; content_type: string; summary: string; body: string; published_at: string | null }>>([]);
+  useEffect(() => {
+    let active = true;
+    fetch('/api/auth/content', { credentials: 'same-origin' })
+      .then(response => response.ok ? response.json() : { items: [] })
+      .then(data => { if (active && Array.isArray(data.items)) setItems(data.items); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+  if (!items.length) return null;
+  return (
+    <section className="published-content-section" aria-labelledby="published-content-heading">
+      <div className="section-heading">
+        <div>
+          <p className="section-kicker">From the Meta team</p>
+          <h2 id="published-content-heading">Updates & new learning</h2>
+          <p className="section-sub">New notes, announcements, and learning resources published by Meta.</p>
+        </div>
+      </div>
+      <div className="published-content-grid">
+        {items.map(item => (
+          <article className="published-content-card" key={item.id}>
+            <span className="published-content-type">{item.content_type === 'lesson' ? 'Learning resource' : 'Announcement'}</span>
+            <h3>{item.title}</h3>
+            {item.summary && <p className="published-content-summary">{item.summary}</p>}
+            <p className="published-content-body">{item.body}</p>
+            {item.published_at && <time dateTime={item.published_at}>{new Date(item.published_at).toLocaleDateString()}</time>}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 function LessonPlaySection() {
   return (
@@ -2502,6 +2540,97 @@ function tipFor(lessonId: string): string {
   return tips[lessonId] ?? 'Build one small piece at a time.';
 }
 
+
+function AdminPublishingPage() {
+  type ContentItem = { id?: number; title: string; slug: string; content_type: 'announcement' | 'lesson'; summary: string; body: string; status: 'draft' | 'published'; updated_at?: string };
+  const empty: ContentItem = { title: '', slug: '', content_type: 'announcement', summary: '', body: '', status: 'draft' };
+  const [items, setItems] = useState<ContentItem[]>([]);
+  const [draft, setDraft] = useState<ContentItem | typeof empty>(empty);
+  const [adminStatus, setAdminStatus] = useState('Checking administrator access…');
+  const [allowed, setAllowed] = useState(false);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    let active = true;
+    fetch('/api/auth/admin/content', { credentials: 'same-origin' })
+      .then(async response => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Could not verify administrator access.');
+        if (!active) return;
+        setAllowed(true);
+        setItems(Array.isArray(data.items) ? data.items : []);
+        setAdminStatus('Drafts are private. Published items appear in the public Meta updates section.');
+      })
+      .catch(error => { if (active) setAdminStatus(error instanceof Error ? error.message : 'Could not verify administrator access.'); });
+    return () => { active = false; };
+  }, []);
+  function editItem(item: ContentItem) { setDraft({ ...item }); }
+  function startNew() { setDraft({ ...empty }); }
+  function updateField<K extends keyof typeof empty>(key: K, value: (typeof empty)[K]) {
+    setDraft(current => ({ ...current, [key]: value }));
+  }
+  async function saveContent(publish: boolean) {
+    if (!draft.title.trim() || !draft.slug.trim() || !draft.body.trim() || saving) {
+      setAdminStatus('Add a title, URL slug, and body before saving.');
+      return;
+    }
+    setSaving(true);
+    setAdminStatus('');
+    const payload = { ...draft, status: publish ? 'published' : 'draft' };
+    try {
+      const response = await fetch('/api/auth/admin/content', {
+        method: draft.id ? 'PUT' : 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Could not save content.');
+      setItems(current => [data.item, ...current.filter(item => item.id !== data.item.id)]);
+      setDraft(data.item);
+      setAdminStatus(publish ? 'Content published.' : 'Draft saved.');
+    } catch (error) {
+      setAdminStatus(error instanceof Error ? error.message : 'Could not save content.');
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <AppShell>
+      <main className="admin-publishing-page">
+        <div className="admin-publishing-heading">
+          <p className="section-kicker">Meta administration</p>
+          <h1>Content publishing</h1>
+          <p>Create drafts, preview your writing, and publish announcements or learning resources without editing source code.</p>
+        </div>
+        <p className="admin-publishing-status" role="status">{adminStatus}</p>
+        {allowed && (
+          <div className="admin-publishing-layout">
+            <aside className="admin-content-list">
+              <div className="admin-list-heading"><h2>Content library</h2><button type="button" className="admin-small-button" onClick={startNew}>New draft</button></div>
+              {items.length === 0 && <p className="admin-muted">Your content library is empty. Create your first draft.</p>}
+              {items.map(item => (
+                <button type="button" key={item.id} className={draft.id === item.id ? 'admin-content-list-item selected' : 'admin-content-list-item'} onClick={() => editItem(item)}>
+                  <strong>{item.title}</strong><span>{item.content_type} · {item.status}</span>
+                </button>
+              ))}
+            </aside>
+            <section className="admin-content-editor">
+              <div className="admin-editor-head"><h2>{draft.id ? 'Edit content' : 'Create content'}</h2><span className={draft.status === 'published' ? 'admin-status-pill published' : 'admin-status-pill'}>{draft.status}</span></div>
+              <label>Title<input value={draft.title} maxLength={120} onChange={e => updateField('title', e.target.value)} placeholder="A clear, useful title" /></label>
+              <label>URL slug<input value={draft.slug} maxLength={100} onChange={e => updateField('slug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} placeholder="getting-started" /><small>Used as a stable content identifier.</small></label>
+              <label>Content type<select value={draft.content_type} onChange={e => updateField('content_type', e.target.value as 'announcement' | 'lesson')}><option value="announcement">Announcement</option><option value="lesson">Learning resource</option></select></label>
+              <label>Short summary<textarea rows={2} maxLength={280} value={draft.summary} onChange={e => updateField('summary', e.target.value)} placeholder="A short preview shown on the home page" /></label>
+              <label>Body<textarea rows={10} maxLength={12000} value={draft.body} onChange={e => updateField('body', e.target.value)} placeholder="Write the content you want learners to see…" /></label>
+              <div className="admin-editor-actions"><button type="button" className="admin-secondary-button" disabled={saving} onClick={() => saveContent(false)}>Save draft</button><button type="button" className="button-primary" disabled={saving} onClick={() => saveContent(true)}>{saving ? 'Saving…' : 'Publish content'}</button></div>
+              <p className="admin-muted">Publishing makes this content visible on the public home page. Saving a draft keeps it private.</p>
+            </section>
+          </div>
+        )}
+      </main>
+    </AppShell>
+  );
+}
+
 function NotFound() {
   return (
     <AppShell>
@@ -2561,6 +2690,7 @@ function MainRoutes() {
   return (
     <Switch>
       <Route path="/" component={HomePage} />
+      <Route path="/admin" component={AdminPublishingPage} />
       <Route path="/user-portal" component={() => <ProtectedRoute><UserPortal /></ProtectedRoute>} />
       <Route path="/learn/:lessonId" component={() => <ProtectedRoute><LessonPage /></ProtectedRoute>} />
       <Route path="/play" component={() => <ProtectedRoute><PlayPage /></ProtectedRoute>} />
