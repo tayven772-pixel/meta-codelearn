@@ -1260,7 +1260,7 @@ function ProjectPage() {
                 <div className="editor-empty">
                   <Eye aria-hidden="true" />
                   <h2>Preview</h2>
-                  {showProjectHints && <p>Browser preview appears when this project has an index.html file. Other project types can still be edited and downloaded.</p>}
+                  {showProjectHints && <p>Browser preview works with any .html file in this project. Open Files and select an HTML file, then tap Preview. Local CSS and JavaScript files are included when they are linked from the page.</p>}
                 </div>
               )}
             </section>
