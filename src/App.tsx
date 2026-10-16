@@ -160,6 +160,7 @@ type MetaProject = {
 
 const PROJECTS_KEY = 'meta-projects-v2';
 const ACTIVE_ACCOUNT_KEY = 'meta-active-account-v1';
+const ACCOUNT_SCOPE_EVENT = 'meta-account-scope-change';
 
 function currentAccountScope(): string {
   try {
@@ -270,6 +271,36 @@ function ThemeProvider({ children }: { children: ReactNode }) {
     }
   }, [theme]);
 
+  useEffect(() => {
+    let active = true;
+    async function resolveAccountScope() {
+      const [emailScope, discordScope] = await Promise.all([
+        fetch('/api/auth/me', { credentials: 'same-origin' })
+          .then(async response => {
+            if (!response.ok) return null;
+            const data = await response.json().catch(() => ({}));
+            return data?.user?.id != null ? `email-${String(data.user.id)}` : null;
+          }).catch(() => null),
+        fetch('/api/auth/discord/me', { credentials: 'same-origin' })
+          .then(async response => {
+            if (!response.ok) return null;
+            const data = await response.json().catch(() => ({}));
+            return data?.authenticated && data?.user?.id != null ? `discord-${String(data.user.id)}` : null;
+          }).catch(() => null),
+      ]);
+      if (!active) return;
+      const nextScope = emailScope || discordScope || 'guest';
+      const previousScope = currentAccountScope();
+      try {
+        if (nextScope === 'guest') localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
+        else localStorage.setItem(ACTIVE_ACCOUNT_KEY, nextScope);
+      } catch { /* The site can still be browsed if local storage is unavailable. */ }
+      if (previousScope !== nextScope) window.dispatchEvent(new CustomEvent(ACCOUNT_SCOPE_EVENT));
+    }
+    resolveAccountScope();
+    return () => { active = false; };
+  }, []);
+
   const value = useMemo(
     () => ({ theme, toggleTheme: () => setTheme((current) => current === 'dark' ? 'light' : 'dark') }),
     [theme],
@@ -323,7 +354,14 @@ function readProgress(storageKey: string): Progress {
 
 function useProgress() {
   const isLoaded = true;
-  const storageKey = `${PROGRESS_KEY}:${currentAccountScope()}`;
+  const [storageKey, setStorageKey] = useState(() => `${PROGRESS_KEY}:${currentAccountScope()}`);
+  useEffect(() => {
+    const refreshScope = () => setStorageKey(`${PROGRESS_KEY}:${currentAccountScope()}`);
+    const onStorage = (event: StorageEvent) => { if (event.key === ACTIVE_ACCOUNT_KEY) refreshScope(); };
+    window.addEventListener(ACCOUNT_SCOPE_EVENT, refreshScope);
+    window.addEventListener('storage', onStorage);
+    return () => { window.removeEventListener(ACCOUNT_SCOPE_EVENT, refreshScope); window.removeEventListener('storage', onStorage); };
+  }, []);
   const [snapshot, setSnapshot] = useState(() => ({
     storageKey,
     progress: readProgress(storageKey),
@@ -2156,9 +2194,10 @@ function AccountSettingsPage() {
       }
       try {
         localStorage.removeItem(`${PROGRESS_KEY}:${scope}`);
-        localStorage.removeItem(`${PROJECTS_KEY}:${scope}`);
         if (scope === 'guest') {
-          for (const key of ['meta-progress-v1', 'code-atlas-progress-v1', 'meta-projects-v1']) localStorage.removeItem(key);
+          for (const key of ['meta-progress-v1', 'code-atlas-progress-v1', 'meta-projects-v2', 'meta-projects-v1']) localStorage.removeItem(key);
+        } else {
+          localStorage.removeItem(`${PROJECTS_KEY}:${scope}`);
         }
         localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
       } catch {
@@ -2770,6 +2809,7 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
       } catch {
         // If storage is blocked, the page still works with guest-only local state.
       }
+      if (scope !== currentAccountScope()) window.dispatchEvent(new CustomEvent(ACCOUNT_SCOPE_EVENT));
       setStatus(scope ? 'signed-in' : 'signed-out');
     });
     return () => { active = false; };
