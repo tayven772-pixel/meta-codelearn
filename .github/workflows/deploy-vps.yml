@@ -74,10 +74,10 @@ jobs:
           test -n "$VPS_HOST" || { echo "Missing repository secret VPS_HOST"; exit 1; }
           test -n "$VPS_USER" || { echo "Missing repository secret VPS_USER"; exit 1; }
           STAGING="/tmp/meta-codelearn-dist-$DEPLOY_SHA"
-          SSH="ssh -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          SSH="ssh -p 10058 -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
           $SSH "$VPS_USER@$VPS_HOST" "mkdir -p '$STAGING'"
-          scp -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -r dist/. "$VPS_USER@$VPS_HOST:$STAGING/"
-          scp -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes server/auth.js "$VPS_USER@$VPS_HOST:/tmp/meta-codelearn-auth-$DEPLOY_SHA.js"
+          scp -P 10058 -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -r dist/. "$VPS_USER@$VPS_HOST:$STAGING/"
+          scp -P 10058 -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes server/auth.js "$VPS_USER@$VPS_HOST:/tmp/meta-codelearn-auth-$DEPLOY_SHA.js"
 
       - name: Back up and publish site
         env:
@@ -87,7 +87,7 @@ jobs:
         run: |
           set -eu
           STAGING="/tmp/meta-codelearn-dist-$DEPLOY_SHA"
-          ssh -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" "bash -s -- '$STAGING' '$DEPLOY_SHA'" <<'REMOTE'
+          ssh -p 10058 -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" "bash -s -- '$STAGING' '$DEPLOY_SHA'" <<'REMOTE'
           set -eu
           STAGING="$1"
           DEPLOY_SHA="$2"
