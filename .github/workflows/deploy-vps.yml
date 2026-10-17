@@ -154,10 +154,20 @@ jobs:
             echo "Auth service restart failed; previous auth server file restored."
             exit 1
           fi
-          if ! curl --fail --silent --show-error http://127.0.0.1:3001/api/health >/dev/null; then
+          AUTH_HEALTHY=0
+          for attempt in $(seq 1 15); do
+            if curl --fail --silent --show-error --max-time 3 http://127.0.0.1:3001/api/health >/dev/null; then
+              AUTH_HEALTHY=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$AUTH_HEALTHY" -ne 1 ]; then
+            echo "Auth health check failed after retries; collecting service logs."
+            sudo -n journalctl -u meta-codelearn-auth.service -n 25 --no-pager || true
             sudo -n cp -a "$AUTH_BACKUP" /opt/meta-codelearn/server/auth.js
             sudo -n systemctl restart meta-codelearn-auth.service || true
-            echo "Auth health check failed; previous auth server file restored."
+            echo "Previous auth server file restored."
             exit 1
           fi
           rm -rf "$STAGING"
