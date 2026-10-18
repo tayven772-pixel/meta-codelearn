@@ -334,6 +334,7 @@ app.put('/api/auth/admin/bot-control/settings', (req, res) => {
   const allowed = new Set([
     'autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_template',
     'server_setup_template','bot_welcome_message','bot_rules_text','bot_status_text',
+    'ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description',
     ...botCommandNames.map(name => `bot_command_enabled:${name}`),
     ...['meta','lessons','ping','help'].map(name => `bot_response:${name}`)
   ]);
@@ -348,6 +349,21 @@ app.put('/api/auth/admin/bot-control/settings', (req, res) => {
       const value = String(rawValue ?? '');
       if (value.length > (key === 'server_setup_template' ? 30000 : key.endsWith('template') ? 1800 : ['bot_welcome_message','bot_rules_text'].includes(key) ? 4096 : 5000)) {
         throw new Error(`Setting ${key} is too long.`);
+      }
+      if (key === 'ticket_panel_style' && !['dropdown','buttons'].includes(value)) throw new Error('Ticket panel style must be dropdown or buttons.');
+      if (key === 'ticket_categories' && value) {
+        const categories = JSON.parse(value);
+        if (!Array.isArray(categories) || categories.length < 1 || categories.length > 25 ||
+            categories.some(item => typeof item !== 'string' || !item.trim() || item.length > 80)) {
+          throw new Error('Ticket categories must be a JSON array of 1–25 names, each 1–80 characters.');
+        }
+      }
+      if (key === 'ticket_form_questions' && value) {
+        const questions = JSON.parse(value);
+        if (!Array.isArray(questions) || questions.length < 1 || questions.length > 5 ||
+            questions.some(item => typeof item !== 'string' || !item.trim() || item.length > 45)) {
+          throw new Error('Ticket form questions must be a JSON array of 1–5 questions, each 1–45 characters.');
+        }
       }
       if (key === 'autopartner_enabled' && !['true','false'].includes(value)) throw new Error('Autopartner enabled must be true or false.');
       if (key === 'autopartner_interval_hours' && (!/^\d+$/.test(value) || Number(value) < 6 || Number(value) > 168)) throw new Error('Autopartner interval must be 6–168 hours.');
