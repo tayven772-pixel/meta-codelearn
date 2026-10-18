@@ -541,8 +541,7 @@ function Header({ progressCount }: { progressCount: number }) {
   return (
     <header className="topbar">
       <Link href="/" className="brand" data-testid="link-academy-home" aria-label="Meta home">
-        <span className="brand-mark"><Code2 aria-hidden="true" /></span>
-        <span className="brand-word">meta</span>
+        <img className="brand-image" src="/meta-logo.svg" alt="Meta" />
       </Link>
 
       <nav className="top-nav" aria-label="Primary">
@@ -785,8 +784,7 @@ function HomePage() {
           <div className="footer-grid">
             <div className="footer-brand">
               <Link href="/" className="brand" aria-label="Meta home">
-                <span className="brand-mark"><Code2 aria-hidden="true" /></span>
-                <span className="brand-word">meta</span>
+                <img className="brand-image" src="/meta-logo.svg" alt="Meta" />
               </Link>
               <p>Learn the idea, then the code. Free, hands-on programming lessons for games, websites, apps, Roblox, and Minecraft.</p>
               <Link href="/pricing" className="footer-cta" data-testid="link-footer-pricing">Compare plans <ArrowRight aria-hidden="true" /></Link>
@@ -2566,8 +2564,7 @@ function LoginPage() {
   return (
     <main className="login-page">
       <Link href="/" className="brand login-brand" aria-label="Meta home">
-        <span className="brand-mark"><Code2 aria-hidden="true" /></span>
-        <span>meta</span>
+        <img className="brand-image" src="/meta-logo.svg" alt="Meta" />
       </Link>
       <section className="login-layout">
         <div className="login-intro">
@@ -2858,8 +2855,7 @@ function DeleteAccountPage() {
   return (
     <main className="policy-page">
       <Link href="/" className="brand policy-brand">
-        <span className="brand-mark"><Code2 aria-hidden="true" /></span>
-        <span>meta</span>
+        <img className="brand-image" src="/meta-logo.svg" alt="Meta" />
       </Link>
       <article className="policy-card">
         <p className="section-kicker">Account deletion</p>
@@ -2880,8 +2876,7 @@ function PrivacyPage() {
   return (
     <main className="policy-page">
       <Link href="/" className="brand policy-brand" aria-label="Meta Code home">
-        <span className="brand-mark"><Code2 aria-hidden="true" /></span>
-        <span>meta</span>
+        <img className="brand-image" src="/meta-logo.svg" alt="Meta" />
       </Link>
       <article className="policy-card">
         <p className="section-kicker">Privacy &amp; cookies</p>

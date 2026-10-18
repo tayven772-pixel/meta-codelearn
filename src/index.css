@@ -2597,3 +2597,15 @@ html[data-reduced-motion='true'] *::after {
   .bottom-workspace-button { font-size: 9px; padding: 5px 1px; gap: 2px; }
   .bottom-workspace-button svg { width: 18px; height: 18px; }
 }
+
+/* Meta Code wordmark */
+.brand-image { display: block; width: 138px; max-width: 100%; height: auto; flex: 0 0 auto; }
+.footer-brand .brand-image { width: 154px; }
+.login-brand .brand-image { width: 142px; }
+.policy-brand .brand-image { width: 136px; }
+@media (max-width: 650px) {
+  .brand-image { width: 120px; }
+  .footer-brand .brand-image { width: 136px; }
+  .login-brand .brand-image { width: 126px; }
+  .policy-brand .brand-image { width: 126px; }
+}
