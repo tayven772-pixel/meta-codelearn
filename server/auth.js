@@ -261,30 +261,35 @@ app.get('/api/auth/me', (req, res) => {
 // The website owner console shares the bot's local SQLite settings database.
 // It never exposes bot tokens or other runtime secrets.
 const botDatabasePath = process.env.META_BOT_DB_PATH || path.resolve(__dirname, '../discord-bot/data/meta-codelearn.sqlite');
-fs.mkdirSync(path.dirname(botDatabasePath), { recursive: true, mode: 0o700 });
-const botDb = new Database(botDatabasePath);
-botDb.pragma('journal_mode = WAL');
-botDb.pragma('busy_timeout = 5000');
-botDb.exec(`
-  CREATE TABLE IF NOT EXISTS settings (
-    guild_id TEXT NOT NULL,
-    setting_key TEXT NOT NULL,
-    setting_value TEXT NOT NULL,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (guild_id, setting_key)
-  );
-  CREATE TABLE IF NOT EXISTS autopartner_partners (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id TEXT NOT NULL,
-    name TEXT NOT NULL COLLATE NOCASE,
-    invite_url TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    created_by TEXT NOT NULL DEFAULT 'website',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (guild_id, name)
-  );
-  CREATE INDEX IF NOT EXISTS autopartner_partners_guild ON autopartner_partners(guild_id);
-`);
+let botDb;
+function getBotDb() {
+  if (botDb) return botDb;
+  fs.mkdirSync(path.dirname(botDatabasePath), { recursive: true, mode: 0o700 });
+  const connection = new Database(botDatabasePath);
+  connection.pragma('busy_timeout = 5000');
+  connection.exec(\`
+    CREATE TABLE IF NOT EXISTS settings (
+      guild_id TEXT NOT NULL,
+      setting_key TEXT NOT NULL,
+      setting_value TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (guild_id, setting_key)
+    );
+    CREATE TABLE IF NOT EXISTS autopartner_partners (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guild_id TEXT NOT NULL,
+      name TEXT NOT NULL COLLATE NOCASE,
+      invite_url TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      created_by TEXT NOT NULL DEFAULT 'website',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (guild_id, name)
+    );
+    CREATE INDEX IF NOT EXISTS autopartner_partners_guild ON autopartner_partners(guild_id);
+  \`);
+  botDb = connection;
+  return botDb;
+}
 const botCommandNames = [
   'meta','lessons','ping','membercount','avatar','roleinfo','slowmode','lock','unlock','embed','help',
   'serverinfo','userinfo','poll','suggest','coinflip','roll','choose','8ball','announce',
@@ -309,7 +314,7 @@ function validGuildId(value) {
   return typeof value === 'string' && /^\d{17,20}$/.test(value);
 }
 function botSettingsForGuild(guildId) {
-  return Object.fromEntries(botDb.prepare('SELECT setting_key, setting_value FROM settings WHERE guild_id = ?').all(guildId).map(row => [row.setting_key, row.setting_value]));
+  return Object.fromEntries(getBotDb().prepare('SELECT setting_key, setting_value FROM settings WHERE guild_id = ?').all(guildId).map(row => [row.setting_key, row.setting_value]));
 }
 app.get('/api/auth/admin/bot-control/settings', (req, res) => {
   if (!requireBotOwner(req, res)) return;
@@ -337,7 +342,7 @@ app.put('/api/auth/admin/bot-control/settings', (req, res) => {
     VALUES (?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT (guild_id, setting_key) DO UPDATE SET setting_value = excluded.setting_value, updated_at = CURRENT_TIMESTAMP
   `);
-  const transaction = botDb.transaction(() => {
+  const transaction = getBotDb().transaction(() => {
     for (const [key, rawValue] of Object.entries(values)) {
       if (!allowed.has(key)) throw new Error(`Unsupported setting: ${key}`);
       const value = String(rawValue ?? '');
