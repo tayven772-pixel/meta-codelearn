@@ -79,7 +79,18 @@ client.once(Events.ClientReady, async readyClient => {
  if (configuredStatus) readyClient.user.setPresence({ activities: [{ name: configuredStatus.slice(0, 128), type: ActivityType.Playing }], status: 'online' });
  runAutoPartnerScheduler(readyClient).catch(error => console.error('Autopartner startup check failed:', error.message));
  setInterval(() => runAutoPartnerScheduler(readyClient).catch(error => console.error('Autopartner scheduler failed:', error.message)), 60_000).unref();
- try { if (guildId) await readyClient.application.commands.set(commands, guildId); else await readyClient.application.commands.set(commands); console.log('Registered Meta CodeLearn slash commands.'); }
+ try {
+  // Register commands globally so the bot works in every server it is invited to.
+  // Global commands can take a little while to appear in Discord.
+  await readyClient.application.commands.set(commands);
+  // Remove legacy guild-only copies from the previously configured server, if present.
+  if (guildId) {
+   await readyClient.application.commands.set([], guildId).catch(error =>
+    console.warn('Could not clear legacy server-only commands:', error.message)
+   );
+  }
+  console.log('Registered Meta CodeLearn slash commands globally for all servers.');
+ }
  catch (error) { console.error('Command registration failed:', error.message); }
 });
 client.on(Events.InteractionCreate, async interaction => {
