@@ -3779,7 +3779,7 @@ function BotControlPage() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Could not save settings.');
       setSettings(data.settings || payload);
-      setStatus('Saved ' + String(data.saved || 0) + ' bot settings. Command toggles apply immediately; Discord may keep disabled commands visible until the next bot restart.');
+      setStatus('Saved ' + String(data.saved || 0) + ' bot settings. Command toggles apply immediately. Discord may still show disabled commands in the command picker, but the bot will reject them.');
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not save settings.'); }
     finally { setBusy(false); }
   };
