@@ -3,7 +3,7 @@ import { ticketCommand } from './lib/ticket-commands.js';
 import { serverSetupCommand } from './lib/server-setup.js';
 import { handleTicketCommand, handleTicketButton } from './lib/tickets.js';
 import { handleServerSetup, handleServerSetupButton } from './lib/server-setup.js';
-import { db } from './lib/database.js';
+import { db, getSetting } from './lib/database.js';
 import { moderationCommands, handleModerationCommand } from './lib/moderation.js';
 import { autoPartnerCommands, handleAutoPartnerCommand, runAutoPartnerScheduler } from './lib/autopartner.js';
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, Client, EmbedBuilder, Events, GatewayIntentBits, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
@@ -34,6 +34,16 @@ const commands = [
   .addStringOption(option => option.setName('title').setDescription('Announcement title').setMaxLength(200).setRequired(true))
   .addStringOption(option => option.setName('message').setDescription('Announcement text').setMaxLength(3500).setRequired(true))
   .addStringOption(option => option.setName('color').setDescription('Hex color such as #42B883').setRequired(false)),
+ new SlashCommandBuilder().setName('thread').setDescription('Start a focused public discussion thread')
+  .addStringOption(option => option.setName('name').setDescription('Thread title').setMaxLength(100).setRequired(true))
+  .addStringOption(option => option.setName('message').setDescription('Opening message').setMaxLength(1500).setRequired(false)),
+ new SlashCommandBuilder().setName('topic').setDescription('Update this channel topic (staff only)')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+  .addStringOption(option => option.setName('text').setDescription('New channel topic (leave empty to clear)').setMaxLength(1024).setRequired(false)),
+ new SlashCommandBuilder().setName('randomcolor').setDescription('Generate a random color and hex code'),
+ new SlashCommandBuilder().setName('remindme').setDescription('Send yourself a reminder by DM')
+  .addIntegerOption(option => option.setName('minutes').setDescription('When to remind you (1–1440 minutes)').setMinValue(1).setMaxValue(1440).setRequired(true))
+  .addStringOption(option => option.setName('reminder').setDescription('What should I remind you about?').setMaxLength(180).setRequired(true)),
  new SlashCommandBuilder().setName('help').setDescription('Show Meta bot commands and community tools'),
  new SlashCommandBuilder().setName('serverinfo').setDescription('Show useful information about this server'),
  new SlashCommandBuilder().setName('userinfo').setDescription('Show information about a server member')
