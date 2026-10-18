@@ -299,13 +299,13 @@ const botCommandNames = [
 ];
 function requireBotOwner(req, res) {
   res.setHeader('Cache-Control', 'no-store');
-  const user = sessionUser(req);
-  if (!user) {
-    res.status(401).json({ error: 'Sign in with the owner Meta account to continue.' });
+  const user = readSession(req);
+  if (!user || !user.id) {
+    res.status(401).json({ error: 'Connect your Discord account to manage bot settings.' });
     return null;
   }
-  if (normalizeEmail(user.email) !== 'metasupport43@gmail.com') {
-    res.status(403).json({ error: 'This account is not authorized to control the bot.' });
+  if (!user.access_token) {
+    res.status(401).json({ error: 'Reconnect Discord to grant permission to list your servers.' });
     return null;
   }
   return user;
@@ -313,24 +313,64 @@ function requireBotOwner(req, res) {
 function validGuildId(value) {
   return typeof value === 'string' && /^\d{17,20}$/.test(value);
 }
+async function fetchDiscordGuilds(user) {
+  const response = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=false', {
+    headers: { authorization: `Bearer ${user.access_token}` },
+    cache: 'no-store'
+  });
+  if (!response.ok) return null;
+  const guilds = await response.json().catch(() => null);
+  return Array.isArray(guilds) ? guilds : null;
+}
+async function requireOwnedGuild(req, res, guildId) {
+  const user = readSession(req);
+  if (!user || !user.access_token) {
+    res.status(401).json({ error: 'Reconnect Discord to verify server ownership.' });
+    return false;
+  }
+  let guilds;
+  try { guilds = await fetchDiscordGuilds(user); } catch { guilds = null; }
+  if (!guilds) {
+    res.status(401).json({ error: 'Discord could not verify your servers. Reconnect Discord and try again.' });
+    return false;
+  }
+  if (!guilds.some(guild => String(guild.id) === guildId && guild.owner === true)) {
+    res.status(403).json({ error: 'You must be the owner of this Discord server to edit its bot settings.' });
+    return false;
+  }
+  return true;
+}
 function botSettingsForGuild(guildId) {
   return Object.fromEntries(getBotDb().prepare('SELECT setting_key, setting_value FROM settings WHERE guild_id = ?').all(guildId).map(row => [row.setting_key, row.setting_value]));
 }
-app.get('/api/auth/admin/bot-control/settings', (req, res) => {
+app.get('/api/auth/admin/bot-control/servers', async (req, res) => {
+  const user = requireBotOwner(req, res);
+  if (!user) return;
+  try {
+    const guilds = await fetchDiscordGuilds(user);
+    if (!guilds) return res.status(401).json({ error: 'Discord could not list your servers. Reconnect Discord and try again.' });
+    return res.json({ servers: guilds.map(guild => ({ id: String(guild.id), name: String(guild.name || 'Unnamed server'), icon: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=96` : null, owner: guild.owner === true })).sort((left, right) => Number(right.owner) - Number(left.owner) || left.name.localeCompare(right.name)) });
+  } catch {
+    return res.status(502).json({ error: 'Could not contact Discord to list your servers.' });
+  }
+});
+app.get('/api/auth/admin/bot-control/settings', async (req, res) => {
   if (!requireBotOwner(req, res)) return;
   const guildId = String(req.query.guildId || '').trim();
-  if (!validGuildId(guildId)) return res.status(400).json({ error: 'Enter a valid Discord server ID (17–20 digits).' });
+  if (!validGuildId(guildId)) return res.status(400).json({ error: 'Select a valid Discord server.' });
+  if (!(await requireOwnedGuild(req, res, guildId))) return;
   const settings = botSettingsForGuild(guildId);
   const partners = getBotDb().prepare('SELECT id, name, invite_url, description, created_at FROM autopartner_partners WHERE guild_id = ? ORDER BY name COLLATE NOCASE').all(guildId);
   return res.json({ guildId, settings, commands: botCommandNames, partners });
 });
-app.put('/api/auth/admin/bot-control/settings', (req, res) => {
+app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
   if (!requireBotOwner(req, res)) return;
   const guildId = String(req.body?.guildId || '').trim();
   const values = req.body?.settings;
   if (!validGuildId(guildId) || !values || typeof values !== 'object' || Array.isArray(values)) {
-    return res.status(400).json({ error: 'Provide a valid server ID and a settings object.' });
+    return res.status(400).json({ error: 'Select a valid server and provide a settings object.' });
   }
+  if (!(await requireOwnedGuild(req, res, guildId))) return;
   const allowed = new Set([
     'autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_template',
     'server_setup_template','bot_welcome_message','bot_rules_text','bot_status_text',
@@ -392,9 +432,11 @@ app.put('/api/auth/admin/bot-control/settings', (req, res) => {
     return res.status(400).json({ error: error.message || 'Could not save bot settings.' });
   }
 });
-app.post('/api/auth/admin/bot-control/partners', (req, res) => {
+app.post('/api/auth/admin/bot-control/partners', async (req, res) => {
   if (!requireBotOwner(req, res)) return;
   const guildId = String(req.body?.guildId || '').trim();
+  if (!validGuildId(guildId)) return res.status(400).json({ error: 'Select a valid Discord server.' });
+  if (!(await requireOwnedGuild(req, res, guildId))) return;
   const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
   const inviteUrl = typeof req.body?.invite_url === 'string' ? req.body.invite_url.trim() : '';
   const description = typeof req.body?.description === 'string' ? req.body.description.trim() : '';
@@ -411,9 +453,11 @@ app.post('/api/auth/admin/bot-control/partners', (req, res) => {
     return res.status(409).json({ error: String(error.message).includes('UNIQUE') ? 'A partner with that name already exists.' : 'Could not save partner.' });
   }
 });
-app.put('/api/auth/admin/bot-control/partners/:id', (req, res) => {
+app.put('/api/auth/admin/bot-control/partners/:id', async (req, res) => {
   if (!requireBotOwner(req, res)) return;
   const guildId = String(req.body?.guildId || '').trim();
+  if (!validGuildId(guildId)) return res.status(400).json({ error: 'Select a valid Discord server.' });
+  if (!(await requireOwnedGuild(req, res, guildId))) return;
   const id = Number(req.params.id);
   const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
   const inviteUrl = typeof req.body?.invite_url === 'string' ? req.body.invite_url.trim() : '';
@@ -434,9 +478,11 @@ app.put('/api/auth/admin/bot-control/partners/:id', (req, res) => {
     return res.status(409).json({ error: String(error.message).includes('UNIQUE') ? 'A partner with that name already exists.' : 'Could not update partner.' });
   }
 });
-app.delete('/api/auth/admin/bot-control/partners/:id', (req, res) => {
+app.delete('/api/auth/admin/bot-control/partners/:id', async (req, res) => {
   if (!requireBotOwner(req, res)) return;
   const guildId = String(req.query.guildId || '').trim();
+  if (!validGuildId(guildId)) return res.status(400).json({ error: 'Select a valid Discord server.' });
+  if (!(await requireOwnedGuild(req, res, guildId))) return;
   const id = Number(req.params.id);
   if (!validGuildId(guildId) || !Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid server or partner ID.' });
   const result = getBotDb().prepare('DELETE FROM autopartner_partners WHERE id = ? AND guild_id = ?').run(id, guildId);
@@ -444,18 +490,9 @@ app.delete('/api/auth/admin/bot-control/partners/:id', (req, res) => {
 });
 
 app.get('/api/auth/admin/bot-control', (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-  const user = sessionUser(req);
-  if (!user) return res.status(401).json({ error: 'Sign in with the owner Meta account to continue.' });
-  const ownerEmail = 'metasupport43@gmail.com';
-  if (!ownerEmail || normalizeEmail(user.email) !== ownerEmail) {
-    return res.status(403).json({ error: 'This account is not authorized to access the private bot dashboard.' });
-  }
-  return res.json({
-    owner: user.email,
-    dashboard: 'Meta Code bot owner console',
-    commands: botCommandNames.map(name => '/' + name)
-  });
+  const user = requireBotOwner(req, res);
+  if (!user) return;
+  return res.json({ owner: user.global_name || user.username || 'Discord user', dashboard: 'Meta Code bot server control', commands: botCommandNames });
 });
 
 // Content publishing API. Administrator privileges are granted only by server environment,
