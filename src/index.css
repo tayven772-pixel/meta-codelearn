@@ -2898,52 +2898,62 @@ html[data-reduced-motion='true'] *::after {
   will-change: max-width;
 }
 .typewriter-games { animation: hero-typewriter-games 18s infinite; }
-.typewriter-websites { animation: hero-typewriter-websites 18s infinite; animation-delay: 3s; }
-.typewriter-apps { animation: hero-typewriter-apps 18s infinite; animation-delay: 6s; }
-.typewriter-ai-tools { animation: hero-typewriter-ai-tools 18s infinite; animation-delay: 9s; }
-.typewriter-roblox { animation: hero-typewriter-roblox 18s infinite; animation-delay: 12s; }
-.typewriter-minecraft { animation: hero-typewriter-minecraft 18s infinite; animation-delay: 15s; }
+.typewriter-websites { animation: hero-typewriter-websites 18s infinite; }
+.typewriter-apps { animation: hero-typewriter-apps 18s infinite; }
+.typewriter-ai-tools { animation: hero-typewriter-ai-tools 18s infinite; }
+.typewriter-roblox { animation: hero-typewriter-roblox 18s infinite; }
+.typewriter-minecraft { animation: hero-typewriter-minecraft 18s infinite; }
 @keyframes hero-typewriter-games {
   0% { max-width: 0; opacity: 1; animation-timing-function: steps(5, end); }
   3.4% { max-width: 5ch; opacity: 1; }
   12% { max-width: 5ch; opacity: 1; animation-timing-function: steps(5, end); }
   15% { max-width: 0; opacity: 1; }
-  16.7%, 100% { max-width: 0; opacity: 0; }
+  16.666% { max-width: 0; opacity: 0; }
+  100% { max-width: 0; opacity: 0; }
 }
 @keyframes hero-typewriter-websites {
-  0% { max-width: 0; opacity: 1; animation-timing-function: steps(8, end); }
-  4.5% { max-width: 8ch; opacity: 1; }
-  12% { max-width: 8ch; opacity: 1; animation-timing-function: steps(8, end); }
-  16.5% { max-width: 0; opacity: 1; }
-  16.7%, 100% { max-width: 0; opacity: 0; }
+  0% { max-width: 0; opacity: 0; }
+  16.666% { max-width: 0; opacity: 1; animation-timing-function: steps(8, end); }
+  21.166% { max-width: 8ch; opacity: 1; }
+  28.666% { max-width: 8ch; opacity: 1; animation-timing-function: steps(8, end); }
+  31.666% { max-width: 0; opacity: 1; }
+  33.333% { max-width: 0; opacity: 0; }
+  100% { max-width: 0; opacity: 0; }
 }
 @keyframes hero-typewriter-apps {
-  0% { max-width: 0; opacity: 1; animation-timing-function: steps(4, end); }
-  2.3% { max-width: 4ch; opacity: 1; }
-  12% { max-width: 4ch; opacity: 1; animation-timing-function: steps(4, end); }
-  14.3% { max-width: 0; opacity: 1; }
-  16.7%, 100% { max-width: 0; opacity: 0; }
+  0% { max-width: 0; opacity: 0; }
+  33.333% { max-width: 0; opacity: 1; animation-timing-function: steps(4, end); }
+  35.633% { max-width: 4ch; opacity: 1; }
+  45.333% { max-width: 4ch; opacity: 1; animation-timing-function: steps(4, end); }
+  47.633% { max-width: 0; opacity: 1; }
+  50% { max-width: 0; opacity: 0; }
+  100% { max-width: 0; opacity: 0; }
 }
 @keyframes hero-typewriter-ai-tools {
-  0% { max-width: 0; opacity: 1; animation-timing-function: steps(8, end); }
-  4.5% { max-width: 8ch; opacity: 1; }
-  12% { max-width: 8ch; opacity: 1; animation-timing-function: steps(8, end); }
-  16.5% { max-width: 0; opacity: 1; }
-  16.7%, 100% { max-width: 0; opacity: 0; }
+  0% { max-width: 0; opacity: 0; }
+  50% { max-width: 0; opacity: 1; animation-timing-function: steps(8, end); }
+  54.5% { max-width: 8ch; opacity: 1; }
+  62% { max-width: 8ch; opacity: 1; animation-timing-function: steps(8, end); }
+  65% { max-width: 0; opacity: 1; }
+  66.666% { max-width: 0; opacity: 0; }
+  100% { max-width: 0; opacity: 0; }
 }
 @keyframes hero-typewriter-roblox {
-  0% { max-width: 0; opacity: 1; animation-timing-function: steps(12, end); }
-  6.7% { max-width: 12ch; opacity: 1; }
-  12% { max-width: 12ch; opacity: 1; animation-timing-function: steps(12, end); }
-  16.5% { max-width: 0; opacity: 1; }
-  16.7%, 100% { max-width: 0; opacity: 0; }
+  0% { max-width: 0; opacity: 0; }
+  66.666% { max-width: 0; opacity: 1; animation-timing-function: steps(12, end); }
+  73.366% { max-width: 12ch; opacity: 1; }
+  78.666% { max-width: 12ch; opacity: 1; animation-timing-function: steps(12, end); }
+  81.666% { max-width: 0; opacity: 1; }
+  83.333% { max-width: 0; opacity: 0; }
+  100% { max-width: 0; opacity: 0; }
 }
 @keyframes hero-typewriter-minecraft {
-  0% { max-width: 0; opacity: 1; animation-timing-function: steps(14, end); }
-  7.8% { max-width: 14ch; opacity: 1; }
-  12% { max-width: 14ch; opacity: 1; animation-timing-function: steps(14, end); }
-  16.5% { max-width: 0; opacity: 1; }
-  16.7%, 100% { max-width: 0; opacity: 0; }
+  0% { max-width: 0; opacity: 0; }
+  83.333% { max-width: 0; opacity: 1; animation-timing-function: steps(14, end); }
+  91.133% { max-width: 14ch; opacity: 1; }
+  95.333% { max-width: 14ch; opacity: 1; animation-timing-function: steps(14, end); }
+  98.333% { max-width: 0; opacity: 1; }
+  100% { max-width: 0; opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .hero-typewriter-word { animation: none !important; will-change: auto; border-right: 0; opacity: 0; }

@@ -49,6 +49,10 @@ import {
 } from 'lucide-react';
 import { languageFor, languages, lessonFor, lessons, type LearnerSkillLevel, type Lesson, type Progress } from './data/academy';
 import { getProgressionStats, learnerSkillLevels } from './data/progression';
+import CodePlaygroundPage from './CodePlayground';
+import GlobalSearch from './GlobalSearch';
+import './code-playground.css';
+import './global-search.css';
 
 const PROGRESS_KEY = 'meta-progress-v1';
 const LEGACY_PROGRESS_KEY = 'code-atlas-progress-v1';
@@ -518,6 +522,7 @@ function useProgress() {
 const NAV_LINKS = [
   { href: '/', label: 'Explore', icon: Compass },
   { href: '/play', label: 'Lessons', icon: BookOpen },
+  { href: '/playground', label: 'Playground', icon: Code2 },
   { href: '/projects', label: 'Projects', icon: FolderKanban },
   { href: '/settings', label: 'Settings', icon: Settings },
   { href: '/pricing', label: 'Pricing', icon: Tag },
@@ -619,6 +624,7 @@ function Header({ progressCount }: { progressCount: number }) {
           <span className="top-progress-text">{progressCount} / {lessons.length} lessons</span>
           <span className="top-progress-track" aria-hidden="true"><span className="top-progress-fill" style={{ width: `${completion}%` }} /></span>
         </span>
+        <GlobalSearch />
         <ThemeToggle />
         {authChecked && signedIn && (
           <button type="button" className="header-signout-button" onClick={() => void handleSignOut()} disabled={signingOut} data-testid="button-header-sign-out">
@@ -804,6 +810,23 @@ function HomePage() {
             </div>
             <div className="visual-stamp"><span><b>12</b><br />ways to begin</span></div>
           </div>
+        </section>
+
+        <section className="momentum-panel" aria-labelledby="momentum-heading">
+          <div className="momentum-intro">
+            <p className="section-kicker">Your learning dashboard</p>
+            <h2 id="momentum-heading">Small steps. <em>Real progress.</em></h2>
+            <p>Keep your momentum going. Every completed foundation lesson adds 25 XP and unlocks milestones.</p>
+            <div className="momentum-progress-copy"><span>{completedCount} of {lessons.length} lessons</span><strong>{Math.round(completion)}%</strong></div>
+            <div className="momentum-progress-track" role="progressbar" aria-label="Lesson completion" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(completion)}><span style={{ width: `${completion}%` }} /></div>
+          </div>
+          <div className="momentum-stats">
+            <article className="momentum-xp-card"><span className="momentum-stat-icon"><Zap aria-hidden="true" /></span><span className="momentum-stat-label">Total XP</span><strong>{completedCount * 25}</strong><small>Earned from lessons</small></article>
+            <article className={completedCount >= 1 ? 'momentum-badge unlocked' : 'momentum-badge'}><span className="momentum-badge-icon"><Star aria-hidden="true" /></span><strong>First step</strong><small>{completedCount >= 1 ? 'Unlocked · First lesson complete' : 'Complete one lesson to unlock'}</small></article>
+            <article className={completedCount >= 5 ? 'momentum-badge unlocked' : 'momentum-badge'}><span className="momentum-badge-icon"><Zap aria-hidden="true" /></span><strong>Momentum</strong><small>{completedCount >= 5 ? 'Unlocked · Five lessons complete' : `${Math.max(0, 5 - completedCount)} more lesson${5 - completedCount === 1 ? '' : 's'} to unlock`}</small></article>
+            <article className={completedCount >= lessons.length ? 'momentum-badge unlocked' : 'momentum-badge'}><span className="momentum-badge-icon"><CheckCircle2 aria-hidden="true" /></span><strong>Foundation graduate</strong><small>{completedCount >= lessons.length ? 'Unlocked · Foundation complete' : 'Finish every foundation lesson'}</small></article>
+          </div>
+          <Link href="/playground" className="momentum-playground-link"><Code2 aria-hidden="true" /><span><strong>Ready to build something?</strong><small>Try your ideas in the interactive code playground.</small></span><ArrowRight aria-hidden="true" /></Link>
         </section>
 
         <PublishedContentSection />
@@ -1043,6 +1066,7 @@ function PlayPage() {
                   <Link href="/#learning-path" className="text-link">Foundation lessons <ArrowRight aria-hidden="true" /></Link>
                 </>
               )}
+              <Link href="/playground" className="button-ghost"><Code2 aria-hidden="true" /> Open code playground</Link>
             </div>
           </div>
           <div className="hero-visual" aria-label="A sample code card showing a small programming project">
@@ -3736,6 +3760,7 @@ function MainRoutes() {
       <Route path="/learn/:lessonId" component={() => <ProtectedRoute><LessonPage /></ProtectedRoute>} />
       <Route path="/play" component={() => <ProtectedRoute><PlayPage /></ProtectedRoute>} />
       <Route path="/play/:track" component={() => <ProtectedRoute><PlayPage /></ProtectedRoute>} />
+      <Route path="/playground" component={() => <AppShell><CodePlaygroundPage /></AppShell>} />
       <Route path="/account" component={() => <ProtectedRoute><AccountSettingsPage /></ProtectedRoute>} />
       <Route path="/projects/:projectId" component={() => <ProtectedRoute><ProjectPage /></ProtectedRoute>} />
       <Route path="/projects" component={() => <ProtectedRoute><ProjectsPage /></ProtectedRoute>} />
