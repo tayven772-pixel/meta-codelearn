@@ -2814,3 +2814,40 @@ html[data-reduced-motion='true'] *::after {
 @media (min-width: 1000px) and (max-width: 1100px) {
   .mobile-nav-panel { top: 82px; }
 }
+
+
+/* Signed-in header action: keep logout visible on full desktop while responsive
+   layouts retain it inside the always-reachable navigation menu. */
+.header-signout-button {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  padding: 0 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  font: 650 11px var(--app-font-sans);
+  cursor: pointer;
+}
+.header-signout-button svg { width: 15px; height: 15px; }
+.header-signout-button:hover { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-ink); }
+.header-signout-button:disabled { opacity: .65; cursor: wait; }
+.header-signout-button:focus-visible, .mobile-nav-action:focus-visible {
+  outline: 3px solid var(--brand);
+  outline-offset: 2px;
+}
+.header-signout-error { margin: 8px 0 0; padding: 10px; border-radius: 8px; background: hsl(var(--destructive, 0 65% 45%) / .1); color: hsl(var(--foreground)); font-size: 12px; line-height: 1.5; }
+.mobile-nav-action {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.mobile-nav-action:disabled { opacity: .65; cursor: wait; }
+@media (max-width: 1100px), (max-height: 720px) and (min-width: 1101px) {
+  .header-signout-button { display: none; }
+}
