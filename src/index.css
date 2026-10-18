@@ -2696,3 +2696,118 @@ html[data-reduced-motion='true'] *::after {
   .settings-search-field input { height: 42px; font-size: 12px; }
   .settings-search-meta { align-items: flex-start; font-size: 9px; }
 }
+
+
+/* -------------------------------------------------------------------------
+   Responsive controls recovery
+   Keep navigation usable in split-screen desktop windows and short TV/Xbox
+   browser viewports. Don't rely on hover for discovering interactive controls.
+   ------------------------------------------------------------------------- */
+
+/* The full desktop header needs more than just the default 980px breakpoint:
+   narrow split views and TV browsers can otherwise crowd the brand/actions. */
+@media (max-width: 1100px), (max-height: 720px) and (min-width: 1101px) {
+  .topbar {
+    min-width: 0;
+    gap: 12px;
+    padding-inline: clamp(12px, 3vw, 32px);
+  }
+  .topbar .brand { min-width: 0; flex: 0 1 auto; }
+  .topbar .brand-image { width: clamp(104px, 16vw, 138px); }
+  .top-nav { display: none !important; }
+  .top-actions { min-width: 0; flex: 0 0 auto; gap: 8px; }
+  .mobile-menu-button { display: grid !important; width: 44px; height: 44px; flex: 0 0 44px; }
+  .top-progress-text, .nav-cta { display: none !important; }
+  .mobile-nav-panel { display: block !important; }
+}
+@media (min-width: 1101px) and (min-height: 721px) {
+  .mobile-menu-button { display: none !important; }
+  .mobile-nav-panel { display: none !important; }
+}
+/* The compact phone header is 62px tall, not the 72px desktop height. */
+@media (max-width: 650px) {
+  .mobile-nav-panel { top: 62px; }
+}
+/* TV browsers often use a short 720p viewport; place the menu below the
+   larger desktop header in that layout. */
+@media (max-height: 720px) and (min-width: 1000px) {
+  .mobile-nav-panel { top: 82px; }
+}
+
+/* Keep project-editor actions visible when a split window leaves little width. */
+@media (max-width: 900px) {
+  .code-workspace {
+    grid-template-columns: clamp(104px, 23vw, 180px) minmax(0, 1fr);
+  }
+  .code-editor-toolbar {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 9px;
+  }
+  .code-editor-toolbar > span {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .code-editor-toolbar > div {
+    min-width: 0;
+    max-width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .editor-text-button {
+    min-height: 36px;
+    padding: 6px 8px;
+    border: 1px solid #314158;
+    border-radius: 6px;
+    font-size: 10px;
+  }
+  .project-download-button, .icon-only-button {
+    min-height: 44px;
+  }
+  .project-bottom-tabs button {
+    min-height: 54px;
+    padding: 6px 4px;
+    font-size: 11px;
+  }
+}
+@media (max-height: 620px) {
+  .project-editor-page {
+    height: 100dvh;
+    min-height: 0;
+    grid-template-rows: 52px minmax(0, 1fr) 58px;
+  }
+  .project-editor-head { min-height: 52px; }
+  .project-bottom-tabs button { min-height: 50px; }
+  .project-chat-tab .project-conversation { padding-block: 10px; }
+  .project-tab-chat-composer { margin-bottom: 7px; }
+}
+
+/* Reliable keyboard/gamepad focus: show a persistent focus ring and avoid
+   clipping outlines at the edges of fixed navigation bars. */
+.top-nav-link:focus-visible,
+.mobile-menu-button:focus-visible,
+.mobile-nav-link:focus-visible,
+.nav-cta:focus-visible,
+.bottom-workspace-button:focus-visible,
+.project-bottom-tabs button:focus-visible,
+.project-download-button:focus-visible,
+.icon-only-button:focus-visible,
+.editor-text-button:focus-visible {
+  position: relative;
+  z-index: 2;
+  outline: 3px solid var(--brand);
+  outline-offset: -2px;
+}
+@media (hover: none), (pointer: coarse) {
+  .top-nav-link, .mobile-nav-link, .bottom-workspace-button,
+  .project-bottom-tabs button, .project-download-button, .icon-only-button,
+  .editor-text-button, .button-primary, .button-secondary {
+    min-height: 44px;
+  }
+  .button-primary, .button-secondary { padding-block: 10px; }
+  .code-editor-toolbar > div { gap: 7px; }
+  .project-bottom-tabs button { padding-inline: 8px; }
+}
