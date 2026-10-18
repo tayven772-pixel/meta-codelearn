@@ -2853,7 +2853,7 @@ html[data-reduced-motion='true'] *::after {
 }
 
 
-/* Homepage typewriter: demonstrate what learners can create with Meta. */
+/* Shared type-and-delete rotator for the homepage and authentication screens. */
 .hero-typewriter {
   min-height: 1.25em;
   margin: -2px 0 18px;
@@ -2878,8 +2878,8 @@ html[data-reduced-motion='true'] *::after {
 .hero-typewriter-visual { display: inline-flex; align-items: baseline; gap: .18em; }
 .hero-typewriter-rotator {
   display: inline-grid;
-  grid-template-columns: 8ch;
-  width: 8ch;
+  grid-template-columns: 15ch;
+  width: 15ch;
   height: 1.25em;
   align-items: baseline;
   vertical-align: baseline;
@@ -2897,38 +2897,53 @@ html[data-reduced-motion='true'] *::after {
   opacity: 0;
   will-change: max-width;
 }
-.typewriter-games {
-  animation: hero-typewriter-games 12s infinite;
-  animation-delay: 0s;
-}
-.typewriter-websites {
-  animation: hero-typewriter-websites 12s infinite;
-  animation-delay: 4s;
-}
-.typewriter-apps {
-  animation: hero-typewriter-apps 12s infinite;
-  animation-delay: 8s;
-}
+.typewriter-games { animation: hero-typewriter-games 18s infinite; }
+.typewriter-websites { animation: hero-typewriter-websites 18s infinite; animation-delay: 3s; }
+.typewriter-apps { animation: hero-typewriter-apps 18s infinite; animation-delay: 6s; }
+.typewriter-ai-tools { animation: hero-typewriter-ai-tools 18s infinite; animation-delay: 9s; }
+.typewriter-roblox { animation: hero-typewriter-roblox 18s infinite; animation-delay: 12s; }
+.typewriter-minecraft { animation: hero-typewriter-minecraft 18s infinite; animation-delay: 15s; }
 @keyframes hero-typewriter-games {
   0% { max-width: 0; opacity: 1; animation-timing-function: steps(5, end); }
-  4.2% { max-width: 5ch; opacity: 1; }
-  27% { max-width: 5ch; opacity: 1; animation-timing-function: steps(5, end); }
-  31.2% { max-width: 0; opacity: 0; }
-  100% { max-width: 0; opacity: 0; }
+  3.4% { max-width: 5ch; opacity: 1; }
+  12% { max-width: 5ch; opacity: 1; animation-timing-function: steps(5, end); }
+  15% { max-width: 0; opacity: 1; }
+  16.7%, 100% { max-width: 0; opacity: 0; }
 }
 @keyframes hero-typewriter-websites {
   0% { max-width: 0; opacity: 1; animation-timing-function: steps(8, end); }
-  6.7% { max-width: 8ch; opacity: 1; }
-  27% { max-width: 8ch; opacity: 1; animation-timing-function: steps(8, end); }
-  33.7% { max-width: 0; opacity: 0; }
-  100% { max-width: 0; opacity: 0; }
+  4.5% { max-width: 8ch; opacity: 1; }
+  12% { max-width: 8ch; opacity: 1; animation-timing-function: steps(8, end); }
+  16.5% { max-width: 0; opacity: 1; }
+  16.7%, 100% { max-width: 0; opacity: 0; }
 }
 @keyframes hero-typewriter-apps {
   0% { max-width: 0; opacity: 1; animation-timing-function: steps(4, end); }
-  3.4% { max-width: 4ch; opacity: 1; }
-  27% { max-width: 4ch; opacity: 1; animation-timing-function: steps(4, end); }
-  30.4% { max-width: 0; opacity: 0; }
-  100% { max-width: 0; opacity: 0; }
+  2.3% { max-width: 4ch; opacity: 1; }
+  12% { max-width: 4ch; opacity: 1; animation-timing-function: steps(4, end); }
+  14.3% { max-width: 0; opacity: 1; }
+  16.7%, 100% { max-width: 0; opacity: 0; }
+}
+@keyframes hero-typewriter-ai-tools {
+  0% { max-width: 0; opacity: 1; animation-timing-function: steps(8, end); }
+  4.5% { max-width: 8ch; opacity: 1; }
+  12% { max-width: 8ch; opacity: 1; animation-timing-function: steps(8, end); }
+  16.5% { max-width: 0; opacity: 1; }
+  16.7%, 100% { max-width: 0; opacity: 0; }
+}
+@keyframes hero-typewriter-roblox {
+  0% { max-width: 0; opacity: 1; animation-timing-function: steps(12, end); }
+  6.7% { max-width: 12ch; opacity: 1; }
+  12% { max-width: 12ch; opacity: 1; animation-timing-function: steps(12, end); }
+  16.5% { max-width: 0; opacity: 1; }
+  16.7%, 100% { max-width: 0; opacity: 0; }
+}
+@keyframes hero-typewriter-minecraft {
+  0% { max-width: 0; opacity: 1; animation-timing-function: steps(14, end); }
+  7.8% { max-width: 14ch; opacity: 1; }
+  12% { max-width: 14ch; opacity: 1; animation-timing-function: steps(14, end); }
+  16.5% { max-width: 0; opacity: 1; }
+  16.7%, 100% { max-width: 0; opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .hero-typewriter-word { animation: none !important; will-change: auto; border-right: 0; opacity: 0; }
