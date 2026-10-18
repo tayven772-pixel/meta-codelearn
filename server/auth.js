@@ -341,7 +341,7 @@ app.put('/api/auth/admin/bot-control/settings', (req, res) => {
     for (const [key, rawValue] of Object.entries(values)) {
       if (!allowed.has(key)) throw new Error(`Unsupported setting: ${key}`);
       const value = String(rawValue ?? '');
-      if (value.length > (key === 'server_setup_template' ? 30000 : key.endsWith('template') ? 1800 : 5000)) {
+      if (value.length > (key === 'server_setup_template' ? 30000 : key.endsWith('template') ? 1800 : ['bot_welcome_message','bot_rules_text'].includes(key) ? 4096 : 5000)) {
         throw new Error(`Setting ${key} is too long.`);
       }
       if (key === 'autopartner_enabled' && !['true','false'].includes(value)) throw new Error('Autopartner enabled must be true or false.');
