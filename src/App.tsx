@@ -3846,6 +3846,10 @@ function BotControlPage() {
                 <textarea value={settings['bot_response:' + name] || ''} onChange={event => setValue('bot_response:' + name, event.target.value)} placeholder="Built-in default" rows={3} style={fieldStyle} />
               </label>)}
               <label style={{ display: 'block', marginTop: 14 }}>
+                <strong>Bot activity status</strong>
+                <input value={settings.bot_status_text || ''} onChange={event => setValue('bot_status_text', event.target.value)} placeholder="Meta Code · Building cool things" maxLength={128} style={fieldStyle} />
+              </label>
+              <label style={{ display: 'block', marginTop: 14 }}>
                 <strong>Welcome message override</strong>
                 <textarea value={settings.bot_welcome_message || ''} onChange={event => setValue('bot_welcome_message', event.target.value)} placeholder="Leave blank to use the default welcome embed" rows={3} style={fieldStyle} />
               </label>
