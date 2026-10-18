@@ -648,8 +648,16 @@ function HomePage() {
       return matchesSearch && matchesCategory && matchesLevel;
     });
   }, [search, category, level]);
-  const completedCount = progress.completedLessonIds.length;
+  const completedLessonIds = new Set(progress.completedLessonIds);
+  const completedCount = lessons.filter((lesson) => completedLessonIds.has(lesson.id)).length;
+  const nextLesson = lessons.find((lesson) => !completedLessonIds.has(lesson.id));
+  const nextLessonIndex = nextLesson ? lessons.findIndex((lesson) => lesson.id === nextLesson.id) : -1;
   const completion = Math.min(100, (completedCount / lessons.length) * 100);
+  const resetLanguageFilters = () => {
+    setSearch('');
+    setCategory('All paths');
+    setLevel('All levels');
+  };
 
   return (
     <AppShell>
@@ -660,10 +668,31 @@ function HomePage() {
             <h1 id="home-heading">Learn the idea.<br /><em>Then the code.</em></h1>
             <p className="hero-copy">Programming makes more sense when you can see the same idea in different languages. Start with the shared foundations, then follow the syntax wherever your curiosity goes.</p>
             <div className="hero-actions">
-              <a href="#learning-path" className="button-primary" data-testid="button-start-learning">Start with lesson one <ArrowRight aria-hidden="true" /></a>
+              <Link
+                href={nextLesson ? `/learn/${nextLesson.id}` : '/play'}
+                className="button-primary"
+                data-testid="button-start-learning"
+              >
+                {nextLesson ? (completedCount > 0 ? 'Continue learning' : 'Start learning') : 'Explore build tracks'}
+                <ArrowRight aria-hidden="true" />
+              </Link>
               <Link href="/pricing" className="button-ghost" data-testid="link-hero-pricing">See plans &amp; pricing <Tag aria-hidden="true" /></Link>
               <a href="#language-library" className="text-link" data-testid="link-browse-languages">Browse languages <ArrowRight aria-hidden="true" /></a>
             </div>
+            <p className="hero-progress-note" role="status">
+              {nextLesson ? (
+                <>
+                  <span className="progress-dot" aria-hidden="true" />
+                  <span>{completedCount > 0 ? 'Up next' : 'Your first step'} · <strong>Lesson {String(nextLessonIndex + 1).padStart(2, '0')}: {nextLesson.title}</strong> · {completedCount} of {lessons.length} complete
+                </span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 aria-hidden="true" />
+                  <span><strong>Foundation complete.</strong> You finished all {lessons.length} lessons. Ready to build something?</span>
+                </>
+              )}
+            </p>
             <ul className="hero-trust">
               <li><Check aria-hidden="true" /> Free lessons, no card required</li>
               <li><Check aria-hidden="true" /> 12 language paths &amp; 7 build tracks</li>
@@ -717,6 +746,12 @@ function HomePage() {
               </select>
             </div>
           </div>
+          <div className="catalog-result-summary" role="status" aria-live="polite">
+            <span>Showing <strong>{filtered.length}</strong> of {languages.length} language paths</span>
+            {(search || category !== 'All paths' || level !== 'All levels') && (
+              <button type="button" className="catalog-reset-button" onClick={resetLanguageFilters}>Clear filters <X aria-hidden="true" /></button>
+            )}
+          </div>
           <div className="language-grid" data-testid="list-language-catalog" aria-live="polite">
             {filtered.map((language, index) => (
               <Link
@@ -768,11 +803,12 @@ function HomePage() {
           </div>
           <div className="lesson-list">
             {lessons.map((lesson, index) => {
-              const done = progress.completedLessonIds.includes(lesson.id);
+              const done = completedLessonIds.has(lesson.id);
+              const isNext = nextLesson?.id === lesson.id;
               return (
-                <Link href={`/learn/${lesson.id}`} className={`lesson-link${done ? ' done' : ''}`} key={lesson.id} data-testid={`link-lesson-${lesson.id}`}>
+                <Link href={`/learn/${lesson.id}`} className={`lesson-link${done ? ' done' : ''}${isNext ? ' next-up' : ''}`} key={lesson.id} data-testid={`link-lesson-${lesson.id}`}>
                   <span className="lesson-index">{done ? <Check aria-label="Complete" /> : String(index + 1).padStart(2, '0')}</span>
-                  <span className="lesson-link-text"><strong>{lesson.title}</strong><small>{lesson.concept} · {lesson.duration}</small></span>
+                  <span className="lesson-link-text"><strong>{lesson.title}</strong><small>{lesson.concept} · {lesson.duration}{isNext ? ' · UP NEXT' : ''}</small></span>
                   <ArrowRight aria-hidden="true" />
                 </Link>
               );
