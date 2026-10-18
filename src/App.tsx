@@ -254,7 +254,7 @@ const aiPlans: Plan[] = [
     description: 'Learn, try the agent, and keep a few active projects.',
     bestFor: 'Trying Meta out and learning the foundations.',
     features: [
-      'All 6 foundation lessons with quizzes',
+      `All ${lessons.length} foundation lessons with quizzes`,
       'All 7 Lesson Play build tracks',
       '40 AI credits every month',
       'Up to 3 active projects',
@@ -759,7 +759,7 @@ function HomePage() {
 
         <section className="pathway" id="learning-path" aria-labelledby="path-heading">
           <div className="pathway-intro">
-            <p className="section-kicker">Your first six steps</p>
+            <p className="section-kicker">Your learning path · {lessons.length} lessons</p>
             <h2 id="path-heading">A little progress<br />adds up.</h2>
             <p>Short, guided lessons make the big ideas feel small enough to try. No setup, no pressure — just one useful concept at a time.</p>
             <div className="path-progress" data-testid="status-path-progress">
@@ -795,7 +795,7 @@ function HomePage() {
               <h3>Learn</h3>
               <Link href="/play">Lesson Play</Link>
               <a href="/#language-library">Language library</a>
-              <a href="/#learning-path">First six lessons</a>
+              <a href="/#learning-path">Foundation lessons</a>
               <Link href="/projects">Projects</Link>
             </nav>
             <nav className="footer-col" aria-label="Account">
@@ -2318,7 +2318,7 @@ function PricingTeaser() {
 }
 
 const PLAN_MATRIX: { label: string; free: string | boolean; builder: string | boolean; pro: string | boolean; highlight?: boolean }[] = [
-  { label: 'Foundation lessons & quizzes', free: 'All 6', builder: 'All 6', pro: 'All 6' },
+  { label: 'Foundation lessons & quizzes', free: `All ${lessons.length}`, builder: `All ${lessons.length}`, pro: `All ${lessons.length}` },
   { label: 'Lesson Play build tracks', free: 'All 7', builder: 'All 7', pro: 'All 7' },
   { label: 'AI credits per month', free: '40', builder: '500', pro: '2,000', highlight: true },
   { label: 'Active projects', free: '3', builder: '25', pro: 'Unlimited' },
@@ -3128,7 +3128,7 @@ function LessonPage() {
           <Link href="/" className="back-link" data-testid="link-back-to-academy"><ArrowLeft aria-hidden="true" /> Back to the academy</Link>
           <div className="lesson-heading-row">
             <div>
-              <div className="eyebrow"><span className="eyebrow-line" /> Lesson {String(currentIndex + 1).padStart(2, '0')} / 06</div>
+              <div className="eyebrow"><span className="eyebrow-line" /> Lesson {String(currentIndex + 1).padStart(2, '0')} / {String(lessons.length).padStart(2, '0')}</div>
               <h1 data-testid="heading-lesson-title">{lesson.title}</h1>
               <p className="lesson-sub">{lesson.concept} · A shared foundation in {activeLanguage.name}</p>
             </div>
@@ -3155,6 +3155,9 @@ function LessonPage() {
               <pre className="code-block" data-testid="code-lesson-example"><code>{displayExample ?? `${activeLanguage.name} approaches this idea in its own way. Start with the shared concept, then notice what feels different.`}</code></pre>
               {languageId === 'html-css' && ['conditions', 'loops', 'functions'].includes(lesson.id) && (
                 <div className="code-caption">HTML and CSS describe page structure and style; behavior like this is usually handled by JavaScript.</div>
+              )}
+              {languageId === 'html-css' && ['strings', 'objects', 'input', 'score-check'].includes(lesson.id) && (
+                <div className="code-caption">HTML can display or collect information, but dynamic text, object logic, and score decisions need JavaScript or another programming language. Switch to JavaScript to see executable logic.</div>
               )}
               {languageId === 'sql' && lesson.id === 'loops' && <div className="code-caption">SQL works with sets of rows rather than repeating a block line by line.</div>}
             </section>
@@ -3276,6 +3279,11 @@ function quoteFor(lessonId: string): string {
     loops: '“Describe the repetition once; let the computer do it carefully.”',
     functions: '“A good function turns a useful idea into a tool you can reuse.”',
     collections: '“One name can hold a whole handful of related values.”',
+    strings: '“A clear message is data arranged for a human to understand.”',
+    objects: '“Related facts become easier to work with when they travel together.”',
+    input: '“A program becomes interactive when it can listen as well as speak.”',
+    debugging: '“Change one thing, test it, and let evidence lead the way.”',
+    'score-check': '“A small project turns separate ideas into one working result.”',
   };
   return quotes[lessonId] ?? '“Small ideas connect into bigger programs.”';
 }
@@ -3288,6 +3296,11 @@ function noticeFor(lessonId: string, languageName: string): string {
     loops: 'Find the start, the stopping point, and the repeated action. Pay attention to whether the end of a range is included.',
     functions: 'The function name makes the action easy to call again. The parameter is a placeholder for the value that will arrive later.',
     collections: 'The brackets group several values, and the comma separates them. Many languages count positions starting at zero.',
+    strings: 'Look for the text value and the operation that combines it with name. Some languages also provide interpolation syntax.',
+    objects: 'Find the key and value pairs in the example. They describe one profile, even if your language uses a struct or record instead of an object.',
+    input: `Identify where the value enters the program. In ${languageName}, that might be a prompt, a terminal read, or a form field.`,
+    debugging: 'Compare the opening and closing quotes or tags, then make the smallest repair you can test.',
+    'score-check': 'Follow the score into the comparison, then trace which message runs when the condition is true or false.',
   };
   return observations[lessonId] ?? `Notice how ${languageName} expresses the same underlying idea.`;
 }
@@ -3300,6 +3313,11 @@ function tipFor(lessonId: string): string {
     loops: 'A loop needs a clear stopping point so it knows when to move on.',
     functions: 'A parameter is the function’s input; return is its output.',
     collections: 'The first item is often item zero, not item one.',
+    strings: 'Keep text inside matching quotes and join it with the value you want to show.',
+    objects: 'Use a structure that names each field so it is clear which value is which.',
+    input: 'Do not assume the user entered a valid value; check it before relying on it.',
+    debugging: 'Read the error, reproduce it, make one small edit, and test again.',
+    'score-check': 'Try scores below 50, exactly 50, and above 50 to test both branches.',
   };
   return tips[lessonId] ?? 'Build one small piece at a time.';
 }
