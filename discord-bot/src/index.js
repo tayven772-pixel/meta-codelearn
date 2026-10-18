@@ -4,6 +4,7 @@ import { serverSetupCommand } from './lib/server-setup.js';
 import { handleTicketCommand, handleTicketButton } from './lib/tickets.js';
 import { handleServerSetup, handleServerSetupButton } from './lib/server-setup.js';
 import { db } from './lib/database.js';
+import { moderationCommands, handleModerationCommand } from './lib/moderation.js';
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, Client, EmbedBuilder, Events, GatewayIntentBits, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 const siteUrl = (process.env.META_SITE_URL || 'https://metasupportcom.dbm.shared-servers.com').replace(/\/$/, '');
 const token = process.env.DISCORD_BOT_TOKEN;
@@ -41,6 +42,7 @@ const commands = [
  new SlashCommandBuilder().setName('setup-applications').setDescription('Post the staff application panel in this channel').setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
  ticketCommand,
  serverSetupCommand,
+ ...moderationCommands.map(command => ({ toJSON: () => command })),
 ].map(command => command.toJSON());
 client.once(Events.ClientReady, async readyClient => {
  console.log(`Meta bot ready as ${readyClient.user.tag}`);
@@ -50,6 +52,7 @@ client.once(Events.ClientReady, async readyClient => {
 client.on(Events.InteractionCreate, async interaction => {
  try {
   if (interaction.isChatInputCommand()) {
+   if (await handleModerationCommand(interaction)) return;
    if (interaction.commandName === 'setup-server') {
     await handleServerSetup(interaction);
     return;
