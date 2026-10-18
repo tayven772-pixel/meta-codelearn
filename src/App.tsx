@@ -1763,7 +1763,7 @@ const SETTINGS_SECTIONS = [
   { id: 'plan', label: 'Plan & billing', icon: CreditCard, keywords: 'subscription ai credits allowance usage invoices receipts payment card upgrade pricing free paid' },
   { id: 'notifications', label: 'Notifications', icon: Bell, keywords: 'reminders updates new lessons features product community discord billing email' },
   { id: 'learning', label: 'Learning', icon: BookOpen, keywords: 'language coding python javascript typescript html css java c c++ c# go rust sql ruby hints exercises lessons beginner' },
-  { id: 'appearance', label: 'Appearance', icon: Palette, keywords: 'theme dark light reduced motion animation accessibility' },
+  { id: 'appearance', label: 'Appearance', icon: Palette, keywords: 'theme dark light mode reduced motion animation accessibility' },
   { id: 'editor', label: 'Editor & projects', icon: Settings, keywords: 'code editor project tab files preview chat text size font word wrap wrapping workspace helper hints' },
   { id: 'privacy', label: 'Privacy & data', icon: Shield, keywords: 'export download backup reset progress completed quizzes xp delete account policy storage' },
   { id: 'support', label: 'Support', icon: CircleHelp, keywords: 'help contact support bug android app apk version email' },
@@ -1799,9 +1799,12 @@ function SettingsPage() {
   const [wordWrap, setWordWrap] = useState(() => readFlag('meta-editor-word-wrap', true));
   const [settingsSearch, setSettingsSearch] = useState('');
   const visibleSettingsSections = useMemo(() => {
-    const query = settingsSearch.trim().toLowerCase();
-    if (!query) return SETTINGS_SECTIONS;
-    return SETTINGS_SECTIONS.filter((section) => `${section.label} ${section.keywords}`.toLowerCase().includes(query));
+    const terms = settingsSearch.trim().toLowerCase().split(/\\s+/).filter(Boolean);
+    if (!terms.length) return SETTINGS_SECTIONS;
+    return SETTINGS_SECTIONS.filter((section) => {
+      const searchableText = `${section.label} ${section.keywords}`.toLowerCase();
+      return terms.every((term) => searchableText.includes(term));
+    });
   }, [settingsSearch]);
   const visibleSettingsSectionIds = useMemo(() => new Set(visibleSettingsSections.map((section) => section.id)), [visibleSettingsSections]);
   const [reducedMotion, setReducedMotion] = useState(() => readFlag('meta-reduced-motion', false));
