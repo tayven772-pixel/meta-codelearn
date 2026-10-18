@@ -647,6 +647,10 @@ function Header({ progressCount }: { progressCount: number }) {
 
       {menuOpen && (
         <div className="mobile-nav-panel">
+          <div className="mobile-nav-tools" aria-label="Mobile quick controls">
+            <GlobalSearch />
+            <ThemeToggle />
+          </div>
           <nav className="mobile-nav-links" aria-label="Mobile navigation">
             {NAV_LINKS.map((item) => (
               <Link key={item.href} href={item.href} className="mobile-nav-link" onClick={() => setMenuOpen(false)}>
