@@ -122,3 +122,54 @@
 @media (prefers-reduced-motion: reduce) {
   .playground-page * { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
+
+.momentum-panel {
+  display: grid;
+  grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr);
+  gap: 22px;
+  margin: 0 auto 54px;
+  padding: clamp(18px, 3vw, 30px);
+  border: 1px solid hsl(var(--border));
+  border-radius: 22px;
+  background: linear-gradient(135deg, hsl(var(--card)), hsl(var(--background) / .7));
+}
+.momentum-intro { min-width: 0; }
+.momentum-intro h2 { margin: 0; font: 650 clamp(25px, 3vw, 36px)/1.08 var(--app-font-serif); letter-spacing: -.035em; }
+.momentum-intro h2 em { color: var(--brand-ink); font-weight: 500; }
+.momentum-intro > p:not(.section-kicker) { max-width: 390px; margin: 12px 0 24px; color: hsl(var(--muted-foreground)); font-size: 13px; line-height: 1.7; }
+.momentum-progress-copy { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-size: 11px; }
+.momentum-progress-copy span { color: hsl(var(--muted-foreground)); }
+.momentum-progress-copy strong { font-size: 12px; }
+.momentum-progress-track { height: 8px; overflow: hidden; border-radius: 999px; background: hsl(var(--border)); }
+.momentum-progress-track > span { height: 100%; display: block; border-radius: inherit; background: var(--brand); transition: width .25s ease; }
+.momentum-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.momentum-xp-card, .momentum-badge { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 7px; padding: 15px; border: 1px solid hsl(var(--border)); border-radius: 15px; background: hsl(var(--card)); }
+.momentum-xp-card { background: var(--brand-soft); border-color: hsl(var(--border)); }
+.momentum-stat-icon, .momentum-badge-icon { width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid hsl(var(--border)); border-radius: 10px; background: hsl(var(--background)); color: var(--brand-ink); }
+.momentum-stat-icon svg, .momentum-badge-icon svg { width: 16px; height: 16px; }
+.momentum-stat-label { color: hsl(var(--muted-foreground)); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.momentum-xp-card > strong { font: 700 30px/1 var(--app-font-serif); }
+.momentum-xp-card > small, .momentum-badge > small { color: hsl(var(--muted-foreground)); font-size: 10px; line-height: 1.5; }
+.momentum-badge > strong { font-size: 12px; }
+.momentum-badge.unlocked { border-color: hsl(var(--primary) / .4); background: hsl(var(--primary) / .06); }
+.momentum-badge.unlocked .momentum-badge-icon { background: hsl(var(--primary) / .12); border-color: hsl(var(--primary) / .2); }
+.momentum-playground-link { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 13px 15px; border: 1px solid hsl(var(--border)); border-radius: 13px; background: hsl(var(--card)); color: hsl(var(--foreground)); text-decoration: none; }
+.momentum-playground-link > svg:first-child { width: 20px; height: 20px; flex: 0 0 auto; color: var(--brand-ink); }
+.momentum-playground-link > svg:last-child { width: 17px; height: 17px; flex: 0 0 auto; margin-left: auto; }
+.momentum-playground-link span { display: grid; gap: 4px; }
+.momentum-playground-link strong { font-size: 12px; }
+.momentum-playground-link small { color: hsl(var(--muted-foreground)); font-size: 11px; line-height: 1.5; }
+.momentum-playground-link:hover { border-color: var(--brand); }
+@media (max-width: 820px) {
+  .momentum-panel { grid-template-columns: minmax(0, 1fr); gap: 18px; margin-bottom: 38px; }
+  .momentum-intro > p:not(.section-kicker) { margin-bottom: 18px; }
+}
+@media (max-width: 420px) {
+  .momentum-panel { padding: 14px; border-radius: 17px; }
+  .momentum-stats { gap: 7px; }
+  .momentum-xp-card, .momentum-badge { padding: 11px; }
+  .momentum-badge > strong { font-size: 11px; }
+  .momentum-badge > small { font-size: 9px; }
+  .momentum-xp-card > strong { font-size: 27px; }
+}
+@media (prefers-reduced-motion: reduce) { .momentum-progress-track > span { transition: none; } }
