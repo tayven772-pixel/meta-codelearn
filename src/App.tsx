@@ -3799,6 +3799,20 @@ function BotControlPage() {
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not add partner.'); }
     finally { setBusy(false); }
   };
+  const updatePartner = async (partner: {id:number;name:string;invite_url:string;description:string;created_at:string}) => {
+    setBusy(true);
+    try {
+      const response = await fetch('/api/auth/admin/bot-control/partners/' + partner.id, {
+        method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guildId: guildId.trim(), name: partner.name, invite_url: partner.invite_url, description: partner.description })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Could not update partner.');
+      setStatus('Updated partner ' + partner.name + '.');
+      await loadSettings();
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not update partner.'); }
+    finally { setBusy(false); }
+  };
   const removePartner = async (id: number) => {
     if (!window.confirm('Remove this approved partner?')) return;
     setBusy(true);
@@ -3879,8 +3893,14 @@ function BotControlPage() {
               <h3>Approved partners</h3>
               <div className="admin-content-list">
                 {partners.map(partner => <div className="admin-content-list-item" key={partner.id}>
-                  <strong>{partner.name}</strong><p>{partner.description || 'No description'}</p><p><a href={partner.invite_url} target="_blank" rel="noreferrer">{partner.invite_url}</a></p>
-                  <button type="button" className="button-secondary" onClick={() => removePartner(partner.id)} disabled={busy}>Remove partner</button>
+                  <strong>Approved partner</strong>
+                  <label style={{ display: 'block', marginTop: 8 }}>Name<input value={partner.name} maxLength={80} onChange={event => setPartners(current => current.map(item => item.id === partner.id ? { ...item, name: event.target.value } : item))} style={fieldStyle} /></label>
+                  <label style={{ display: 'block', marginTop: 8 }}>Invite URL<input type="url" value={partner.invite_url} onChange={event => setPartners(current => current.map(item => item.id === partner.id ? { ...item, invite_url: event.target.value } : item))} style={fieldStyle} /></label>
+                  <label style={{ display: 'block', marginTop: 8 }}>Description<input value={partner.description} maxLength={300} onChange={event => setPartners(current => current.map(item => item.id === partner.id ? { ...item, description: event.target.value } : item))} style={fieldStyle} /></label>
+                  <div className="admin-publishing-actions">
+                    <button type="button" className="button-primary" onClick={() => updatePartner(partner)} disabled={busy}>Save partner</button>
+                    <button type="button" className="button-secondary" onClick={() => removePartner(partner.id)} disabled={busy}>Remove partner</button>
+                  </div>
                 </div>)}
                 {!partners.length && <p>No approved partners yet.</p>}
               </div>
