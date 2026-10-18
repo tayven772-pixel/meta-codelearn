@@ -3693,7 +3693,9 @@ function AdminPublishingPage() {
 }
 
 function BotControlPage() {
-  const [status, setStatus] = useState('Verifying owner access…');
+  const [discordReady, setDiscordReady] = useState(false);
+  const [discordChecked, setDiscordChecked] = useState(false);
+  const [status, setStatus] = useState('Checking Discord connection…');
   const [allowed, setAllowed] = useState(false);
   const [owner, setOwner] = useState('');
   const [guildId, setGuildId] = useState('');
@@ -3723,17 +3725,27 @@ function BotControlPage() {
   }, null, 2);
   useEffect(() => {
     let active = true;
-    fetch('/api/auth/admin/bot-control', { credentials: 'same-origin', cache: 'no-store' })
+    fetch('/api/auth/discord/me', { credentials: 'same-origin', cache: 'no-store' })
       .then(async response => {
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.error || 'Access denied.');
         if (!active) return;
-        setOwner(String(data.owner || 'Owner'));
-        setCommands(Array.isArray(data.commands) ? data.commands : []);
+        const connected = Boolean(data?.authenticated && data?.user?.id);
+        setDiscordReady(connected);
+        setDiscordChecked(true);
+        if (!connected) {
+          setStatus('Connect your Discord account to continue.');
+          return;
+        }
+        const ownerResponse = await fetch('/api/auth/admin/bot-control', { credentials: 'same-origin', cache: 'no-store' });
+        const ownerData = await ownerResponse.json().catch(() => ({}));
+        if (!ownerResponse.ok) throw new Error(ownerData.error || 'Owner access denied. Sign in to your Meta owner account.');
+        if (!active) return;
+        setOwner(String(ownerData.owner || 'Owner'));
+        setCommands(Array.isArray(ownerData.commands) ? ownerData.commands : []);
         setAllowed(true);
-        setStatus('Owner access verified. Enter your Discord server ID to load settings.');
+        setStatus('Discord connected and owner access verified. Enter your Discord server ID to load settings.');
       })
-      .catch(error => { if (active) setStatus(error instanceof Error ? error.message : 'Access denied.'); });
+      .catch(error => { if (active) setStatus(error instanceof Error ? error.message : 'Could not check Discord connection.'); });
     return () => { active = false; };
   }, []);
   const loadSettings = async () => {
@@ -3837,7 +3849,16 @@ function BotControlPage() {
           <p>Manage command access, partnership rotation, server setup templates, and editable bot messages from the website. Bot tokens and secrets are never displayed.</p>
         </div>
         <p className="admin-publishing-status" role="status">{status}</p>
-        {allowed && <>
+        {discordChecked && !discordReady && <section className="admin-publishing-guide">
+          <h2>Connect your Discord account</h2>
+          <p>Sign in with Discord to connect your account before using bot control.</p>
+          <a className="button-primary" href="/api/auth/discord">Sign in with Discord</a>
+        </section>}
+        {discordReady && !allowed && discordChecked && <section className="admin-publishing-guide">
+          <h2>Owner access required</h2>
+          <p>Discord is connected, but bot control also requires the authorized Meta owner account.</p>
+        </section>}
+        {allowed && discordReady && <>
           <section className="admin-publishing-guide">
             <h2>Owner session</h2>
             <p>Authorized account: <strong>{owner}</strong></p>
