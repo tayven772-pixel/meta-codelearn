@@ -2879,24 +2879,71 @@ function DeleteAccountPage() {
 function PrivacyPage() {
   return (
     <main className="policy-page">
-      <Link href="/" className="brand policy-brand">
+      <Link href="/" className="brand policy-brand" aria-label="Meta Code home">
         <span className="brand-mark"><Code2 aria-hidden="true" /></span>
         <span>meta</span>
       </Link>
       <article className="policy-card">
-        <p className="section-kicker">Privacy</p>
-        <h1>Meta privacy overview</h1>
-        <p>Meta is a coding-learning app. Meta is currently transitioning to its own account system. Lesson progress and project data may be stored locally on your device during this transition.</p>
-        <h2>What the app may store</h2>
-        <p>Account identifiers, profile details supplied during sign-in, selected learning settings, and lesson progress. The app should only request data needed for learning and account functionality.</p>
-        <h2>Device permissions</h2>
-        <p>The core learning experience does not require contacts, call logs, SMS, precise location, microphone, camera, or background location.</p>
-        <h2>Children and families</h2>
-        <p>Store listing age targeting and any child-directed features must be configured accurately in Google Play Console. Features and data practices should match the audience selected there.</p>
-        <h2>Account deletion and data requests</h2>
-        <p>Signed-in users can delete their account from the Account page. Users who cannot access the app can use the public <Link className="policy-link" href="/delete-account">account deletion page</Link> or contact <a className="policy-link" href="mailto:metasupport43@gmail.com">metasupport43@gmail.com</a>. Account deletion is intended to remove the account and associated Meta-controlled learning/account data, subject only to any retention that is legally or security-required.</p>
-        <h2>Support contact</h2>
-        <p>Privacy, account, and app-support questions can be sent to <a className="policy-link" href="mailto:metasupport43@gmail.com">metasupport43@gmail.com</a>.</p>
+        <p className="section-kicker">Privacy &amp; cookies</p>
+        <h1>Privacy Policy</h1>
+        <p><strong>Last updated: October 18, 2026</strong></p>
+        <p>This policy explains how Meta Code (also referred to as “Meta” or “we”) handles information when you use the Meta Code website, learning tools, project workspace, account features, and AI coding features. The policy describes the current implementation and may change when features or service providers change.</p>
+
+        <h2>1. Information we collect</h2>
+        <ul>
+          <li><strong>Account information.</strong> When you register with email, we process your email address, a salted password hash, account creation and email-verification status, and any profile information you choose to provide, such as a display name, username, or PNG profile image. We do not store your password as plain text.</li>
+          <li><strong>Google sign-in.</strong> If you choose Google sign-in, Google provides account details needed for sign-in, such as a Google account identifier, email address, verification status, display/profile information, and profile picture where available. Meta does not receive your Google password.</li>
+          <li><strong>Discord sign-in.</strong> If you choose Discord sign-in, Meta receives the Discord identity information permitted by the sign-in flow, including your Discord user ID, username, display name, and avatar information where available. The current Discord flow requests identity access, not access to your Discord messages.</li>
+          <li><strong>Learning and project data.</strong> The browser can store selected coding language, theme, lesson and quiz progress, editor preferences, project names and types, project files, and project-agent conversation history. This information is generally saved in browser storage on the device you use, rather than automatically synced to your account across devices.</li>
+          <li><strong>AI requests.</strong> When you use Meta Coach or the AI Project Builder, the prompt you submit and relevant context—such as your selected track, project files, and recent project conversation—are sent to the AI endpoint configured for the service and onward to OpenAI to generate a response. Do not include passwords, API keys, private keys, payment details, or other sensitive personal information in prompts or project files.</li>
+          <li><strong>Technical and security information.</strong> The website, host, and server infrastructure may generate logs containing information such as IP address, browser/request details, timestamps, requested pages or endpoints, response status, and security or error events. These records help operate the service, diagnose failures, limit abuse, and protect accounts.</li>
+          <li><strong>Support and email.</strong> If you contact support, we receive the information you include in your message. Email is also used to send account-verification messages.</li>
+        </ul>
+
+        <h2>2. How we use information</h2>
+        <p>We use information to provide and secure sign-in; verify email addresses; maintain profiles; remember learning progress and preferences on your device; save and export projects; generate requested AI responses; answer support requests; prevent abuse and troubleshoot problems; and comply with applicable legal obligations. We do not intentionally sell personal information or use third-party behavioural-advertising trackers in the current website implementation.</p>
+
+        <h2>3. Cookies and similar technologies</h2>
+        <p>Cookies are small pieces of data stored by your browser. The current site uses first-party cookies needed for account sessions and secure sign-in flows:</p>
+        <ul>
+          <li><strong>meta_session</strong> — keeps an email/Google account signed in. It is configured to expire after up to 7 days and uses HttpOnly, SameSite=Lax, and the Secure attribute when the site is configured for HTTPS.</li>
+          <li><strong>meta_discord_session</strong> — keeps a Discord sign-in session. It is configured to expire after up to 7 days and uses HttpOnly, Secure, and SameSite=Lax.</li>
+          <li><strong>meta_google_oauth_state</strong> and <strong>meta_discord_oauth_state</strong> — temporary security cookies used to verify a Google or Discord sign-in callback. They last about 10 minutes and are cleared as the sign-in flow completes.</li>
+        </ul>
+        <p>These cookies support authentication and protection against forged sign-in callbacks; they are not used by Meta for advertising. The current first-party website code does not intentionally set optional analytics or advertising cookies. If we add optional cookies or tracking in the future, we will update this notice and provide any choices or consent required by applicable law before enabling them.</p>
+        <p>Google, Discord, Stripe, or another provider may use its own technologies on its own website when you leave Meta or use a third-party sign-in or checkout flow. Those providers control their own practices; see their privacy information below.</p>
+
+        <h2>4. Browser storage is not a cookie</h2>
+        <p>Meta also uses browser local storage to remember settings such as your theme, selected language, editor preferences, learning progress, projects, files, and project-agent conversation history. This information may remain on that browser after you close it and is not automatically available on another device. You can clear Meta's site data in your browser settings, but doing so may sign you out and erase locally saved progress, preferences, projects, and conversations. The Account page also provides account-data deletion controls for the active account and its associated local data on that browser.</p>
+
+        <h2>5. AI features and third-party services</h2>
+        <p>When you ask for AI help, relevant prompts, code, files, and recent conversation context are sent to OpenAI through the configured API so it can produce the requested response. Meta's current AI endpoint does not save those prompts or responses in the Meta account database, but the project content and conversation history may remain in your browser storage. OpenAI processes API requests under its own applicable terms and data-use practices. Please review <a className="policy-link" href="https://platform.openai.com/docs/guides/your-data" target="_blank" rel="noreferrer">OpenAI’s API data guidance</a> and <a className="policy-link" href="https://openai.com/policies/privacy-policy/" target="_blank" rel="noreferrer">OpenAI’s privacy policy</a>.</p>
+        <p>The service also relies on service providers for infrastructure and email delivery. Google is used for Google sign-in, Google-hosted fonts, and delivery of account-verification email through the configured email service. Discord is used when you choose Discord sign-in. These providers may receive information needed to deliver their service and are governed by their own policies: <a className="policy-link" href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Google Privacy Policy</a> and <a className="policy-link" href="https://discord.com/privacy/policy/" target="_blank" rel="noreferrer">Discord Privacy Policy</a>.</p>
+        <p>The Builder and Pro checkout links currently point to Stripe's test environment and are not configured for real purchases. Do not enter real payment card details through those test links. If you follow a checkout link, Stripe controls the information it collects on its own pages; see <a className="policy-link" href="https://stripe.com/privacy" target="_blank" rel="noreferrer">Stripe's privacy policy</a>. This notice should be updated before live payments are enabled.</p>
+
+        <h2>6. When information may be shared</h2>
+        <p>Information may be handled by providers described above when needed to operate a feature you request, by support or infrastructure providers that help run Meta, or where disclosure is required to comply with law, respond to a valid legal request, protect the safety or security of users or the service, investigate misuse, or protect legal rights. We do not intentionally sell personal information.</p>
+
+        <h2>7. Storage, retention, and security</h2>
+        <p>Account information is retained while needed to operate your account and for legitimate security, operational, or legal purposes. Authentication sessions are designed to expire after 7 days; email-verification links expire after 30 minutes; and OAuth state cookies are short-lived. Browser-stored projects, progress, and preferences can remain until you delete them or clear the browser's site data. Technical logs and backup copies may have different retention periods depending on the system and may be kept where reasonably needed for security, recovery, or legal obligations.</p>
+        <p>We use safeguards in the current implementation that include salted password hashing, hashed server-side session tokens for email accounts, protected session cookies, HTTPS security attributes where configured, and request rate limiting. No website or storage system can be guaranteed completely secure, so avoid storing secrets or sensitive personal details in your projects or AI prompts.</p>
+
+        <h2>8. International processing</h2>
+        <p>Meta and its service providers may process information in more than one country, depending on where the service and its infrastructure operate. Privacy laws in those places may differ from the laws where you live. Third-party providers' own policies explain their processing and any applicable safeguards.</p>
+
+        <h2>9. Children, teens, and families</h2>
+        <p>Meta provides coding-learning features and may be used by younger learners. Parents and guardians should help younger users understand what information is saved in the browser and what is sent to third-party services when AI or sign-in features are used. Do not submit sensitive personal information about yourself or someone else in a prompt, project, or support message. If you believe personal information has been provided inappropriately or without a consent required by applicable law, contact us using the email below.</p>
+
+        <h2>10. Your choices and requests</h2>
+        <p>You can choose whether to use Google or Discord sign-in and whether to submit content to AI features. You can clear browser site data to remove local settings and project data; be aware that this may remove work you have not exported. You can request access to, correction of, or deletion of account information by contacting us. We may need to verify your identity before handling a request and may retain information where required or permitted by law.</p>
+        <p>To delete a Meta account, use the Account page when available or visit the <Link className="policy-link" href="/delete-account">account deletion page</Link>. Deleting your Meta account does not delete your Google or Discord account, remove information held independently by those providers, or necessarily erase existing provider logs and backups immediately.</p>
+
+        <h2>11. Changes to this policy</h2>
+        <p>We may update this policy when the service, providers, or legal requirements change. We will update the date above when we publish a revised version. Significant changes should be highlighted where appropriate.</p>
+
+        <h2>12. Contact</h2>
+        <p>For privacy, account, or data requests, email <a className="policy-link" href="mailto:metasupport43@gmail.com">metasupport43@gmail.com</a>.</p>
+        <p><strong>Launch note:</strong> This policy describes the current code and is not a substitute for jurisdiction-specific legal advice. Before a broad public launch, confirm the responsible operator's legal name/contact details, exact hosting/log retention settings, and whether any new analytics or advertising tools have been enabled.</p>
       </article>
     </main>
   );
