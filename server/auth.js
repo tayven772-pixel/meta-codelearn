@@ -306,7 +306,7 @@ function requireBotOwner(req, res) {
   return user;
 }
 function validGuildId(value) {
-  return typeof value === 'string' && /^\\d{17,20}$/.test(value);
+  return typeof value === 'string' && /^\d{17,20}$/.test(value);
 }
 function botSettingsForGuild(guildId) {
   return Object.fromEntries(botDb.prepare('SELECT setting_key, setting_value FROM settings WHERE guild_id = ?').all(guildId).map(row => [row.setting_key, row.setting_value]));
@@ -345,8 +345,8 @@ app.put('/api/auth/admin/bot-control/settings', (req, res) => {
         throw new Error(`Setting ${key} is too long.`);
       }
       if (key === 'autopartner_enabled' && !['true','false'].includes(value)) throw new Error('Autopartner enabled must be true or false.');
-      if (key === 'autopartner_interval_hours' && (!/^\\d+$/.test(value) || Number(value) < 6 || Number(value) > 168)) throw new Error('Autopartner interval must be 6–168 hours.');
-      if (key === 'autopartner_channel_id' && value && !/^\\d{17,20}$/.test(value)) throw new Error('Autopartner channel ID must be a Discord ID.');
+      if (key === 'autopartner_interval_hours' && (!/^\d+$/.test(value) || Number(value) < 6 || Number(value) > 168)) throw new Error('Autopartner interval must be 6–168 hours.');
+      if (key === 'autopartner_channel_id' && value && !/^\d{17,20}$/.test(value)) throw new Error('Autopartner channel ID must be a Discord ID.');
       if (key.startsWith('bot_command_enabled:') && !['true','false'].includes(value)) throw new Error('Command toggles must be true or false.');
       if (key === 'server_setup_template' && value) {
         const template = JSON.parse(value);
