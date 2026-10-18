@@ -37,7 +37,7 @@ const commands = [
  new SlashCommandBuilder().setName('8ball').setDescription('Ask the magic 8-ball a question')
   .addStringOption(option => option.setName('question').setDescription('Your question').setMaxLength(250).setRequired(true)),
  new SlashCommandBuilder().setName('announce').setDescription('Post an official server announcement').setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-  .addStringOption(option => option.setName('message').setDescription('Announcement text').setMaxLength(1800).setRequired(true))
+  .addStringOption(option => option.setName('message').setDescription('Announcement text').setMaxLength(1800).setRequired(true)),
  new SlashCommandBuilder().setName('setup-applications').setDescription('Post the staff application panel in this channel').setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
  ticketCommand,
  serverSetupCommand,
