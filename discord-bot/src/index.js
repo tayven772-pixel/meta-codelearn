@@ -5,6 +5,7 @@ import { handleTicketCommand, handleTicketButton } from './lib/tickets.js';
 import { handleServerSetup, handleServerSetupButton } from './lib/server-setup.js';
 import { db } from './lib/database.js';
 import { moderationCommands, handleModerationCommand } from './lib/moderation.js';
+import { autoPartnerCommands, handleAutoPartnerCommand, runAutoPartnerScheduler } from './lib/autopartner.js';
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, Client, EmbedBuilder, Events, GatewayIntentBits, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 const siteUrl = (process.env.META_SITE_URL || 'https://metasupportcom.dbm.shared-servers.com').replace(/\/$/, '');
 const token = process.env.DISCORD_BOT_TOKEN;
@@ -60,15 +61,19 @@ const commands = [
  ticketCommand,
  serverSetupCommand,
  ...moderationCommands.map(command => ({ toJSON: () => command })),
+ ...autoPartnerCommands.map(command => ({ toJSON: () => command })),
 ].map(command => command.toJSON());
 client.once(Events.ClientReady, async readyClient => {
  console.log(`Meta bot ready as ${readyClient.user.tag}`);
+ runAutoPartnerScheduler(readyClient).catch(error => console.error('Autopartner startup check failed:', error.message));
+ setInterval(() => runAutoPartnerScheduler(readyClient).catch(error => console.error('Autopartner scheduler failed:', error.message)), 60_000).unref();
  try { if (guildId) await readyClient.application.commands.set(commands, guildId); else await readyClient.application.commands.set(commands); console.log('Registered Meta CodeLearn slash commands.'); }
  catch (error) { console.error('Command registration failed:', error.message); }
 });
 client.on(Events.InteractionCreate, async interaction => {
  try {
   if (interaction.isChatInputCommand()) {
+   if (await handleAutoPartnerCommand(interaction)) return;
    if (await handleModerationCommand(interaction)) return;
    if (interaction.commandName === 'setup-server') {
     await handleServerSetup(interaction);
@@ -88,6 +93,7 @@ client.on(Events.InteractionCreate, async interaction => {
       { name: 'Community', value: '`/poll` — create a reaction poll\n`/suggest` — share an idea\n`/coinflip` — flip a coin\n`/roll` — random number\n`/choose` — choose from a list\n`/8ball` — playful answer\n`/serverinfo` — server details\n`/userinfo` — member details\n`/ping` — check bot status\n`/membercount` — server member totals\n`/avatar` — view an avatar\n`/roleinfo` — inspect a role', inline: false },
       { name: 'Moderation', value: '`/warn` and `/warnings` — record and review warnings\n`/timeout` and `/untimeout` — manage member timeouts\n`/purge` — delete up to 100 recent messages (staff permissions required)', inline: false },
       { name: 'Administrator', value: '`/announce` — post an official announcement (administrators only)\n`/embed` — post a formatted announcement\n`/lock`, `/unlock`, `/slowmode` — manage a text channel', inline: false },
+      { name: 'Partnerships', value: '/autopartner-setup, /partner-add, /partner-remove, /partner-list, /partner-settings, /partner-template, /partner-post', inline: false },
       { name: 'Staff tools', value: '`/ticket`, `/ticket-panel`, `/setup-server`, `/setup-applications` — availability depends on your server permissions and bot setup.', inline: false }
      )
      .setFooter({ text: 'Meta Code • Learn the idea, then the code' });
