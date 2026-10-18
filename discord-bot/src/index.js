@@ -16,6 +16,23 @@ const commands = [
  new SlashCommandBuilder().setName('meta').setDescription('Open Meta CodeLearn and explore coding lessons'),
  new SlashCommandBuilder().setName('lessons').setDescription('Get Meta CodeLearn learning links'),
  new SlashCommandBuilder().setName('ping').setDescription('Check whether the Meta bot is online'),
+ new SlashCommandBuilder().setName('membercount').setDescription('Show this server’s member count'),
+ new SlashCommandBuilder().setName('avatar').setDescription('Show a member’s avatar')
+  .addUserOption(option => option.setName('user').setDescription('Member (defaults to you)').setRequired(false)),
+ new SlashCommandBuilder().setName('roleinfo').setDescription('Show details about a server role')
+  .addRoleOption(option => option.setName('role').setDescription('Role to inspect').setRequired(true)),
+ new SlashCommandBuilder().setName('slowmode').setDescription('Set this channel’s slowmode (staff only)')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+  .addIntegerOption(option => option.setName('seconds').setDescription('Seconds between messages (0–21600)').setMinValue(0).setMaxValue(21600).setRequired(true)),
+ new SlashCommandBuilder().setName('lock').setDescription('Lock this text channel for @everyone (staff only)')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+ new SlashCommandBuilder().setName('unlock').setDescription('Unlock this text channel for @everyone (staff only)')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+ new SlashCommandBuilder().setName('embed').setDescription('Post a formatted announcement embed (admin only)')
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+  .addStringOption(option => option.setName('title').setDescription('Announcement title').setMaxLength(200).setRequired(true))
+  .addStringOption(option => option.setName('message').setDescription('Announcement text').setMaxLength(3500).setRequired(true))
+  .addStringOption(option => option.setName('color').setDescription('Hex color such as #42B883').setRequired(false)),
  new SlashCommandBuilder().setName('help').setDescription('Show Meta bot commands and community tools'),
  new SlashCommandBuilder().setName('serverinfo').setDescription('Show useful information about this server'),
  new SlashCommandBuilder().setName('userinfo').setDescription('Show information about a server member')
@@ -68,13 +85,89 @@ client.on(Events.InteractionCreate, async interaction => {
      .setDescription('Helpful tools for the Meta Code community.')
      .addFields(
       { name: 'Learning', value: '`/meta` — website, projects and account links\n`/lessons` — jump into coding lessons', inline: false },
-      { name: 'Community', value: '`/poll` — create a reaction poll\n`/suggest` — share an idea\n`/coinflip` — flip a coin\n`/roll` — random number\n`/choose` — choose from a list\n`/8ball` — playful answer\n`/serverinfo` — server details\n`/userinfo` — member details\n`/ping` — check bot status', inline: false },
+      { name: 'Community', value: '`/poll` — create a reaction poll\n`/suggest` — share an idea\n`/coinflip` — flip a coin\n`/roll` — random number\n`/choose` — choose from a list\n`/8ball` — playful answer\n`/serverinfo` — server details\n`/userinfo` — member details\n`/ping` — check bot status\n`/membercount` — server member totals\n`/avatar` — view an avatar\n`/roleinfo` — inspect a role', inline: false },
       { name: 'Moderation', value: '`/warn` and `/warnings` — record and review warnings\n`/timeout` and `/untimeout` — manage member timeouts\n`/purge` — delete up to 100 recent messages (staff permissions required)', inline: false },
-      { name: 'Administrator', value: '`/announce` — post an official announcement (administrators only)', inline: false },
+      { name: 'Administrator', value: '`/announce` — post an official announcement (administrators only)\n`/embed` — post a formatted announcement\n`/lock`, `/unlock`, `/slowmode` — manage a text channel', inline: false },
       { name: 'Staff tools', value: '`/ticket`, `/ticket-panel`, `/setup-server`, `/setup-applications` — availability depends on your server permissions and bot setup.', inline: false }
      )
      .setFooter({ text: 'Meta Code • Learn the idea, then the code' });
     await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+   }
+   else if (interaction.commandName === 'membercount') {
+    if (!interaction.inGuild()) {
+     await interaction.reply({ content: 'Use this command inside a server.', flags: MessageFlags.Ephemeral });
+     return;
+    }
+    const guild = interaction.guild;
+    const counts = await guild.fetch().catch(() => guild);
+    await interaction.reply({
+     embeds: [new EmbedBuilder().setColor(0x42B883).setTitle(`👥 ${guild.name} member count`)
+      .addFields(
+       { name: 'Total members', value: String(counts.memberCount ?? guild.memberCount), inline: true },
+       { name: 'Server created', value: `<t:${Math.floor(guild.createdTimestamp / 1000)}:D>`, inline: true }
+      ).setTimestamp()],
+     flags: MessageFlags.Ephemeral
+    });
+   }
+   else if (interaction.commandName === 'avatar') {
+    const user = interaction.options.getUser('user') ?? interaction.user;
+    const url = user.displayAvatarURL({ size: 1024, extension: 'png' });
+    const embed = new EmbedBuilder().setColor(0x42B883).setTitle(`${user.username}’s avatar`).setImage(url).setURL(url);
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+   }
+   else if (interaction.commandName === 'roleinfo') {
+    if (!interaction.inGuild()) {
+     await interaction.reply({ content: 'Use this command inside a server.', flags: MessageFlags.Ephemeral });
+     return;
+    }
+    const role = interaction.options.getRole('role', true);
+    const embed = new EmbedBuilder().setColor(role.color || 0x42B883).setTitle(`Role: ${role.name}`)
+     .addFields(
+      { name: 'Members', value: String(role.members.size), inline: true },
+      { name: 'Position', value: String(role.position), inline: true },
+      { name: 'Mentionable', value: role.mentionable ? 'Yes' : 'No', inline: true },
+      { name: 'Hoisted', value: role.hoist ? 'Yes' : 'No', inline: true },
+      { name: 'Created', value: `<t:${Math.floor(role.createdTimestamp / 1000)}:D>`, inline: true },
+      { name: 'Role ID', value: role.id, inline: false }
+     );
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+   }
+   else if (['lock', 'unlock', 'slowmode'].includes(interaction.commandName)) {
+    if (!interaction.inGuild() || !interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) {
+     await interaction.reply({ content: 'You need Manage Channels permission to use this command.', flags: MessageFlags.Ephemeral });
+     return;
+    }
+    const channel = interaction.channel;
+    if (!channel?.isTextBased() || !channel.permissionOverwrites?.edit || typeof channel.setRateLimitPerUser !== 'function') {
+     await interaction.reply({ content: 'This command only works in a standard server text channel.', flags: MessageFlags.Ephemeral });
+     return;
+    }
+    if (interaction.commandName === 'slowmode') {
+     const seconds = interaction.options.getInteger('seconds', true);
+     await channel.setRateLimitPerUser(seconds, `Slowmode updated by ${interaction.user.tag}`);
+     await interaction.reply({ content: seconds === 0 ? '✅ Slowmode disabled.' : `🐢 Slowmode set to **${seconds} seconds**.`, flags: MessageFlags.Ephemeral });
+    } else {
+     const locked = interaction.commandName === 'lock';
+     await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { SendMessages: locked ? false : null }, { reason: `Channel ${locked ? 'locked' : 'unlocked'} by ${interaction.user.tag}` });
+     await interaction.reply({ content: locked ? '🔒 Channel locked for @everyone.' : '🔓 Channel unlocked for @everyone.', flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
+    }
+   }
+   else if (interaction.commandName === 'embed') {
+    if (!interaction.inGuild() || !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+     await interaction.reply({ content: 'Only server administrators can post formatted announcements.', flags: MessageFlags.Ephemeral });
+     return;
+    }
+    const title = interaction.options.getString('title', true).trim();
+    const message = interaction.options.getString('message', true).trim();
+    const rawColor = interaction.options.getString('color')?.trim();
+    const color = rawColor ? Number.parseInt(rawColor.replace(/^#/, ''), 16) : 0x42B883;
+    if (rawColor && (!/^(?:#)?[0-9a-fA-F]{6}$/.test(rawColor) || !Number.isInteger(color) || color < 0 || color > 0xFFFFFF)) {
+     await interaction.reply({ content: 'Use a valid six-digit hex color, for example #42B883.', flags: MessageFlags.Ephemeral });
+     return;
+    }
+    const embed = new EmbedBuilder().setColor(color).setTitle(title).setDescription(message).setFooter({ text: `Meta Code • Posted by ${interaction.user.username}` }).setTimestamp();
+    await interaction.channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
+    await interaction.reply({ content: 'Formatted announcement posted.', flags: MessageFlags.Ephemeral });
    }
    else if (interaction.commandName === 'serverinfo') {
     if (!interaction.inGuild()) {
