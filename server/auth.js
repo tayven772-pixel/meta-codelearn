@@ -267,7 +267,7 @@ function getBotDb() {
   fs.mkdirSync(path.dirname(botDatabasePath), { recursive: true, mode: 0o700 });
   const connection = new Database(botDatabasePath);
   connection.pragma('busy_timeout = 5000');
-  connection.exec(\`
+  connection.exec(`
     CREATE TABLE IF NOT EXISTS settings (
       guild_id TEXT NOT NULL,
       setting_key TEXT NOT NULL,
@@ -286,7 +286,7 @@ function getBotDb() {
       UNIQUE (guild_id, name)
     );
     CREATE INDEX IF NOT EXISTS autopartner_partners_guild ON autopartner_partners(guild_id);
-  \`);
+  `);
   botDb = connection;
   return botDb;
 }
