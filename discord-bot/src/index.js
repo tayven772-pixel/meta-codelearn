@@ -107,8 +107,8 @@ client.on(Events.InteractionCreate, async interaction => {
      .setTitle('Meta Bot | Command Guide')
      .setDescription('Helpful tools for the Meta Code community.')
      .addFields(
-      { name: 'Learning', value: '`/meta` — website, projects and account links\n`/lessons` — jump into coding lessons', inline: false },
-      { name: 'Community', value: '`/poll` — create a reaction poll\n`/suggest` — share an idea\n`/coinflip` — flip a coin\n`/roll` — random number\n`/choose` — choose from a list\n`/8ball` — playful answer\n`/serverinfo` — server details\n`/userinfo` — member details\n`/ping` — check bot status\n`/membercount` — server member totals\n`/avatar` — view an avatar\n`/roleinfo` — inspect a role', inline: false },
+      { name: 'Learning', value: '`/meta` — website, projects and account links\n`/lessons` — jump into coding lessons\n`/remindme` — DM yourself a reminder\n`/randomcolor` — generate a color code', inline: false },
+      { name: 'Community', value: '`/poll` — create a reaction poll\n`/suggest` — share an idea\n`/coinflip` — flip a coin\n`/roll` — random number\n`/choose` — choose from a list\n`/8ball` — playful answer\n`/serverinfo` — server details\n`/userinfo` — member details\n`/ping` — check bot status\n`/membercount` — server member totals\n`/avatar` — view an avatar\n`/roleinfo` — inspect a role\n`/thread` — start a discussion\n`/topic` — update a channel topic (staff)', inline: false },
       { name: 'Moderation', value: '`/warn` and `/warnings` — record and review warnings\n`/timeout` and `/untimeout` — manage member timeouts\n`/purge` — delete up to 100 recent messages (staff permissions required)', inline: false },
       { name: 'Administrator', value: '`/announce` — post an official announcement (administrators only)\n`/embed` — post a formatted announcement\n`/lock`, `/unlock`, `/slowmode` — manage a text channel', inline: false },
       { name: 'Partnerships', value: '/autopartner-setup, /partner-add, /partner-remove, /partner-list, /partner-settings, /partner-template, /partner-post', inline: false },
