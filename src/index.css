@@ -613,7 +613,6 @@ button { color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
   .site-fact-copy { animation: none; }
-  .site-fact-toggle { display: none; }
 }
 
 /* Lesson Play */
