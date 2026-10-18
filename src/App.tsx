@@ -518,6 +518,7 @@ const NAV_LINKS = [
   { href: '/', label: 'Explore', icon: Compass },
   { href: '/play', label: 'Lessons', icon: BookOpen },
   { href: '/projects', label: 'Projects', icon: FolderKanban },
+  { href: '/settings', label: 'Settings', icon: Settings },
   { href: '/pricing', label: 'Pricing', icon: Tag },
 ];
 
@@ -588,11 +589,6 @@ function Header({ progressCount }: { progressCount: number }) {
                 <ArrowRight aria-hidden="true" />
               </Link>
             ))}
-            <Link href="/settings" className="mobile-nav-link" onClick={() => setMenuOpen(false)}>
-              <Settings aria-hidden="true" />
-              <span>Settings</span>
-              <ArrowRight aria-hidden="true" />
-            </Link>
             <Link href="/sign-in" className="mobile-nav-link" onClick={() => setMenuOpen(false)}>
               <LockKeyhole aria-hidden="true" />
               <span>Sign in</span>
