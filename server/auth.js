@@ -350,8 +350,14 @@ app.put('/api/auth/admin/bot-control/settings', (req, res) => {
       if (key.startsWith('bot_command_enabled:') && !['true','false'].includes(value)) throw new Error('Command toggles must be true or false.');
       if (key === 'server_setup_template' && value) {
         const template = JSON.parse(value);
-        if (!Array.isArray(template.roles) || !Array.isArray(template.categories) || template.roles.length > 40 || template.categories.length > 30) {
-          throw new Error('Setup template must include roles and categories (up to 40 roles and 30 categories).');
+        if (!Array.isArray(template.roles) || !Array.isArray(template.categories) ||
+            template.roles.length > 40 || template.categories.length > 30 ||
+            template.roles.some(role => !role || typeof role.name !== 'string' || !role.name.trim() || role.name.length > 100) ||
+            template.categories.some(group => !group || typeof group.name !== 'string' || !group.name.trim() ||
+              !Array.isArray(group.channels) || group.channels.length > 50 ||
+              group.channels.some(channel => !Array.isArray(channel) || !['text','voice'].includes(channel[0]) ||
+                typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
+          throw new Error('Setup template needs valid roles and categories. Each channel must be ["text" or "voice", "channel-name"]. Limits: 40 roles, 30 categories, 50 channels per category.');
         }
       }
       put.run(guildId, key, value);
