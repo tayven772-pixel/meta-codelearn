@@ -254,7 +254,7 @@ const aiPlans: Plan[] = [
     description: 'Learn, try the agent, and keep a few active projects.',
     bestFor: 'Trying Meta out and learning the foundations.',
     features: [
-      'All 6 foundation lessons with quizzes',
+      `All ${lessons.length} foundation lessons with quizzes`,
       'All 7 Lesson Play build tracks',
       '40 AI credits every month',
       'Up to 3 active projects',
@@ -2318,7 +2318,7 @@ function PricingTeaser() {
 }
 
 const PLAN_MATRIX: { label: string; free: string | boolean; builder: string | boolean; pro: string | boolean; highlight?: boolean }[] = [
-  { label: 'Foundation lessons & quizzes', free: 'All 6', builder: 'All 6', pro: 'All 6' },
+  { label: 'Foundation lessons & quizzes', free: `All ${lessons.length}`, builder: `All ${lessons.length}`, pro: `All ${lessons.length}` },
   { label: 'Lesson Play build tracks', free: 'All 7', builder: 'All 7', pro: 'All 7' },
   { label: 'AI credits per month', free: '40', builder: '500', pro: '2,000', highlight: true },
   { label: 'Active projects', free: '3', builder: '25', pro: 'Unlimited' },
