@@ -257,6 +257,22 @@ app.get('/api/auth/me', (req, res) => {
   res.json({ user: publicUser(user) });
 });
 
+// Private Discord bot owner dashboard. URL secrecy is not used as authorization.
+app.get('/api/auth/admin/bot-control', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const user = sessionUser(req);
+  if (!user) return res.status(401).json({ error: 'Sign in with the owner Meta account to continue.' });
+  const ownerEmail = normalizeEmail(process.env.META_BOT_OWNER_EMAIL || '');
+  if (!ownerEmail || normalizeEmail(user.email) !== ownerEmail) {
+    return res.status(403).json({ error: 'This account is not authorized to access the private bot dashboard.' });
+  }
+  return res.json({
+    owner: user.email,
+    dashboard: 'Meta Code bot owner console',
+    commands: ['/help', '/meta', '/lessons', '/ping', '/serverinfo', '/userinfo', '/poll', '/suggest', '/coinflip', '/roll', '/choose', '/8ball', '/announce', '/ticket', '/ticket-panel', '/setup-server', '/setup-applications']
+  });
+});
+
 // Content publishing API. Administrator privileges are granted only by server environment,
 // never by a client-supplied email or role field.
 const adminEmails = new Set(
