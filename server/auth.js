@@ -321,7 +321,7 @@ app.get('/api/auth/admin/bot-control/settings', (req, res) => {
   const guildId = String(req.query.guildId || '').trim();
   if (!validGuildId(guildId)) return res.status(400).json({ error: 'Enter a valid Discord server ID (17–20 digits).' });
   const settings = botSettingsForGuild(guildId);
-  const partners = botDb.prepare('SELECT id, name, invite_url, description, created_at FROM autopartner_partners WHERE guild_id = ? ORDER BY name COLLATE NOCASE').all(guildId);
+  const partners = getBotDb().prepare('SELECT id, name, invite_url, description, created_at FROM autopartner_partners WHERE guild_id = ? ORDER BY name COLLATE NOCASE').all(guildId);
   return res.json({ guildId, settings, commands: botCommandNames, partners });
 });
 app.put('/api/auth/admin/bot-control/settings', (req, res) => {
@@ -337,7 +337,7 @@ app.put('/api/auth/admin/bot-control/settings', (req, res) => {
     ...botCommandNames.map(name => `bot_command_enabled:${name}`),
     ...['meta','lessons','ping','help'].map(name => `bot_response:${name}`)
   ]);
-  const put = botDb.prepare(`
+  const put = getBotDb().prepare(`
     INSERT INTO settings (guild_id, setting_key, setting_value, updated_at)
     VALUES (?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT (guild_id, setting_key) DO UPDATE SET setting_value = excluded.setting_value, updated_at = CURRENT_TIMESTAMP
@@ -388,8 +388,8 @@ app.post('/api/auth/admin/bot-control/partners', (req, res) => {
     return res.status(400).json({ error: 'Only official HTTPS Discord invite links are accepted.' });
   }
   try {
-    const result = botDb.prepare('INSERT INTO autopartner_partners (guild_id, name, invite_url, description, created_by) VALUES (?, ?, ?, ?, ?)').run(guildId, name, inviteUrl, description, 'website');
-    return res.status(201).json({ partner: botDb.prepare('SELECT id, name, invite_url, description, created_at FROM autopartner_partners WHERE id = ?').get(result.lastInsertRowid) });
+    const result = getBotDb().prepare('INSERT INTO autopartner_partners (guild_id, name, invite_url, description, created_by) VALUES (?, ?, ?, ?, ?)').run(guildId, name, inviteUrl, description, 'website');
+    return res.status(201).json({ partner: getBotDb().prepare('SELECT id, name, invite_url, description, created_at FROM autopartner_partners WHERE id = ?').get(result.lastInsertRowid) });
   } catch (error) {
     return res.status(409).json({ error: String(error.message).includes('UNIQUE') ? 'A partner with that name already exists.' : 'Could not save partner.' });
   }
@@ -410,9 +410,9 @@ app.put('/api/auth/admin/bot-control/partners/:id', (req, res) => {
     return res.status(400).json({ error: 'Only official HTTPS Discord invite links are accepted.' });
   }
   try {
-    const result = botDb.prepare('UPDATE autopartner_partners SET name = ?, invite_url = ?, description = ? WHERE id = ? AND guild_id = ?').run(name, inviteUrl, description, id, guildId);
+    const result = getBotDb().prepare('UPDATE autopartner_partners SET name = ?, invite_url = ?, description = ? WHERE id = ? AND guild_id = ?').run(name, inviteUrl, description, id, guildId);
     if (!result.changes) return res.status(404).json({ error: 'Partner not found.' });
-    return res.json({ partner: botDb.prepare('SELECT id, name, invite_url, description, created_at FROM autopartner_partners WHERE id = ? AND guild_id = ?').get(id, guildId) });
+    return res.json({ partner: getBotDb().prepare('SELECT id, name, invite_url, description, created_at FROM autopartner_partners WHERE id = ? AND guild_id = ?').get(id, guildId) });
   } catch (error) {
     return res.status(409).json({ error: String(error.message).includes('UNIQUE') ? 'A partner with that name already exists.' : 'Could not update partner.' });
   }
@@ -422,7 +422,7 @@ app.delete('/api/auth/admin/bot-control/partners/:id', (req, res) => {
   const guildId = String(req.query.guildId || '').trim();
   const id = Number(req.params.id);
   if (!validGuildId(guildId) || !Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid server or partner ID.' });
-  const result = botDb.prepare('DELETE FROM autopartner_partners WHERE id = ? AND guild_id = ?').run(id, guildId);
+  const result = getBotDb().prepare('DELETE FROM autopartner_partners WHERE id = ? AND guild_id = ?').run(id, guildId);
   return result.changes ? res.json({ deleted: true }) : res.status(404).json({ error: 'Partner not found.' });
 });
 
