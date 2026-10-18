@@ -98,6 +98,8 @@ client.on(Events.InteractionCreate, async interaction => {
       return;
      }
    if (interaction.commandName === 'help') {
+    const customHelp = interaction.inGuild() ? getSetting(interaction.guildId, 'bot_response:help') : null;
+    if (customHelp) { await interaction.reply({ content: customHelp.replaceAll('{siteUrl}', siteUrl), flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } }); return; }
     const embed = new EmbedBuilder()
      .setColor(0x42B883)
      .setTitle('Meta Bot | Command Guide')
