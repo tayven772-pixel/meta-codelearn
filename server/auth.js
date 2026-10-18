@@ -334,7 +334,7 @@ app.put('/api/auth/admin/bot-control/settings', (req, res) => {
   const allowed = new Set([
     'autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_template',
     'server_setup_template','bot_welcome_message','bot_rules_text','bot_status_text',
-    'ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description',
+    'ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id',
     ...botCommandNames.map(name => `bot_command_enabled:${name}`),
     ...['meta','lessons','ping','help'].map(name => `bot_response:${name}`)
   ]);
@@ -350,6 +350,7 @@ app.put('/api/auth/admin/bot-control/settings', (req, res) => {
       if (value.length > (key === 'server_setup_template' ? 30000 : key.endsWith('template') ? 1800 : ['bot_welcome_message','bot_rules_text'].includes(key) ? 4096 : 5000)) {
         throw new Error(`Setting ${key} is too long.`);
       }
+      if (['ticket_category_id','ticket_staff_role_id','ticket_log_channel_id'].includes(key) && value && !/^\d{17,20}$/.test(value)) throw new Error(key + ' must be a valid Discord ID (17–20 digits).');
       if (key === 'ticket_panel_style' && !['dropdown','buttons'].includes(value)) throw new Error('Ticket panel style must be dropdown or buttons.');
       if (key === 'ticket_categories' && value) {
         const categories = JSON.parse(value);
