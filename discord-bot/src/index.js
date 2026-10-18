@@ -69,6 +69,7 @@ client.on(Events.InteractionCreate, async interaction => {
      .addFields(
       { name: 'Learning', value: '`/meta` — website, projects and account links\n`/lessons` — jump into coding lessons', inline: false },
       { name: 'Community', value: '`/poll` — create a reaction poll\n`/suggest` — share an idea\n`/coinflip` — flip a coin\n`/roll` — random number\n`/choose` — choose from a list\n`/8ball` — playful answer\n`/serverinfo` — server details\n`/userinfo` — member details\n`/ping` — check bot status', inline: false },
+      { name: 'Moderation', value: '`/warn` and `/warnings` — record and review warnings\n`/timeout` and `/untimeout` — manage member timeouts\n`/purge` — delete up to 100 recent messages (staff permissions required)', inline: false },
       { name: 'Administrator', value: '`/announce` — post an official announcement (administrators only)', inline: false },
       { name: 'Staff tools', value: '`/ticket`, `/ticket-panel`, `/setup-server`, `/setup-applications` — availability depends on your server permissions and bot setup.', inline: false }
      )
