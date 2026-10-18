@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { ticketCommand } from './lib/ticket-commands.js';
 import { serverSetupCommand } from './lib/server-setup.js';
-import { handleTicketCommand, handleTicketButton } from './lib/tickets.js';
+import { handleTicketCommand, handleTicketButton, handleTicketPanelCommand } from './lib/tickets.js';
 import { handleServerSetup, handleServerSetupButton } from './lib/server-setup.js';
 import { db, getSetting } from './lib/database.js';
 import { moderationCommands, handleModerationCommand } from './lib/moderation.js';
@@ -356,9 +356,15 @@ client.on(Events.InteractionCreate, async interaction => {
       await handleServerSetupButton(interaction);
       return;
     }
-    if (interaction.isButton() && interaction.customId === 'ticket_create') {
-     await handleTicketButton(interaction, db);
-     return;
+    if (
+      (interaction.isButton() || interaction.isStringSelectMenu() || interaction.isModalSubmit()) &&
+      (interaction.customId === 'ticket_create' ||
+       interaction.customId === 'ticket_category_select' ||
+       interaction.customId.startsWith('ticket_category_button_') ||
+       interaction.customId.startsWith('ticket_form_submit_'))
+    ) {
+      await handleTicketButton(interaction, db);
+      return;
     }
   if (interaction.isButton() && interaction.customId === 'staff_apply_start') {
    try { await interaction.user.send('Welcome to Meta CodeLearn staff recruitment! 📋\n\nYou started the staff application process. The private questionnaire and submission workflow are the next setup step. Please keep your DMs open.'); await interaction.reply({ content: 'I sent you a DM. Check your Discord messages.', flags: MessageFlags.Ephemeral }); }
