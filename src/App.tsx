@@ -3767,7 +3767,7 @@ function BotControlPage() {
         throw new Error('Use roles and categories arrays. Each channel must be ["text" or "voice", "channel-name"]. Limits: 40 roles, 30 categories, 50 channels each.');
       }
     } catch (error) { setStatus('Setup template JSON is invalid: ' + (error instanceof Error ? error.message : 'check the JSON')); return; }
-    const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_template','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help']);
+    const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_template','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help','ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description']);
     const payload = Object.fromEntries(Object.entries(settings).filter(([key]) => editableKeys.has(key) || key.startsWith('bot_command_enabled:')));
     payload.server_setup_template = template;
     setBusy(true);
@@ -3879,6 +3879,36 @@ function BotControlPage() {
                 <strong>Rules text override</strong>
                 <textarea value={settings.bot_rules_text || ''} onChange={event => setValue('bot_rules_text', event.target.value)} placeholder="Leave blank to use the default rules" rows={5} style={fieldStyle} />
               </label>
+            </section>
+            <section className="admin-publishing-guide">
+              <h2>Ticket system builder</h2>
+              <p>Choose how members select a ticket category, customize the panel text, and configure the form they must complete before a private ticket channel is created. Save all settings, then run <code>/ticket panel</code> again to post the updated panel.</p>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Category picker style</strong>
+                <select value={settings.ticket_panel_style || 'dropdown'} onChange={event => setValue('ticket_panel_style', event.target.value)} style={fieldStyle}>
+                  <option value="dropdown">Dropdown menu</option>
+                  <option value="buttons">Buttons</option>
+                </select>
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Ticket panel title</strong>
+                <input value={settings.ticket_panel_title || ''} onChange={event => setValue('ticket_panel_title', event.target.value)} maxLength={256} placeholder="Meta Code Support" style={fieldStyle} />
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Ticket panel description</strong>
+                <textarea value={settings.ticket_panel_description || ''} onChange={event => setValue('ticket_panel_description', event.target.value)} maxLength={4000} rows={3} placeholder="Explain how members should open a ticket" style={fieldStyle} />
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Ticket categories (JSON list)</strong>
+                <textarea value={settings.ticket_categories || '["General Support","Bug Report","Website Help","Partnership","Other"]'} onChange={event => setValue('ticket_categories', event.target.value)} rows={5} spellCheck={false} style={{ ...fieldStyle, fontFamily: 'monospace' }} />
+                <small>Use 1–25 category names, for example ["General Support","Bug Report","Partnership"].</small>
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Required form questions (JSON list)</strong>
+                <textarea value={settings.ticket_form_questions || '["Briefly describe what you need help with."]'} onChange={event => setValue('ticket_form_questions', event.target.value)} rows={5} spellCheck={false} style={{ ...fieldStyle, fontFamily: 'monospace' }} />
+                <small>Use 1–5 questions. Each question becomes a required field shown before the bot creates the ticket channel. Each question must be 45 characters or fewer.</small>
+              </label>
+              <p>Important: the ticket category and staff role used for channel permissions still need to be configured with <code>/ticket setup</code>. This editor controls the categories members choose on the panel.</p>
             </section>
             <section className="admin-publishing-guide">
               <h2>Automatic partnerships</h2>
