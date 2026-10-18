@@ -389,6 +389,29 @@ app.post('/api/auth/admin/bot-control/partners', (req, res) => {
     return res.status(409).json({ error: String(error.message).includes('UNIQUE') ? 'A partner with that name already exists.' : 'Could not save partner.' });
   }
 });
+app.put('/api/auth/admin/bot-control/partners/:id', (req, res) => {
+  if (!requireBotOwner(req, res)) return;
+  const guildId = String(req.body?.guildId || '').trim();
+  const id = Number(req.params.id);
+  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  const inviteUrl = typeof req.body?.invite_url === 'string' ? req.body.invite_url.trim() : '';
+  const description = typeof req.body?.description === 'string' ? req.body.description.trim() : '';
+  if (!validGuildId(guildId) || !Number.isSafeInteger(id) || id < 1 || !name || name.length > 80 || description.length > 300) {
+    return res.status(400).json({ error: 'Check the partner ID, server ID, partner name (1–80 chars), and description (up to 300 chars).' });
+  }
+  let url;
+  try { url = new URL(inviteUrl); } catch { return res.status(400).json({ error: 'Enter a valid Discord invite URL.' }); }
+  if (url.protocol !== 'https:' || !['discord.gg','www.discord.gg','discord.com','www.discord.com'].includes(url.hostname) || (url.hostname.includes('discord.com') && !url.pathname.startsWith('/invite/'))) {
+    return res.status(400).json({ error: 'Only official HTTPS Discord invite links are accepted.' });
+  }
+  try {
+    const result = botDb.prepare('UPDATE autopartner_partners SET name = ?, invite_url = ?, description = ? WHERE id = ? AND guild_id = ?').run(name, inviteUrl, description, id, guildId);
+    if (!result.changes) return res.status(404).json({ error: 'Partner not found.' });
+    return res.json({ partner: botDb.prepare('SELECT id, name, invite_url, description, created_at FROM autopartner_partners WHERE id = ? AND guild_id = ?').get(id, guildId) });
+  } catch (error) {
+    return res.status(409).json({ error: String(error.message).includes('UNIQUE') ? 'A partner with that name already exists.' : 'Could not update partner.' });
+  }
+});
 app.delete('/api/auth/admin/bot-control/partners/:id', (req, res) => {
   if (!requireBotOwner(req, res)) return;
   const guildId = String(req.query.guildId || '').trim();
