@@ -59,13 +59,13 @@ export default function CodePlaygroundPage() {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<style>${code.css.replace(/<\\/style/gi, '<\\\\/style')}</style>
+<style>${code.css.replace(/<\/style/gi, '<\\/style')}</style>
 </head>
 <body>
-${code.html.replace(/<\\/script/gi, '<\\\\/script')}
+${code.html.replace(/<\/script/gi, '<\\/script')}
 <script>
 try {
-${code.js.replace(/<\\/script/gi, '<\\\\/script')}
+${code.js.replace(/<\/script/gi, '<\\/script')}
 } catch (error) {
   const notice = document.createElement('pre');
   notice.style.cssText = 'white-space:pre-wrap;margin:16px;padding:12px;border:1px solid #b91c1c;border-radius:8px;background:#fee2e2;color:#7f1d1d;font:13px monospace';
