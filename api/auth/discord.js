@@ -6,6 +6,9 @@ export default function handler(req, res) {
   if (!process.env.DISCORD_CLIENT_ID) return res.status(503).send('Discord sign-in is not configured yet. Add the Discord OAuth environment variables in your deployment settings.');
   const state = crypto.randomBytes(24).toString('hex');
   setCookie(res, STATE_COOKIE, state, 600);
+  const requestedReturn = String(req.query?.returnTo || '');
+  const returnTo = requestedReturn.startsWith('/') && !requestedReturn.startsWith('//') ? requestedReturn : '/account';
+  setCookie(res, 'meta_discord_return', encodeURIComponent(returnTo), 600);
   const redirectUri = process.env.DISCORD_REDIRECT_URI || `${process.env.APP_URL || 'https://' + req.headers.host}/api/auth/callback`;
   const url = new URL('https://discord.com/oauth2/authorize');
   url.searchParams.set('client_id', process.env.DISCORD_CLIENT_ID);
