@@ -7,10 +7,11 @@ import {
   ButtonBuilder,
   ButtonStyle
 } from 'discord.js';
+import { getSetting } from './database.js';
 
 export const serverSetupCommand = new SlashCommandBuilder()
   .setName('setup-server')
-  .setDescription('Create the Meta CodeLearn community layout')
+  .setDescription('Safely add the Meta Code community template without deleting existing channels')
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
 const roleDefinitions = [
@@ -123,63 +124,32 @@ export async function handleServerSetup(interaction, confirmed = false, alreadyD
   }
 
 
-  if (!confirmed) {
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('setup_server_confirm')
-        .setLabel('Confirm full reset')
-        .setStyle(ButtonStyle.Danger),
-      new ButtonBuilder()
-        .setCustomId('setup_server_cancel')
-        .setLabel('Cancel')
-        .setStyle(ButtonStyle.Secondary)
-    );
-    return interaction.editReply({
-      content:
-        `⚠️ **FULL SERVER RESET**\n\nThis will delete all server channels and categories, including message histories. Roles and members remain. This cannot be undone.`,
-      components: [row]
-    });
-  }
-
-  const currentChannels = await guild.channels.fetch();
-  const deletionOrder = [...currentChannels.values()]
-    .filter(Boolean)
-    .sort((a, b) =>
-      Number(a.type === ChannelType.GuildCategory) -
-      Number(b.type === ChannelType.GuildCategory)
-    );
-
-  let deletedCount = 0;
-  const skippedChannels = [];
-
-  for (const channel of deletionOrder) {
-    if (!channel.deletable) {
-      skippedChannels.push(`${channel.name} (not deletable)`);
-      continue;
-    }
-
+  // Setup is deliberately additive: existing channels and message history are never deleted.
+  const errors = [];
+  let activeRoleDefinitions = roleDefinitions;
+  let activeLayout = layout;
+  const savedTemplate = getSetting(guild.id, 'server_setup_template');
+  if (savedTemplate) {
     try {
-      await channel.delete(
-        'Administrator confirmed Meta CodeLearn full server reset'
-      );
-      deletedCount++;
+      const parsed = JSON.parse(savedTemplate);
+      if (!Array.isArray(parsed.roles) || !Array.isArray(parsed.categories) ||
+          parsed.roles.length > 40 || parsed.categories.length > 30 ||
+          parsed.roles.some(role => typeof role.name !== 'string' || !role.name.trim() || role.name.length > 100) ||
+          parsed.categories.some(group => typeof group.name !== 'string' || !group.name.trim() || !Array.isArray(group.channels) || group.channels.length > 50 ||
+            group.channels.some(channel => !Array.isArray(channel) || !['text','voice'].includes(channel[0]) || typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
+        throw new Error('Template must contain roles and categories with valid channel entries.');
+      }
+      activeRoleDefinitions = parsed.roles.map(role => ({ name: role.name.trim(), color: Number.isInteger(role.color) && role.color >= 0 && role.color <= 0xFFFFFF ? role.color : 0xD7DCE4 }));
+      activeLayout = parsed.categories.map(group => ({ name: group.name.trim().slice(0, 100), private: Boolean(group.private), channels: group.channels.map(([kind, name]) => [kind, name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 100) || 'new-channel']) }));
     } catch (error) {
-      skippedChannels.push(`${channel.name} (${error.message})`);
+      errors.push(`Saved setup template was invalid; used the built-in template instead: ${error.message}`);
     }
-  }
-
-  if (skippedChannels.length) {
-    errors.push(
-      `Channels not deleted (${skippedChannels.length}): ` +
-      skippedChannels.join(', ')
-    );
   }
 
   const created = [];
   const reused = [];
-  const errors = [];
 
-  for (const definition of roleDefinitions) {
+  for (const definition of activeRoleDefinitions) {
     try {
       let role = guild.roles.cache.find(
         item => item.name === definition.name
@@ -204,7 +174,7 @@ export async function handleServerSetup(interaction, confirmed = false, alreadyD
     role => role.name === 'Administrator'
   );
 
-  for (const group of layout) {
+  for (const group of activeLayout) {
     try {
       let category = guild.channels.cache.find(
         channel =>
@@ -373,7 +343,7 @@ export async function handleServerSetup(interaction, confirmed = false, alreadyD
   }
 
   const summary = [
-    '✅ **Meta CodeLearn setup finished.**',
+    '✅ **Meta Code setup finished. Existing channels and messages were preserved.**',
     `Created: ${created.length} items`,
     `Already existed: ${reused.length} items`,
     `Issues: ${errors.length}`
@@ -405,18 +375,7 @@ export async function handleServerSetupButton(interaction) {
     });
   }
 
-  if (interaction.customId !== 'setup_server_confirm') return;
-
-  if (
-    !interaction.inGuild() ||
-    !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)
-  ) {
-    return interaction.reply({
-      content: 'Only a server administrator can confirm a full reset.',
-      ephemeral: true
-    });
+  if (interaction.customId === 'setup_server_confirm') {
+    return interaction.update({ content: 'The destructive reset option has been retired. Run `/setup-server` to add missing template channels safely.', components: [], embeds: [] });
   }
-
-  await interaction.deferUpdate();
-  return handleServerSetup(interaction, true, true);
 }
