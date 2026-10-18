@@ -78,27 +78,7 @@ export async function handleTicketCommand(interaction, db) {
   }
 
   if (sub === 'panel') {
-    if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-      return replyPrivate(interaction, 'Only administrators can post the ticket panel.');
-    }
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('ticket_create')
-        .setLabel('Open a Support Ticket')
-        .setEmoji('🎫')
-        .setStyle(ButtonStyle.Primary)
-    );
-
-    const embed = new EmbedBuilder()
-      .setColor(0x5865F2)
-      .setTitle('Meta CodeLearn Support')
-      .setDescription(
-        'Need help with Meta CodeLearn? Click the button below to open a private support ticket. Please do not share passwords or verification codes.'
-      );
-
-    await interaction.channel.send({ embeds: [embed], components: [row] });
-    return replyPrivate(interaction, 'Support ticket panel posted.');
+    return handleTicketPanelCommand(interaction);
   }
 
   const ticket = await findTicket(db, interaction.channelId, guildId);
