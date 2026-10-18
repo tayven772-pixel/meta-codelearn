@@ -1,6 +1,9 @@
 name: Deploy Meta CodeLearn to VPS
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       confirm_deploy:
@@ -20,7 +23,7 @@ concurrency:
 
 jobs:
   build:
-    if: inputs.confirm_deploy == 'deploy'
+    if: github.event_name == 'push' || inputs.confirm_deploy == 'deploy'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
