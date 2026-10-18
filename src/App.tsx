@@ -3695,8 +3695,32 @@ function AdminPublishingPage() {
 function BotControlPage() {
   const [status, setStatus] = useState('Verifying owner access…');
   const [allowed, setAllowed] = useState(false);
-  const [commands, setCommands] = useState<string[]>([]);
   const [owner, setOwner] = useState('');
+  const [guildId, setGuildId] = useState('');
+  const [commands, setCommands] = useState<string[]>([]);
+  const [settings, setSettings] = useState<Record<string, string>>({});
+  const [partners, setPartners] = useState<Array<{id:number;name:string;invite_url:string;description:string;created_at:string}>>([]);
+  const [templateText, setTemplateText] = useState('');
+  const [partnerName, setPartnerName] = useState('');
+  const [partnerInvite, setPartnerInvite] = useState('');
+  const [partnerDescription, setPartnerDescription] = useState('');
+  const [busy, setBusy] = useState(false);
+  const defaultTemplate = JSON.stringify({
+    roles: [
+      { name: 'Founder', color: 16042333 }, { name: 'Administrator', color: 9289215 },
+      { name: 'Moderator', color: 7391137 }, { name: 'Support Team', color: 9091048 },
+      { name: 'Mentor', color: 12100084 }, { name: 'Developer', color: 11786657 },
+      { name: 'Community Member', color: 14148836 }
+    ],
+    categories: [
+      { name: '📍 GET STARTED', channels: [['text','welcome'],['text','rules'],['text','announcements'],['text','official-links'],['text','choose-roles']] },
+      { name: '💬 COMMUNITY', channels: [['text','general-chat'],['text','introductions'],['text','questions'],['text','ideas-and-feedback'],['text','project-showcase']] },
+      { name: '💻 LEARN AND BUILD', channels: [['text','learning-resources'],['text','web-development'],['text','discord-bots'],['text','coding-challenges'],['text','github-and-projects']] },
+      { name: '🛟 META SUPPORT', channels: [['text','open-a-ticket'],['text','bug-reports'],['text','suggestions']] },
+      { name: '🔊 VOICE LOUNGE', channels: [['voice','Community Lounge'],['voice','Coding Together'],['voice','AFK']] },
+      { name: '🔐 STAFF HQ', private: true, channels: [['text','staff-chat'],['text','staff-applications'],['text','ticket-logs'],['text','moderation-logs']] }
+    ]
+  }, null, 2);
   useEffect(() => {
     let active = true;
     fetch('/api/auth/admin/bot-control', { credentials: 'same-origin', cache: 'no-store' })
@@ -3707,36 +3731,163 @@ function BotControlPage() {
         setOwner(String(data.owner || 'Owner'));
         setCommands(Array.isArray(data.commands) ? data.commands : []);
         setAllowed(true);
-        setStatus('Owner access verified.');
+        setStatus('Owner access verified. Enter your Discord server ID to load settings.');
       })
       .catch(error => { if (active) setStatus(error instanceof Error ? error.message : 'Access denied.'); });
     return () => { active = false; };
   }, []);
+  const loadSettings = async () => {
+    const id = guildId.trim();
+    if (!/^\d{17,20}$/.test(id)) { setStatus('Enter your Discord server ID (17–20 digits).'); return; }
+    setBusy(true);
+    try {
+      const response = await fetch('/api/auth/admin/bot-control/settings?guildId=' + encodeURIComponent(id), { credentials: 'same-origin', cache: 'no-store' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Could not load settings.');
+      setSettings(data.settings || {});
+      setPartners(Array.isArray(data.partners) ? data.partners : []);
+      setTemplateText(data.settings?.server_setup_template || defaultTemplate);
+      setStatus('Loaded settings for server ' + id + '.');
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not load settings.'); }
+    finally { setBusy(false); }
+  };
+  const setValue = (key: string, value: string) => setSettings(current => ({ ...current, [key]: value }));
+  const saveSettings = async () => {
+    if (!/^\d{17,20}$/.test(guildId.trim())) { setStatus('Load a valid server ID first.'); return; }
+    let template = templateText;
+    try {
+      const parsed = JSON.parse(template);
+      if (!Array.isArray(parsed.roles) || !Array.isArray(parsed.categories)) throw new Error('Template needs roles and categories arrays.');
+    } catch (error) { setStatus('Setup template JSON is invalid: ' + (error instanceof Error ? error.message : 'check the JSON')); return; }
+    const payload = { ...settings, server_setup_template: template };
+    setBusy(true);
+    try {
+      const response = await fetch('/api/auth/admin/bot-control/settings', {
+        method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guildId: guildId.trim(), settings: payload })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Could not save settings.');
+      setSettings(data.settings || payload);
+      setStatus('Saved ' + String(data.saved || 0) + ' bot settings. Command toggles apply immediately; Discord may keep disabled commands visible until the next bot restart.');
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not save settings.'); }
+    finally { setBusy(false); }
+  };
+  const addPartner = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      const response = await fetch('/api/auth/admin/bot-control/partners', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guildId: guildId.trim(), name: partnerName, invite_url: partnerInvite, description: partnerDescription })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Could not add partner.');
+      setPartnerName(''); setPartnerInvite(''); setPartnerDescription('');
+      await loadSettings();
+      setStatus('Partner added to the approved rotation.');
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not add partner.'); }
+    finally { setBusy(false); }
+  };
+  const removePartner = async (id: number) => {
+    if (!window.confirm('Remove this approved partner?')) return;
+    setBusy(true);
+    try {
+      const response = await fetch('/api/auth/admin/bot-control/partners/' + id + '?guildId=' + encodeURIComponent(guildId.trim()), { method: 'DELETE', credentials: 'same-origin' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Could not remove partner.');
+      await loadSettings();
+      setStatus('Partner removed.');
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not remove partner.'); }
+    finally { setBusy(false); }
+  };
+  const toggleCommand = (name: string, enabled: boolean) => setValue('bot_command_enabled:' + name, enabled ? 'true' : 'false');
+  const isEnabled = (name: string) => settings['bot_command_enabled:' + name] !== 'false';
+  const fieldStyle: CSSProperties = { width: '100%', marginTop: 8, padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border, #d1d5db)', background: 'var(--surface, #fff)', color: 'var(--text, #111827)' };
   return (
     <AppShell>
       <main className="admin-publishing-page">
         <div className="admin-publishing-heading">
           <p className="section-kicker">Private · owner access only</p>
           <h1>Meta Code bot control</h1>
-          <p>A private command dashboard and maintenance reference for your Discord bot. This page is protected by the auth server, not by the URL being hard to guess.</p>
+          <p>Manage command access, partnership rotation, server setup templates, and editable bot messages from the website. Bot tokens and secrets are never displayed.</p>
         </div>
         <p className="admin-publishing-status" role="status">{status}</p>
         {allowed && <>
           <section className="admin-publishing-guide">
             <h2>Owner session</h2>
             <p>Authorized account: <strong>{owner}</strong></p>
-            <p>Dashboard URL: <code>https://metasupportcom.dbm.shared-servers.com/bot-control</code></p>
-            <p>To install bot changes, update the repository on the VPS, run <code>npm ci</code> in <code>discord-bot</code>, then restart the confirmed Discord bot systemd service. The website deploy does not restart the bot process.</p>
-            <p><strong>Safety:</strong> bot token and server secrets are intentionally never shown on this page.</p>
+            <p>Discord server ID</p>
+            <input value={guildId} onChange={event => setGuildId(event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Example: 123456789012345678" style={fieldStyle} inputMode="numeric" />
+            <div className="admin-publishing-actions">
+              <button type="button" className="button-primary" onClick={loadSettings} disabled={busy}>Load server settings</button>
+              <button type="button" className="button-secondary" onClick={saveSettings} disabled={busy || !guildId}>Save all settings</button>
+            </div>
+            <p>Find the server ID in Discord with Developer Mode enabled → right-click the server icon → Copy Server ID.</p>
           </section>
+          {guildId.length >= 17 && <>
+            <section className="admin-publishing-guide">
+              <h2>Command controls</h2>
+              <p>Turn commands off here without editing code. Staff-only permissions are still enforced by Discord and the bot.</p>
+              <div className="admin-content-list">
+                {commands.map(command => <label className="admin-content-list-item" key={command} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                  <strong>/{command}</strong>
+                  <input type="checkbox" checked={isEnabled(command)} onChange={event => toggleCommand(command, event.target.checked)} aria-label={'Enable /' + command} />
+                </label>)}
+              </div>
+            </section>
+            <section className="admin-publishing-guide">
+              <h2>Editable bot responses</h2>
+              <p>Use <code>{'{siteUrl}'}</code> as a placeholder in messages. Leave a field empty to use the built-in default.</p>
+              {(['meta','lessons','ping','help'] as const).map(name => <label key={name} style={{ display: 'block', marginTop: 14 }}>
+                <strong>/{name} response override</strong>
+                <textarea value={settings['bot_response:' + name] || ''} onChange={event => setValue('bot_response:' + name, event.target.value)} placeholder="Built-in default" rows={3} style={fieldStyle} />
+              </label>)}
+              <label style={{ display: 'block', marginTop: 14 }}>
+                <strong>Welcome message override</strong>
+                <textarea value={settings.bot_welcome_message || ''} onChange={event => setValue('bot_welcome_message', event.target.value)} placeholder="Leave blank to use the default welcome embed" rows={3} style={fieldStyle} />
+              </label>
+              <label style={{ display: 'block', marginTop: 14 }}>
+                <strong>Rules text override</strong>
+                <textarea value={settings.bot_rules_text || ''} onChange={event => setValue('bot_rules_text', event.target.value)} placeholder="Leave blank to use the default rules" rows={5} style={fieldStyle} />
+              </label>
+            </section>
+            <section className="admin-publishing-guide">
+              <h2>Automatic partnerships</h2>
+              <label style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}>
+                <input type="checkbox" checked={settings.autopartner_enabled === 'true'} onChange={event => setValue('autopartner_enabled', event.target.checked ? 'true' : 'false')} />
+                Enable automatic approved-partner posts
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>Announcement channel ID<input value={settings.autopartner_channel_id || ''} onChange={event => setValue('autopartner_channel_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Discord channel ID" style={fieldStyle} /></label>
+              <label style={{ display: 'block', marginTop: 12 }}>Interval (6–168 hours)<input type="number" min={6} max={168} value={settings.autopartner_interval_hours || '24'} onChange={event => setValue('autopartner_interval_hours', event.target.value)} style={fieldStyle} /></label>
+              <label style={{ display: 'block', marginTop: 12 }}>Partner message template<textarea value={settings.autopartner_template || ''} onChange={event => setValue('autopartner_template', event.target.value)} placeholder="Use {name}, {invite}, and {description}" rows={4} style={fieldStyle} /></label>
+              <p>Automatic posting stays disabled until you enable it, choose a channel, and add at least one partner.</p>
+              <h3>Approved partners</h3>
+              <div className="admin-content-list">
+                {partners.map(partner => <div className="admin-content-list-item" key={partner.id}>
+                  <strong>{partner.name}</strong><p>{partner.description || 'No description'}</p><p><a href={partner.invite_url} target="_blank" rel="noreferrer">{partner.invite_url}</a></p>
+                  <button type="button" className="button-secondary" onClick={() => removePartner(partner.id)} disabled={busy}>Remove partner</button>
+                </div>)}
+                {!partners.length && <p>No approved partners yet.</p>}
+              </div>
+              <form onSubmit={addPartner} style={{ marginTop: 18 }}>
+                <label style={{ display: 'block' }}>Partner name<input required maxLength={80} value={partnerName} onChange={event => setPartnerName(event.target.value)} style={fieldStyle} /></label>
+                <label style={{ display: 'block', marginTop: 10 }}>Discord invite URL<input required type="url" value={partnerInvite} onChange={event => setPartnerInvite(event.target.value)} placeholder="https://discord.gg/..." style={fieldStyle} /></label>
+                <label style={{ display: 'block', marginTop: 10 }}>Description<input maxLength={300} value={partnerDescription} onChange={event => setPartnerDescription(event.target.value)} style={fieldStyle} /></label>
+                <button type="submit" className="button-primary" disabled={busy} style={{ marginTop: 12 }}>Add approved partner</button>
+              </form>
+            </section>
+            <section className="admin-publishing-guide">
+              <h2>Server setup template editor</h2>
+              <p>Edit the JSON that <code>/setup-server</code> uses. This setup now only creates missing roles, categories, and channels; it does not delete existing channels or message history.</p>
+              <textarea value={templateText} onChange={event => setTemplateText(event.target.value)} rows={20} spellCheck={false} style={{ ...fieldStyle, fontFamily: 'monospace' }} />
+              <button type="button" className="button-secondary" onClick={() => setTemplateText(defaultTemplate)} style={{ marginTop: 10 }}>Reset editor to built-in template</button>
+            </section>
+          </>}
           <section className="admin-publishing-guide">
-            <h2>Registered slash commands</h2>
-            <div className="admin-content-list">{commands.map(command => <div className="admin-content-list-item" key={command}><strong>{command}</strong></div>)}</div>
-          </section>
-          <section className="admin-publishing-guide">
-            <h2>Quick links</h2>
-            <p><a className="policy-link" href="https://discord.gg/t5jXgJwws" target="_blank" rel="noreferrer">Open Meta Code Discord</a></p>
-            <p><a className="policy-link" href="https://metasupportcom.dbm.shared-servers.com/" target="_blank" rel="noreferrer">Open Meta Code website</a></p>
+            <h2>More commands added</h2>
+            <p><code>/thread</code> starts a public discussion, <code>/topic</code> updates a channel topic with staff permission, <code>/randomcolor</code> creates a hex color, and <code>/remindme</code> DMs a reminder (reminders are temporary and are lost if the bot restarts).</p>
+            <p>Changes save to the bot's local database shared with the running bot. Some slash-command visibility changes may require a bot restart to refresh Discord's command list.</p>
           </section>
         </>}
       </main>
