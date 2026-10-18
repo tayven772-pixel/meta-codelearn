@@ -83,6 +83,10 @@ client.once(Events.ClientReady, async readyClient => {
 client.on(Events.InteractionCreate, async interaction => {
  try {
   if (interaction.isChatInputCommand()) {
+   if (interaction.inGuild() && getSetting(interaction.guildId, 'bot_command_enabled:' + interaction.commandName) === 'false') {
+    await interaction.reply({ content: 'This command is currently disabled by the server owner in the Meta Code bot dashboard.', flags: MessageFlags.Ephemeral });
+    return;
+   }
    if (await handleAutoPartnerCommand(interaction)) return;
    if (await handleModerationCommand(interaction)) return;
    if (interaction.commandName === 'setup-server') {
@@ -288,6 +292,35 @@ client.on(Events.InteractionCreate, async interaction => {
     const embed = new EmbedBuilder().setColor(0x42B883).setTitle('📣 Meta Code Announcement').setDescription(message).setFooter({ text: `Posted by ${interaction.user.username}` }).setTimestamp();
     await interaction.channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
     await interaction.reply({ content: 'Announcement posted.', flags: MessageFlags.Ephemeral });
+   }
+   else if (interaction.commandName === 'thread') {
+    if (!interaction.inGuild() || !interaction.channel?.isTextBased() || !interaction.channel.threads || typeof interaction.channel.send !== 'function') { await interaction.reply({ content: 'Use this command in a standard server text channel.', flags: MessageFlags.Ephemeral }); return; }
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.CreatePublicThreads) && !interaction.memberPermissions?.has(PermissionFlagsBits.ManageThreads)) { await interaction.reply({ content: 'You need Create Public Threads or Manage Threads permission.', flags: MessageFlags.Ephemeral }); return; }
+    const name = interaction.options.getString('name', true).trim();
+    const opening = interaction.options.getString('message')?.trim() || ('Discussion started by ' + interaction.user.username + '.');
+    const starter = await interaction.channel.send({ content: '🧵 **' + name + '**\n' + opening, allowedMentions: { parse: [] } });
+    const thread = await starter.startThread({ name, autoArchiveDuration: 1440, reason: 'Thread requested by ' + interaction.user.tag });
+    await interaction.reply({ content: 'Created discussion: <#' + thread.id + '>', flags: MessageFlags.Ephemeral });
+   }
+   else if (interaction.commandName === 'topic') {
+    if (!interaction.inGuild() || !interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) { await interaction.reply({ content: 'You need Manage Channels permission to edit a channel topic.', flags: MessageFlags.Ephemeral }); return; }
+    if (!interaction.channel || typeof interaction.channel.setTopic !== 'function') { await interaction.reply({ content: 'This command only works in a text channel.', flags: MessageFlags.Ephemeral }); return; }
+    const topic = interaction.options.getString('text')?.trim() || null;
+    await interaction.channel.setTopic(topic, 'Channel topic updated by ' + interaction.user.tag);
+    await interaction.reply({ content: topic ? 'Channel topic updated.' : 'Channel topic cleared.', flags: MessageFlags.Ephemeral });
+   }
+   else if (interaction.commandName === 'randomcolor') {
+    const hex = '#' + Math.floor(Math.random() * 0x1000000).toString(16).padStart(6, '0').toUpperCase();
+    const color = Number.parseInt(hex.slice(1), 16);
+    const description = '**' + hex + '**\nRGB: ' + ((color >> 16) & 255) + ', ' + ((color >> 8) & 255) + ', ' + (color & 255);
+    await interaction.reply({ embeds: [new EmbedBuilder().setColor(color).setTitle('🎨 Random color').setDescription(description).setFooter({ text: 'Use this hex code in your project or server design.' })], flags: MessageFlags.Ephemeral });
+   }
+   else if (interaction.commandName === 'remindme') {
+    const minutes = interaction.options.getInteger('minutes', true);
+    const reminder = interaction.options.getString('reminder', true).trim();
+    await interaction.reply({ content: '⏰ I’ll DM you in ' + minutes + ' minute' + (minutes === 1 ? '' : 's') + ': **' + reminder + '**\nKeep DMs open. Reminders are lost if the bot restarts before they fire.', flags: MessageFlags.Ephemeral });
+    const timer = setTimeout(() => interaction.user.send('⏰ Reminder from Meta Code: ' + reminder).catch(() => {}), minutes * 60000);
+    timer.unref?.();
    }
    else if (interaction.commandName === 'ping') await interaction.reply({ content: 'Meta bot is online ✅', flags: MessageFlags.Ephemeral });
    else if (interaction.commandName === 'lessons') await interaction.reply({ content: `Start learning: ${siteUrl}/play`, flags: MessageFlags.Ephemeral });
