@@ -28,7 +28,14 @@ export default async function handler(req, res) {
     if (!profileResponse.ok) return res.status(401).send('Could not retrieve your Discord profile.');
     const user = await profileResponse.json();
     setCookie(res, 'meta_discord_session', createSession(user), 7 * 24 * 60 * 60);
-    return res.redirect(302, '/account?discord=connected');
+    const returnCookie = cookieValue(req, 'meta_discord_return');
+    clearCookie(res, 'meta_discord_return');
+    let returnTo = '/account?discord=connected';
+    try {
+      const requested = decodeURIComponent(returnCookie || '');
+      if (requested.startsWith('/') && !requested.startsWith('//')) returnTo = requested;
+    } catch {}
+    return res.redirect(302, returnTo);
   } catch (error) {
     console.error('Discord OAuth callback failed:', error);
     return res.status(502).send('Discord sign-in is temporarily unavailable.');
