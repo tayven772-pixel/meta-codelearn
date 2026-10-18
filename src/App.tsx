@@ -2798,7 +2798,18 @@ function LoginPage() {
       <section className="login-layout">
         <div className="login-intro">
           <p className="section-kicker">YOUR NEXT CHAPTER STARTS HERE</p>
-          <h1>Build something real.</h1>
+          <h1>
+            Build{' '}
+            <span className="hero-typewriter-visual login-typewriter-visual">
+              <span className="hero-typewriter-sr-only">games, websites, and apps.</span>
+              <span className="hero-typewriter-rotator" aria-hidden="true">
+                <span className="hero-typewriter-word typewriter-games">games</span>
+                <span className="hero-typewriter-word typewriter-websites">websites</span>
+                <span className="hero-typewriter-word typewriter-apps">apps</span>
+              </span>
+            </span>
+            <span aria-hidden="true">.</span>
+          </h1>
           <p>Sign in to pick up where you left off, keep your projects close, and continue learning with Meta.</p>
           <div className="login-intro-note"><Code2 aria-hidden="true" /><span>Project-based learning, built around you.</span></div>
         </div>
