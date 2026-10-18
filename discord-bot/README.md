@@ -1,6 +1,18 @@
 # Meta CodeLearn Discord bot
 
-This companion bot provides the slash commands `/meta`, `/lessons`, and `/ping`.
+This companion bot provides learning links, staff utilities, and community tools for Meta Code.
+
+## Community commands
+
+- `/help` — quick command guide
+- `/serverinfo` — server owner, member/channel counts, creation date and boosts
+- `/userinfo` — account age, server join date, roles and user ID
+- `/poll` — create a reaction poll with 2–5 options
+- `/suggest` — post an idea with 👍/👎 feedback
+- `/meta`, `/lessons`, `/ping` — learning links and bot status
+- `/ticket` and server/staff setup commands — additional tools, depending on configuration and permissions
+
+Polls and suggestions are posted in the channel where the command is used. Staff setup commands should only be used by trusted moderators or administrators.
 
 ## Create the Discord app
 
