@@ -28,6 +28,16 @@ const commands = [
   .addStringOption(option => option.setName('option5').setDescription('Fifth option (optional)').setMaxLength(80).setRequired(false)),
  new SlashCommandBuilder().setName('suggest').setDescription('Post a suggestion for the community')
   .addStringOption(option => option.setName('idea').setDescription('Your suggestion for the server or Meta').setMaxLength(1000).setRequired(true)),
+ new SlashCommandBuilder().setName('coinflip').setDescription('Flip a coin'),
+ new SlashCommandBuilder().setName('roll').setDescription('Roll a number between two limits')
+  .addIntegerOption(option => option.setName('min').setDescription('Lowest possible number').setMinValue(-1000000).setMaxValue(1000000).setRequired(false))
+  .addIntegerOption(option => option.setName('max').setDescription('Highest possible number').setMinValue(-1000000).setMaxValue(1000000).setRequired(false)),
+ new SlashCommandBuilder().setName('choose').setDescription('Choose one item from a comma-separated list')
+  .addStringOption(option => option.setName('options').setDescription('Items separated by commas').setMaxLength(1000).setRequired(true)),
+ new SlashCommandBuilder().setName('8ball').setDescription('Ask the magic 8-ball a question')
+  .addStringOption(option => option.setName('question').setDescription('Your question').setMaxLength(250).setRequired(true)),
+ new SlashCommandBuilder().setName('announce').setDescription('Post an official server announcement').setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+  .addStringOption(option => option.setName('message').setDescription('Announcement text').setMaxLength(1800).setRequired(true))
  new SlashCommandBuilder().setName('setup-applications').setDescription('Post the staff application panel in this channel').setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
  ticketCommand,
  serverSetupCommand,
@@ -55,7 +65,8 @@ client.on(Events.InteractionCreate, async interaction => {
      .setDescription('Helpful tools for the Meta Code community.')
      .addFields(
       { name: 'Learning', value: '`/meta` — website, projects and account links\n`/lessons` — jump into coding lessons', inline: false },
-      { name: 'Community', value: '`/poll` — create a reaction poll\n`/suggest` — share an idea\n`/serverinfo` — server details\n`/userinfo` — member details\n`/ping` — check bot status', inline: false },
+      { name: 'Community', value: '`/poll` — create a reaction poll\n`/suggest` — share an idea\n`/coinflip` — flip a coin\n`/roll` — random number\n`/choose` — choose from a list\n`/8ball` — playful answer\n`/serverinfo` — server details\n`/userinfo` — member details\n`/ping` — check bot status', inline: false },
+      { name: 'Administrator', value: '`/announce` — post an official announcement (administrators only)', inline: false },
       { name: 'Staff tools', value: '`/ticket`, `/ticket-panel`, `/setup-server`, `/setup-applications` — availability depends on your server permissions and bot setup.', inline: false }
      )
      .setFooter({ text: 'Meta Code • Learn the idea, then the code' });
@@ -139,6 +150,31 @@ client.on(Events.InteractionCreate, async interaction => {
     await message.react('👍');
     await message.react('👎');
     await interaction.reply({ content: 'Suggestion posted — thanks for helping improve the community!', flags: MessageFlags.Ephemeral });
+   }
+   else if (interaction.commandName === 'coinflip') {
+    await interaction.reply({ content: `🪙 **${Math.random() < 0.5 ? 'Heads' : 'Tails'}!**`, flags: MessageFlags.Ephemeral });
+   }
+   else if (interaction.commandName === 'roll') {
+    const min = interaction.options.getInteger('min') ?? 1;
+    const max = interaction.options.getInteger('max') ?? 100;
+    if (min > max) { await interaction.reply({ content: 'The minimum must be less than or equal to the maximum.', flags: MessageFlags.Ephemeral }); return; }
+    await interaction.reply({ content: `🎲 You rolled **${Math.floor(Math.random() * (max - min + 1)) + min}** (${min}–${max}).`, flags: MessageFlags.Ephemeral });
+   }
+   else if (interaction.commandName === 'choose') {
+    const options = interaction.options.getString('options', true).split(',').map(value => value.trim()).filter(Boolean);
+    if (options.length < 2) { await interaction.reply({ content: 'Give me at least two choices separated by commas.', flags: MessageFlags.Ephemeral }); return; }
+    await interaction.reply({ content: `🎯 I choose: **${options[Math.floor(Math.random() * options.length)].slice(0, 180)}**`, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
+   }
+   else if (interaction.commandName === '8ball') {
+    const answers = ['It looks likely.', 'Signs point to yes.', 'Ask again later.', 'I cannot predict that one.', 'Probably not.', 'The outlook is uncertain.', 'Absolutely!', 'Not looking likely.'];
+    await interaction.reply({ content: `🎱 **${answers[Math.floor(Math.random() * answers.length)]}**`, flags: MessageFlags.Ephemeral });
+   }
+   else if (interaction.commandName === 'announce') {
+    if (!interaction.inGuild() || !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) { await interaction.reply({ content: 'Only server administrators can post official announcements.', flags: MessageFlags.Ephemeral }); return; }
+    const message = interaction.options.getString('message', true);
+    const embed = new EmbedBuilder().setColor(0x42B883).setTitle('📣 Meta Code Announcement').setDescription(message).setFooter({ text: `Posted by ${interaction.user.username}` }).setTimestamp();
+    await interaction.channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
+    await interaction.reply({ content: 'Announcement posted.', flags: MessageFlags.Ephemeral });
    }
    else if (interaction.commandName === 'ping') await interaction.reply({ content: 'Meta bot is online ✅', flags: MessageFlags.Ephemeral });
    else if (interaction.commandName === 'lessons') await interaction.reply({ content: `Start learning: ${siteUrl}/play`, flags: MessageFlags.Ephemeral });
