@@ -262,7 +262,7 @@ app.get('/api/auth/admin/bot-control', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const user = sessionUser(req);
   if (!user) return res.status(401).json({ error: 'Sign in with the owner Meta account to continue.' });
-  const ownerEmail = normalizeEmail(process.env.META_BOT_OWNER_EMAIL || '');
+  const ownerEmail = 'metasupport43@gmail.com';
   if (!ownerEmail || normalizeEmail(user.email) !== ownerEmail) {
     return res.status(403).json({ error: 'This account is not authorized to access the private bot dashboard.' });
   }
