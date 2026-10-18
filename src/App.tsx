@@ -3692,6 +3692,58 @@ function AdminPublishingPage() {
   );
 }
 
+function BotControlPage() {
+  const [status, setStatus] = useState('Verifying owner access…');
+  const [allowed, setAllowed] = useState(false);
+  const [commands, setCommands] = useState<string[]>([]);
+  const [owner, setOwner] = useState('');
+  useEffect(() => {
+    let active = true;
+    fetch('/api/auth/admin/bot-control', { credentials: 'same-origin', cache: 'no-store' })
+      .then(async response => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Access denied.');
+        if (!active) return;
+        setOwner(String(data.owner || 'Owner'));
+        setCommands(Array.isArray(data.commands) ? data.commands : []);
+        setAllowed(true);
+        setStatus('Owner access verified.');
+      })
+      .catch(error => { if (active) setStatus(error instanceof Error ? error.message : 'Access denied.'); });
+    return () => { active = false; };
+  }, []);
+  return (
+    <AppShell>
+      <main className="admin-publishing-page">
+        <div className="admin-publishing-heading">
+          <p className="section-kicker">Private · owner access only</p>
+          <h1>Meta Code bot control</h1>
+          <p>A private command dashboard and maintenance reference for your Discord bot. This page is protected by the auth server, not by the URL being hard to guess.</p>
+        </div>
+        <p className="admin-publishing-status" role="status">{status}</p>
+        {allowed && <>
+          <section className="admin-publishing-guide">
+            <h2>Owner session</h2>
+            <p>Authorized account: <strong>{owner}</strong></p>
+            <p>Dashboard URL: <code>https://metasupportcom.dbm.shared-servers.com/bot-control</code></p>
+            <p>To install bot changes, update the repository on the VPS, run <code>npm ci</code> in <code>discord-bot</code>, then restart the confirmed Discord bot systemd service. The website deploy does not restart the bot process.</p>
+            <p><strong>Safety:</strong> bot token and server secrets are intentionally never shown on this page.</p>
+          </section>
+          <section className="admin-publishing-guide">
+            <h2>Registered slash commands</h2>
+            <div className="admin-content-list">{commands.map(command => <div className="admin-content-list-item" key={command}><strong>{command}</strong></div>)}</div>
+          </section>
+          <section className="admin-publishing-guide">
+            <h2>Quick links</h2>
+            <p><a className="policy-link" href="https://discord.gg/t5jXgJwws" target="_blank" rel="noreferrer">Open Meta Code Discord</a></p>
+            <p><a className="policy-link" href="https://metasupportcom.dbm.shared-servers.com/" target="_blank" rel="noreferrer">Open Meta Code website</a></p>
+          </section>
+        </>}
+      </main>
+    </AppShell>
+  );
+}
+
 function NotFound() {
   return (
     <AppShell>
@@ -3760,6 +3812,7 @@ function MainRoutes() {
     <Switch>
       <Route path="/" component={HomePage} />
       <Route path="/admin" component={AdminPublishingPage} />
+      <Route path="/bot-control" component={BotControlPage} />
       <Route path="/user-portal" component={() => <ProtectedRoute><UserPortal /></ProtectedRoute>} />
       <Route path="/learn/:lessonId" component={() => <ProtectedRoute><LessonPage /></ProtectedRoute>} />
       <Route path="/play" component={() => <ProtectedRoute><PlayPage /></ProtectedRoute>} />
