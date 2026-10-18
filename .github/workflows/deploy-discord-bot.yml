@@ -1,0 +1,141 @@
+name: Deploy Meta Discord Bot to VPS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'discord-bot/**'
+      - '.github/workflows/deploy-discord-bot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-discord-bot-deploy
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: discord-bot
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: discord-bot/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Check bot JavaScript syntax
+        run: |
+          set -eu
+          find src scripts -type f -name '*.js' -print0 | while IFS= read -r -d '' file; do
+            node --check "$file"
+          done
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          VPS_SSH_KEY_B64: ${{ secrets.VPS_SSH_KEY_B64 }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -eu
+          test -n "$VPS_SSH_KEY_B64" || { echo "Missing repository secret VPS_SSH_KEY_B64"; exit 1; }
+          test -n "$VPS_KNOWN_HOSTS" || { echo "Missing repository secret VPS_KNOWN_HOSTS"; exit 1; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s' "$VPS_SSH_KEY_B64" | base64 --decode > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Package bot code without runtime data or secrets
+        run: |
+          set -eu
+          tar --exclude='discord-bot/.env' \
+              --exclude='discord-bot/.env.*' \
+              --exclude='discord-bot/node_modules' \
+              --exclude='discord-bot/data' \
+              --exclude='discord-bot/*.sqlite' \
+              --exclude='discord-bot/*.sqlite-*' \
+              -czf "$RUNNER_TEMP/meta-discord-bot.tar.gz" discord-bot
+
+      - name: Upload bot package to VPS staging
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          DEPLOY_SHA: ${{ github.sha }}
+        run: |
+          set -eu
+          test -n "$VPS_HOST" || { echo "Missing repository secret VPS_HOST"; exit 1; }
+          test -n "$VPS_USER" || { echo "Missing repository secret VPS_USER"; exit 1; }
+          : "${VPS_SSH_PORT:=10058}"
+          scp -P "$VPS_SSH_PORT" -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$RUNNER_TEMP/meta-discord-bot.tar.gz" \
+            "$VPS_USER@$VPS_HOST:/tmp/meta-discord-bot-$DEPLOY_SHA.tar.gz"
+
+      - name: Install bot update and restart service
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          DEPLOY_SHA: ${{ github.sha }}
+        run: |
+          set -eu
+          : "${VPS_SSH_PORT:=10058}"
+          ssh -p "$VPS_SSH_PORT" -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" "bash -s -- '$DEPLOY_SHA'" <<'REMOTE'
+          set -eu
+          DEPLOY_SHA="$1"
+          PACKAGE="/tmp/meta-discord-bot-$DEPLOY_SHA.tar.gz"
+          TARGET="/opt/meta-codelearn"
+          SERVICE="meta-codelearn-discord.service"
+          test -s "$PACKAGE"
+          sudo -n test -d "$TARGET/discord-bot"
+          BACKUP="/tmp/meta-discord-bot-backup-$DEPLOY_SHA.tar.gz"
+          sudo -n tar --exclude='discord-bot/.env' \
+            --exclude='discord-bot/.env.*' \
+            --exclude='discord-bot/node_modules' \
+            --exclude='discord-bot/data' \
+            --exclude='discord-bot/*.sqlite' \
+            --exclude='discord-bot/*.sqlite-*' \
+            -czf "$BACKUP" -C "$TARGET" discord-bot
+          sudo -n tar --no-same-owner -xzf "$PACKAGE" -C "$TARGET"
+          rm -f "$PACKAGE"
+          if ! sudo -n bash -lc 'cd /opt/meta-codelearn/discord-bot && npm ci --omit=dev'; then
+            echo "Dependency installation failed. Bot service was not restarted."
+            exit 1
+          fi
+          if ! sudo -n systemctl restart "$SERVICE"; then
+            echo "Bot service restart failed; collecting logs."
+            sudo -n journalctl -u "$SERVICE" -n 40 --no-pager || true
+            echo "Code backup is available at $BACKUP"
+            exit 1
+          fi
+          if ! sudo -n systemctl is-active --quiet "$SERVICE"; then
+            sudo -n journalctl -u "$SERVICE" -n 40 --no-pager || true
+            echo "Bot service is not active after restart. Code backup: $BACKUP"
+            exit 1
+          fi
+          echo "Discord bot deployed and service is active. Code backup: $BACKUP"
+          REMOTE
