@@ -50,7 +50,9 @@ import {
 import { languageFor, languages, lessonFor, lessons, type LearnerSkillLevel, type Lesson, type Progress } from './data/academy';
 import { getProgressionStats, learnerSkillLevels } from './data/progression';
 import CodePlaygroundPage from './CodePlayground';
+import GlobalSearch from './GlobalSearch';
 import './code-playground.css';
+import './global-search.css';
 
 const PROGRESS_KEY = 'meta-progress-v1';
 const LEGACY_PROGRESS_KEY = 'code-atlas-progress-v1';
@@ -622,6 +624,7 @@ function Header({ progressCount }: { progressCount: number }) {
           <span className="top-progress-text">{progressCount} / {lessons.length} lessons</span>
           <span className="top-progress-track" aria-hidden="true"><span className="top-progress-fill" style={{ width: `${completion}%` }} /></span>
         </span>
+        <GlobalSearch />
         <ThemeToggle />
         {authChecked && signedIn && (
           <button type="button" className="header-signout-button" onClick={() => void handleSignOut()} disabled={signingOut} data-testid="button-header-sign-out">
