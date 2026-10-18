@@ -46,11 +46,11 @@ export default function GlobalSearch() {
       .filter((item) => !normalized || `${item.label} ${item.detail} ${item.keywords}`.toLowerCase().includes(normalized))
       .map((item) => ({ ...item, key: item.href, group: 'Pages' }));
     const lessonResults = lessons
-      .filter((lesson) => normalized && `${lesson.title} ${lesson.description} ${lesson.languageId}`.toLowerCase().includes(normalized))
+      .filter((lesson) => normalized && `${lesson.title} ${lesson.concept} ${lesson.explanation}`.toLowerCase().includes(normalized))
       .slice(0, 5)
       .map((lesson) => ({
         label: lesson.title,
-        detail: `Lesson · ${lesson.languageId}`,
+        detail: `Lesson · ${lesson.duration} · ${lesson.concept}`,
         href: `/learn/${lesson.id}`,
         key: `lesson-${lesson.id}`,
         group: 'Lessons',
