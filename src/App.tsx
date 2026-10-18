@@ -1300,6 +1300,7 @@ function ProjectPage() {
       return true;
     }
   });
+  const [wordWrap] = useState(() => readFlag('meta-editor-word-wrap', true));
 
   useEffect(() => writeProjects(projects), [projects]);
 
@@ -1634,6 +1635,7 @@ function ProjectPage() {
                       value={currentFiles[activeFile] || ''}
                       onChange={(event) => updateActiveFile(event.target.value)}
                       spellCheck={false}
+                      wrap={wordWrap ? 'soft' : 'off'}
                       aria-label={`Edit ${activeFile}`}
                     />
                   </>
@@ -1757,13 +1759,14 @@ function readFlag(key: string, fallback: boolean) {
 }
 
 const SETTINGS_SECTIONS = [
-  { id: 'profile', label: 'Profile', icon: User },
-  { id: 'plan', label: 'Plan & billing', icon: CreditCard },
-  { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'appearance', label: 'Appearance', icon: Palette },
-  { id: 'editor', label: 'Editor & projects', icon: Settings },
-  { id: 'privacy', label: 'Privacy & data', icon: Shield },
-  { id: 'support', label: 'Support', icon: CircleHelp },
+  { id: 'profile', label: 'Profile', icon: User, keywords: 'account display name username email picture avatar photo' },
+  { id: 'plan', label: 'Plan & billing', icon: CreditCard, keywords: 'subscription ai credits allowance usage invoices receipts payment card upgrade pricing free paid' },
+  { id: 'notifications', label: 'Notifications', icon: Bell, keywords: 'reminders updates new lessons features product community discord billing email' },
+  { id: 'learning', label: 'Learning', icon: BookOpen, keywords: 'language coding python javascript typescript html css java c c++ c# go rust sql ruby hints exercises lessons beginner' },
+  { id: 'appearance', label: 'Appearance', icon: Palette, keywords: 'theme dark light mode reduced motion animation accessibility' },
+  { id: 'editor', label: 'Editor & projects', icon: Settings, keywords: 'code editor project tab files preview chat text size font word wrap wrapping workspace helper hints' },
+  { id: 'privacy', label: 'Privacy & data', icon: Shield, keywords: 'export download backup reset progress completed quizzes xp delete account policy storage' },
+  { id: 'support', label: 'Support', icon: CircleHelp, keywords: 'help contact support bug android app apk version email' },
 ];
 
 function SettingsPage() {
@@ -1778,11 +1781,32 @@ function SettingsPage() {
   });
   const [editorSize, setEditorSize] = useState(() => {
     try {
-      return localStorage.getItem('meta-editor-font-size') || 'medium';
+      const saved = localStorage.getItem('meta-editor-font-size');
+      return saved === 'small' || saved === 'large' ? saved : 'medium';
     } catch {
       return 'medium';
     }
   });
+  const [defaultLanguage, setDefaultLanguage] = useState(() => {
+    try {
+      const saved = localStorage.getItem(LANGUAGE_KEY);
+      return languages.some((language) => language.id === saved) ? saved as string : 'python';
+    } catch {
+      return 'python';
+    }
+  });
+  const [autoShowLessonHints, setAutoShowLessonHints] = useState(() => readFlag('meta-auto-show-lesson-hints', false));
+  const [wordWrap, setWordWrap] = useState(() => readFlag('meta-editor-word-wrap', true));
+  const [settingsSearch, setSettingsSearch] = useState('');
+  const visibleSettingsSections = useMemo(() => {
+    const terms = settingsSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!terms.length) return SETTINGS_SECTIONS;
+    return SETTINGS_SECTIONS.filter((section) => {
+      const searchableText = `${section.label} ${section.keywords}`.toLowerCase();
+      return terms.every((term) => searchableText.includes(term));
+    });
+  }, [settingsSearch]);
+  const visibleSettingsSectionIds = useMemo(() => new Set(visibleSettingsSections.map((section) => section.id)), [visibleSettingsSections]);
   const [reducedMotion, setReducedMotion] = useState(() => readFlag('meta-reduced-motion', false));
   const [showProjectHints, setShowProjectHints] = useState(() => readFlag('meta-project-hints', true));
   const [notifyLessons, setNotifyLessons] = useState(() => readFlag('meta-notify-lessons', true));
@@ -1851,8 +1875,8 @@ function SettingsPage() {
 
   useEffect(() => {
     const onScroll = () => {
-      let current = SETTINGS_SECTIONS[0].id;
-      for (const section of SETTINGS_SECTIONS) {
+      let current = visibleSettingsSections[0]?.id ?? SETTINGS_SECTIONS[0].id;
+      for (const section of visibleSettingsSections) {
         const element = document.getElementById(section.id);
         if (element && element.getBoundingClientRect().top <= 160) current = section.id;
       }
@@ -1861,7 +1885,7 @@ function SettingsPage() {
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+  }, [visibleSettingsSections]);
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1935,6 +1959,9 @@ function SettingsPage() {
   }, [reducedMotion]);
 
   useEffect(() => { try { localStorage.setItem('meta-default-project-tab', defaultTab); } catch { /* storage may be unavailable */ } }, [defaultTab]);
+  useEffect(() => { try { localStorage.setItem(LANGUAGE_KEY, defaultLanguage); } catch { /* storage may be unavailable */ } }, [defaultLanguage]);
+  useEffect(() => { try { localStorage.setItem('meta-auto-show-lesson-hints', String(autoShowLessonHints)); } catch { /* storage may be unavailable */ } }, [autoShowLessonHints]);
+  useEffect(() => { try { localStorage.setItem('meta-editor-word-wrap', String(wordWrap)); } catch { /* storage may be unavailable */ } }, [wordWrap]);
   useEffect(() => { try { localStorage.setItem('meta-project-hints', String(showProjectHints)); } catch { /* storage may be unavailable */ } }, [showProjectHints]);
   useEffect(() => { try { localStorage.setItem('meta-notify-lessons', String(notifyLessons)); } catch { /* storage may be unavailable */ } }, [notifyLessons]);
   useEffect(() => { try { localStorage.setItem('meta-notify-product', String(notifyProduct)); } catch { /* storage may be unavailable */ } }, [notifyProduct]);
@@ -1954,6 +1981,9 @@ function SettingsPage() {
         editorSize,
         reducedMotion,
         showProjectHints,
+        defaultLanguage,
+        autoShowLessonHints,
+        wordWrap,
         notifications: { notifyLessons, notifyProduct, notifyCommunity, notifyBilling },
       },
     };
@@ -1993,9 +2023,37 @@ function SettingsPage() {
           <Link href="/account" className="button-secondary" data-testid="link-account-security">Account &amp; security</Link>
         </section>
 
+        <div className="settings-search-panel">
+          <label className="settings-search-field">
+            <Search aria-hidden="true" />
+            <input
+              type="search"
+              value={settingsSearch}
+              onChange={(event) => setSettingsSearch(event.target.value)}
+              placeholder="Search settings… (e.g. language, dark mode, billing)"
+              aria-label="Search settings"
+              aria-describedby="settings-search-status"
+              data-testid="input-search-settings"
+            />
+            {settingsSearch && (
+              <button type="button" onClick={() => setSettingsSearch('')} aria-label="Clear settings search" className="settings-search-clear">
+                <X aria-hidden="true" />
+              </button>
+            )}
+          </label>
+          <div className="settings-search-meta">
+            <span id="settings-search-status" role="status" aria-live="polite">
+              {settingsSearch.trim()
+                ? `${visibleSettingsSections.length} section${visibleSettingsSections.length === 1 ? '' : 's'} matching “${settingsSearch.trim()}”`
+                : `Search across ${SETTINGS_SECTIONS.length} settings sections`}
+            </span>
+            {settingsSearch.trim() && <button type="button" className="settings-search-reset" onClick={() => setSettingsSearch('')}>Clear search</button>}
+          </div>
+        </div>
+
         <div className="settings-layout">
           <nav className="settings-nav" aria-label="Settings sections">
-            {SETTINGS_SECTIONS.map((section) => (
+            {visibleSettingsSections.map((section) => (
               <a
                 key={section.id}
                 href={`#${section.id}`}
@@ -2010,7 +2068,15 @@ function SettingsPage() {
           </nav>
 
           <div className="settings-panels">
-            <section className="settings-card" id="profile" aria-labelledby="settings-profile-heading">
+            {visibleSettingsSections.length === 0 && (
+              <div className="settings-empty-search" role="status">
+                <Search aria-hidden="true" />
+                <h2>No matching settings</h2>
+                <p>Try another word such as “theme”, “language”, “font”, “privacy”, or “billing”.</p>
+                <button type="button" className="button-secondary" onClick={() => setSettingsSearch('')}>Show all settings</button>
+              </div>
+            )}
+            <section className="settings-card" hidden={!visibleSettingsSectionIds.has('profile')} id="profile" aria-labelledby="settings-profile-heading">
               <div className="settings-card-head">
                 <div>
                   <h2 id="settings-profile-heading"><User aria-hidden="true" /> Your profile</h2>
@@ -2077,7 +2143,7 @@ function SettingsPage() {
               )}
             </section>
 
-            <section className="settings-card" id="plan" aria-labelledby="settings-plan-heading">
+            <section className="settings-card" hidden={!visibleSettingsSectionIds.has('plan')} id="plan" aria-labelledby="settings-plan-heading">
               <div className="settings-card-head">
                 <div>
                   <h2 id="settings-plan-heading"><CreditCard aria-hidden="true" /> Plan &amp; billing</h2>
@@ -2125,7 +2191,7 @@ function SettingsPage() {
               </div>
             </section>
 
-            <section className="settings-card" id="notifications" aria-labelledby="settings-notify-heading">
+            <section className="settings-card" hidden={!visibleSettingsSectionIds.has('notifications')} id="notifications" aria-labelledby="settings-notify-heading">
               <div className="settings-card-head">
                 <div>
                   <h2 id="settings-notify-heading"><Bell aria-hidden="true" /> Notifications</h2>
@@ -2176,7 +2242,37 @@ function SettingsPage() {
               </div>
             </section>
 
-            <section className="settings-card" id="appearance" aria-labelledby="settings-appearance-heading">
+            <section className="settings-card" hidden={!visibleSettingsSectionIds.has('learning')} id="learning" aria-labelledby="settings-learning-heading">
+              <div className="settings-card-head">
+                <div>
+                  <h2 id="settings-learning-heading"><BookOpen aria-hidden="true" /> Learning preferences</h2>
+                  <p>Choose your default coding language and how much guidance you want when a lesson opens.</p>
+                </div>
+              </div>
+              <div className="settings-rows">
+                <div className="settings-row">
+                  <div>
+                    <strong>Default coding language</strong>
+                    <span>Preselect this language when you open a foundation lesson. You can still switch languages any time.</span>
+                  </div>
+                  <select className="settings-select" value={defaultLanguage} onChange={(event) => { setDefaultLanguage(event.target.value); flash('Default learning language saved.'); }} aria-label="Default coding language" data-testid="select-default-learning-language">
+                    {languages.map((language) => <option key={language.id} value={language.id}>{language.name}</option>)}
+                  </select>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Show lesson hints automatically</strong>
+                    <span>Open the small exercise hint by default in each lesson. You can hide it whenever you prefer.</span>
+                  </div>
+                  <label className="settings-switch">
+                    <input type="checkbox" checked={autoShowLessonHints} onChange={(event) => { setAutoShowLessonHints(event.target.checked); flash('Preference saved.'); }} aria-label="Show lesson hints automatically" data-testid="toggle-auto-lesson-hints" />
+                    <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <section className="settings-card" hidden={!visibleSettingsSectionIds.has('appearance')} id="appearance" aria-labelledby="settings-appearance-heading">
               <div className="settings-card-head">
                 <div>
                   <h2 id="settings-appearance-heading"><Palette aria-hidden="true" /> Appearance</h2>
@@ -2207,7 +2303,7 @@ function SettingsPage() {
               </div>
             </section>
 
-            <section className="settings-card" id="editor" aria-labelledby="settings-editor-heading">
+            <section className="settings-card" hidden={!visibleSettingsSectionIds.has('editor')} id="editor" aria-labelledby="settings-editor-heading">
               <div className="settings-card-head">
                 <div>
                   <h2 id="settings-editor-heading"><Settings aria-hidden="true" /> Editor &amp; projects</h2>
@@ -2247,10 +2343,20 @@ function SettingsPage() {
                     <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
                   </label>
                 </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Wrap long code lines</strong>
+                    <span>Keep long lines inside the editor width instead of requiring horizontal scrolling.</span>
+                  </div>
+                  <label className="settings-switch">
+                    <input type="checkbox" checked={wordWrap} onChange={(event) => { setWordWrap(event.target.checked); flash('Preference saved.'); }} aria-label="Wrap long code lines" data-testid="toggle-editor-word-wrap" />
+                    <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
+                  </label>
+                </div>
               </div>
             </section>
 
-            <section className="settings-card" id="privacy" aria-labelledby="settings-privacy-heading">
+            <section className="settings-card" hidden={!visibleSettingsSectionIds.has('privacy')} id="privacy" aria-labelledby="settings-privacy-heading">
               <div className="settings-card-head">
                 <div>
                   <h2 id="settings-privacy-heading"><Shield aria-hidden="true" /> Privacy &amp; data</h2>
@@ -2289,7 +2395,7 @@ function SettingsPage() {
               </div>
             </section>
 
-            <section className="settings-card" id="support" aria-labelledby="settings-support-heading">
+            <section className="settings-card" hidden={!visibleSettingsSectionIds.has('support')} id="support" aria-labelledby="settings-support-heading">
               <div className="settings-card-head">
                 <div>
                   <h2 id="settings-support-heading"><CircleHelp aria-hidden="true" /> Support &amp; app</h2>
@@ -3105,7 +3211,7 @@ function LessonPage() {
   });
   const [answer, setAnswer] = useState('');
   const [feedback, setFeedback] = useState<'correct' | 'try-again' | null>(null);
-  const [showHint, setShowHint] = useState(false);
+  const [showHint, setShowHint] = useState(() => readFlag('meta-auto-show-lesson-hints', false));
   const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({});
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizScore, setQuizScore] = useState<number | null>(null);
@@ -3114,7 +3220,7 @@ function LessonPage() {
   useEffect(() => {
     setAnswer('');
     setFeedback(null);
-    setShowHint(false);
+    setShowHint(readFlag('meta-auto-show-lesson-hints', false));
     setQuizAnswers({});
     setQuizSubmitted(false);
     setQuizScore(null);
