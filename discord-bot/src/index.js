@@ -15,6 +15,19 @@ const commands = [
  new SlashCommandBuilder().setName('meta').setDescription('Open Meta CodeLearn and explore coding lessons'),
  new SlashCommandBuilder().setName('lessons').setDescription('Get Meta CodeLearn learning links'),
  new SlashCommandBuilder().setName('ping').setDescription('Check whether the Meta bot is online'),
+ new SlashCommandBuilder().setName('help').setDescription('Show Meta bot commands and community tools'),
+ new SlashCommandBuilder().setName('serverinfo').setDescription('Show useful information about this server'),
+ new SlashCommandBuilder().setName('userinfo').setDescription('Show information about a server member')
+  .addUserOption(option => option.setName('user').setDescription('Member to look up (defaults to you)').setRequired(false)),
+ new SlashCommandBuilder().setName('poll').setDescription('Create a quick reaction poll')
+  .addStringOption(option => option.setName('question').setDescription('What are you asking?').setMaxLength(250).setRequired(true))
+  .addStringOption(option => option.setName('option1').setDescription('First option').setMaxLength(80).setRequired(true))
+  .addStringOption(option => option.setName('option2').setDescription('Second option').setMaxLength(80).setRequired(true))
+  .addStringOption(option => option.setName('option3').setDescription('Third option (optional)').setMaxLength(80).setRequired(false))
+  .addStringOption(option => option.setName('option4').setDescription('Fourth option (optional)').setMaxLength(80).setRequired(false))
+  .addStringOption(option => option.setName('option5').setDescription('Fifth option (optional)').setMaxLength(80).setRequired(false)),
+ new SlashCommandBuilder().setName('suggest').setDescription('Post a suggestion for the community')
+  .addStringOption(option => option.setName('idea').setDescription('Your suggestion for the server or Meta').setMaxLength(1000).setRequired(true)),
  new SlashCommandBuilder().setName('setup-applications').setDescription('Post the staff application panel in this channel').setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
  ticketCommand,
  serverSetupCommand,
@@ -35,7 +48,99 @@ client.on(Events.InteractionCreate, async interaction => {
       await handleTicketCommand(interaction, db);
       return;
      }
-   if (interaction.commandName === 'ping') await interaction.reply({ content: 'Meta bot is online ✅', flags: MessageFlags.Ephemeral });
+   if (interaction.commandName === 'help') {
+    const embed = new EmbedBuilder()
+     .setColor(0x42B883)
+     .setTitle('Meta Bot | Command Guide')
+     .setDescription('Helpful tools for the Meta Code community.')
+     .addFields(
+      { name: 'Learning', value: '`/meta` — website, projects and account links\n`/lessons` — jump into coding lessons', inline: false },
+      { name: 'Community', value: '`/poll` — create a reaction poll\n`/suggest` — share an idea\n`/serverinfo` — server details\n`/userinfo` — member details\n`/ping` — check bot status', inline: false },
+      { name: 'Staff tools', value: '`/ticket`, `/ticket-panel`, `/setup-server`, `/setup-applications` — availability depends on your server permissions and bot setup.', inline: false }
+     )
+     .setFooter({ text: 'Meta Code • Learn the idea, then the code' });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+   }
+   else if (interaction.commandName === 'serverinfo') {
+    if (!interaction.inGuild()) {
+     await interaction.reply({ content: 'Use this command inside a server.', flags: MessageFlags.Ephemeral });
+     return;
+    }
+    const guild = interaction.guild;
+    const owner = await guild.fetchOwner().catch(() => null);
+    const embed = new EmbedBuilder()
+     .setColor(0x42B883)
+     .setTitle(guild.name)
+     .setThumbnail(guild.iconURL({ size: 256 }) ?? null)
+     .addFields(
+      { name: 'Owner', value: owner ? `${owner.user.tag}` : 'Unavailable', inline: true },
+      { name: 'Members', value: String(guild.memberCount), inline: true },
+      { name: 'Channels', value: String(guild.channels.cache.size), inline: true },
+      { name: 'Created', value: `<t:${Math.floor(guild.createdTimestamp / 1000)}:D>`, inline: true },
+      { name: 'Server ID', value: guild.id, inline: true },
+      { name: 'Boosts', value: String(guild.premiumSubscriptionCount ?? 0), inline: true }
+     );
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+   }
+   else if (interaction.commandName === 'userinfo') {
+    if (!interaction.inGuild()) {
+     await interaction.reply({ content: 'Use this command inside a server.', flags: MessageFlags.Ephemeral });
+     return;
+    }
+    const user = interaction.options.getUser('user') ?? interaction.user;
+    const member = interaction.guild.members.cache.get(user.id) ?? await interaction.guild.members.fetch(user.id).catch(() => null);
+    const roles = member ? member.roles.cache.filter(role => role.id !== interaction.guild.id).map(role => role.toString()).slice(0, 10) : [];
+    const embed = new EmbedBuilder()
+     .setColor(0x42B883)
+     .setTitle(`Member: ${user.username}`)
+     .setThumbnail(user.displayAvatarURL({ size: 256 }))
+     .addFields(
+      { name: 'Account created', value: `<t:${Math.floor(user.createdTimestamp / 1000)}:D>`, inline: true },
+      { name: 'Joined server', value: member?.joinedTimestamp ? `<t:${Math.floor(member.joinedTimestamp / 1000)}:D>` : 'Not available', inline: true },
+      { name: 'Roles', value: roles.length ? roles.join(' ') : 'No additional roles shown', inline: false },
+      { name: 'User ID', value: user.id, inline: false }
+     );
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+   }
+   else if (interaction.commandName === 'poll') {
+    if (!interaction.inGuild() || !interaction.channel?.isTextBased()) {
+     await interaction.reply({ content: 'Create polls in a server text channel.', flags: MessageFlags.Ephemeral });
+     return;
+    }
+    const question = interaction.options.getString('question', true);
+    const options = ['option1', 'option2', 'option3', 'option4', 'option5']
+     .map(name => interaction.options.getString(name))
+     .filter(Boolean);
+    const emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
+    const embed = new EmbedBuilder()
+     .setColor(0x5865F2)
+     .setTitle('📊 Community Poll')
+     .setDescription(`**${question}**\n\n${options.map((option, index) => `${emojis[index]}  ${option}`).join('\n')}\n\n*React below to vote.*`)
+     .setFooter({ text: `Poll by ${interaction.user.username} • Meta Code` })
+     .setTimestamp();
+    const message = await interaction.channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
+    for (let index = 0; index < options.length; index++) await message.react(emojis[index]);
+    await interaction.reply({ content: 'Your poll is live!', flags: MessageFlags.Ephemeral });
+   }
+   else if (interaction.commandName === 'suggest') {
+    if (!interaction.inGuild() || !interaction.channel?.isTextBased()) {
+     await interaction.reply({ content: 'Post suggestions in a server text channel.', flags: MessageFlags.Ephemeral });
+     return;
+    }
+    const idea = interaction.options.getString('idea', true);
+    const embed = new EmbedBuilder()
+     .setColor(0x42B883)
+     .setTitle('💡 Community Suggestion')
+     .setDescription(idea)
+     .setAuthor({ name: interaction.user.username, iconURL: interaction.user.displayAvatarURL() })
+     .setFooter({ text: 'React to support this idea • Meta Code' })
+     .setTimestamp();
+    const message = await interaction.channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
+    await message.react('👍');
+    await message.react('👎');
+    await interaction.reply({ content: 'Suggestion posted — thanks for helping improve the community!', flags: MessageFlags.Ephemeral });
+   }
+   else if (interaction.commandName === 'ping') await interaction.reply({ content: 'Meta bot is online ✅', flags: MessageFlags.Ephemeral });
    else if (interaction.commandName === 'lessons') await interaction.reply({ content: `Start learning: ${siteUrl}/play`, flags: MessageFlags.Ephemeral });
    else if (interaction.commandName === 'meta') await interaction.reply({ content: `Welcome to Meta CodeLearn!\nWebsite: ${siteUrl}\nLessons: ${siteUrl}/play\nProjects: ${siteUrl}/projects\nAccount: ${siteUrl}/account`, flags: MessageFlags.Ephemeral });
    else if (interaction.commandName === 'setup-applications') {
