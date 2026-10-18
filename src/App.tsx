@@ -602,29 +602,35 @@ function Header({ progressCount }: { progressCount: number }) {
 
 function AppShell({ children, showBottomNav = true, showHeader = true }: { children: ReactNode; showBottomNav?: boolean; showHeader?: boolean }) {
   const { progress } = useProgress();
+  const [location] = useLocation();
+  const isActiveDestination = (href: string) => {
+    if (href === '/') return location === '/';
+    if (href === '/play') return location.startsWith('/play') || location.startsWith('/learn');
+    return location === href || location.startsWith(`${href}/`);
+  };
   return (
     <div className="app-shell">
       {showHeader && <Header progressCount={progress.completedLessonIds.length} />}
       {children}
       {showBottomNav && (
         <nav className="bottom-workspace-nav" aria-label="Main navigation">
-          <Link href="/" className="bottom-workspace-button" aria-label="Explore" data-testid="button-home">
+          <Link href="/" className={`bottom-workspace-button${isActiveDestination('/') ? ' active' : ''}`} aria-current={isActiveDestination('/') ? 'page' : undefined} aria-label="Explore" data-testid="button-home">
             <Compass aria-hidden="true" />
             <span>Explore</span>
           </Link>
-          <Link href="/play" className="bottom-workspace-button" aria-label="Lessons" data-testid="button-lessons">
+          <Link href="/play" className={`bottom-workspace-button${isActiveDestination('/play') ? ' active' : ''}`} aria-current={isActiveDestination('/play') ? 'page' : undefined} aria-label="Lessons" data-testid="button-lessons">
             <BookOpen aria-hidden="true" />
             <span>Lessons</span>
           </Link>
-          <Link href="/projects" className="bottom-workspace-button" aria-label="Projects" data-testid="button-projects">
+          <Link href="/projects" className={`bottom-workspace-button${isActiveDestination('/projects') ? ' active' : ''}`} aria-current={isActiveDestination('/projects') ? 'page' : undefined} aria-label="Projects" data-testid="button-projects">
             <FolderKanban aria-hidden="true" />
             <span>Projects</span>
           </Link>
-          <Link href="/pricing" className="bottom-workspace-button" aria-label="Plans and pricing" data-testid="button-pricing">
+          <Link href="/pricing" className={`bottom-workspace-button${isActiveDestination('/pricing') ? ' active' : ''}`} aria-current={isActiveDestination('/pricing') ? 'page' : undefined} aria-label="Plans and pricing" data-testid="button-pricing">
             <Tag aria-hidden="true" />
             <span>Plans</span>
           </Link>
-          <Link href="/settings" className="bottom-workspace-button" aria-label="Settings" data-testid="button-settings">
+          <Link href="/settings" className={`bottom-workspace-button${isActiveDestination('/settings') ? ' active' : ''}`} aria-current={isActiveDestination('/settings') ? 'page' : undefined} aria-label="Settings" data-testid="button-settings">
             <Settings aria-hidden="true" />
             <span>Settings</span>
           </Link>
