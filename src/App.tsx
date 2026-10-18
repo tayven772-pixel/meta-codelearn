@@ -743,13 +743,16 @@ function HomePage() {
             <div className="eyebrow"><span className="eyebrow-line" /> A hands-on academy for curious minds</div>
             <h1 id="home-heading">Learn the idea.<br /><em>Then the code.</em></h1>
             <p className="hero-typewriter">
-              <span className="hero-typewriter-sr-only">Make games, websites, and apps.</span>
+              <span className="hero-typewriter-sr-only">Make games, websites, apps, AI tools, Roblox games, and Minecraft mods.</span>
               <span className="hero-typewriter-visual" aria-hidden="true">
                 <span>Make </span>
                 <span className="hero-typewriter-rotator">
                   <span className="hero-typewriter-word typewriter-games">games</span>
                   <span className="hero-typewriter-word typewriter-websites">websites</span>
                   <span className="hero-typewriter-word typewriter-apps">apps</span>
+                  <span className="hero-typewriter-word typewriter-ai-tools">AI tools</span>
+                  <span className="hero-typewriter-word typewriter-roblox">Roblox games</span>
+                  <span className="hero-typewriter-word typewriter-minecraft">Minecraft mods</span>
                 </span>
               </span>
             </p>
@@ -2801,11 +2804,14 @@ function LoginPage() {
           <h1>
             Build{' '}
             <span className="hero-typewriter-visual login-typewriter-visual">
-              <span className="hero-typewriter-sr-only">games, websites, and apps.</span>
+              <span className="hero-typewriter-sr-only">games, websites, apps, AI tools, Roblox games, and Minecraft mods.</span>
               <span className="hero-typewriter-rotator" aria-hidden="true">
                 <span className="hero-typewriter-word typewriter-games">games</span>
                 <span className="hero-typewriter-word typewriter-websites">websites</span>
                 <span className="hero-typewriter-word typewriter-apps">apps</span>
+                <span className="hero-typewriter-word typewriter-ai-tools">AI tools</span>
+                <span className="hero-typewriter-word typewriter-roblox">Roblox games</span>
+                <span className="hero-typewriter-word typewriter-minecraft">Minecraft mods</span>
               </span>
             </span>
             <span aria-hidden="true">.</span>
