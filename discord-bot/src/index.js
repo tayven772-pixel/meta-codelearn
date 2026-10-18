@@ -6,7 +6,7 @@ import { handleServerSetup, handleServerSetupButton } from './lib/server-setup.j
 import { db, getSetting } from './lib/database.js';
 import { moderationCommands, handleModerationCommand } from './lib/moderation.js';
 import { autoPartnerCommands, handleAutoPartnerCommand, runAutoPartnerScheduler } from './lib/autopartner.js';
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, Client, EmbedBuilder, Events, GatewayIntentBits, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import { ActionRowBuilder, ActivityType, ButtonBuilder, ButtonStyle, Client, EmbedBuilder, Events, GatewayIntentBits, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 const siteUrl = (process.env.META_SITE_URL || 'https://metasupportcom.dbm.shared-servers.com').replace(/\/$/, '');
 const token = process.env.DISCORD_BOT_TOKEN;
 const clientId = process.env.DISCORD_CLIENT_ID;
@@ -75,6 +75,8 @@ const commands = [
 ].map(command => command.toJSON());
 client.once(Events.ClientReady, async readyClient => {
  console.log(`Meta bot ready as ${readyClient.user.tag}`);
+ const configuredStatus = getSetting(guildId || readyClient.guilds.cache.first()?.id || '', 'bot_status_text');
+ if (configuredStatus) readyClient.user.setPresence({ activities: [{ name: configuredStatus.slice(0, 128), type: ActivityType.Playing }], status: 'online' });
  runAutoPartnerScheduler(readyClient).catch(error => console.error('Autopartner startup check failed:', error.message));
  setInterval(() => runAutoPartnerScheduler(readyClient).catch(error => console.error('Autopartner scheduler failed:', error.message)), 60_000).unref();
  try { if (guildId) await readyClient.application.commands.set(commands, guildId); else await readyClient.application.commands.set(commands); console.log('Registered Meta CodeLearn slash commands.'); }
