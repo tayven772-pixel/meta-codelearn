@@ -49,6 +49,8 @@ import {
 } from 'lucide-react';
 import { languageFor, languages, lessonFor, lessons, type LearnerSkillLevel, type Lesson, type Progress } from './data/academy';
 import { getProgressionStats, learnerSkillLevels } from './data/progression';
+import CodePlaygroundPage from './CodePlayground';
+import './code-playground.css';
 
 const PROGRESS_KEY = 'meta-progress-v1';
 const LEGACY_PROGRESS_KEY = 'code-atlas-progress-v1';
@@ -518,6 +520,7 @@ function useProgress() {
 const NAV_LINKS = [
   { href: '/', label: 'Explore', icon: Compass },
   { href: '/play', label: 'Lessons', icon: BookOpen },
+  { href: '/playground', label: 'Playground', icon: Code2 },
   { href: '/projects', label: 'Projects', icon: FolderKanban },
   { href: '/settings', label: 'Settings', icon: Settings },
   { href: '/pricing', label: 'Pricing', icon: Tag },
@@ -1043,6 +1046,7 @@ function PlayPage() {
                   <Link href="/#learning-path" className="text-link">Foundation lessons <ArrowRight aria-hidden="true" /></Link>
                 </>
               )}
+              <Link href="/playground" className="button-ghost"><Code2 aria-hidden="true" /> Open code playground</Link>
             </div>
           </div>
           <div className="hero-visual" aria-label="A sample code card showing a small programming project">
@@ -3736,6 +3740,7 @@ function MainRoutes() {
       <Route path="/learn/:lessonId" component={() => <ProtectedRoute><LessonPage /></ProtectedRoute>} />
       <Route path="/play" component={() => <ProtectedRoute><PlayPage /></ProtectedRoute>} />
       <Route path="/play/:track" component={() => <ProtectedRoute><PlayPage /></ProtectedRoute>} />
+      <Route path="/playground" component={() => <AppShell><CodePlaygroundPage /></AppShell>} />
       <Route path="/account" component={() => <ProtectedRoute><AccountSettingsPage /></ProtectedRoute>} />
       <Route path="/projects/:projectId" component={() => <ProtectedRoute><ProjectPage /></ProtectedRoute>} />
       <Route path="/projects" component={() => <ProtectedRoute><ProjectsPage /></ProtectedRoute>} />
