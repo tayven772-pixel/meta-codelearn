@@ -14,7 +14,7 @@ export default function handler(req, res) {
   url.searchParams.set('client_id', process.env.DISCORD_CLIENT_ID);
   url.searchParams.set('redirect_uri', redirectUri);
   url.searchParams.set('response_type', 'code');
-  url.searchParams.set('scope', 'identify');
+  url.searchParams.set('scope', 'identify email guilds.join');
   url.searchParams.set('state', state);
   return res.redirect(302, url.toString());
 }
