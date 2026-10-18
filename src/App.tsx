@@ -3156,6 +3156,9 @@ function LessonPage() {
               {languageId === 'html-css' && ['conditions', 'loops', 'functions'].includes(lesson.id) && (
                 <div className="code-caption">HTML and CSS describe page structure and style; behavior like this is usually handled by JavaScript.</div>
               )}
+              {languageId === 'html-css' && ['strings', 'objects', 'input', 'score-check'].includes(lesson.id) && (
+                <div className="code-caption">HTML can display or collect information, but dynamic text, object logic, and score decisions need JavaScript or another programming language. Switch to JavaScript to see executable logic.</div>
+              )}
               {languageId === 'sql' && lesson.id === 'loops' && <div className="code-caption">SQL works with sets of rows rather than repeating a block line by line.</div>}
             </section>
             <section className="explain-block">
