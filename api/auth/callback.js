@@ -17,7 +17,7 @@ function botConfig(name) {
     const file = fs.readFileSync(path.join(projectRoot, 'discord-bot', '.env'), 'utf8');
     const line = file.split(/\r?\n/).find(row => row.startsWith(name + '='));
     if (!line) return '';
-    return line.slice(name.length + 1).trim().replace(/^(['"])(.*)\\1$/, '$2');
+    return line.slice(name.length + 1).trim().replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1');
   } catch {
     return '';
   }
