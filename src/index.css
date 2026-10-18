@@ -3007,3 +3007,37 @@ html[data-reduced-motion='true'] *::after {
 @media (min-width: 981px) {
   .mobile-nav-tools { display: none; }
 }
+
+
+/* Fix mobile menu clipping: backdrop-filter on the sticky header creates a
+   containing block for fixed descendants. Anchor the expanded panel directly
+   below the header and give it an explicit viewport height instead. */
+@media (max-width: 1100px), (max-height: 720px) and (min-width: 1101px) {
+  .topbar { position: sticky; overflow: visible; }
+  .topbar > .mobile-nav-panel {
+    position: absolute !important;
+    inset: 100% 0 auto !important;
+    width: 100%;
+    height: calc(100dvh - 62px);
+    max-height: calc(100dvh - 62px);
+    box-sizing: border-box;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 16px max(18px, env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+    z-index: 60;
+    background: hsl(var(--background) / .98);
+    backdrop-filter: blur(16px);
+  }
+}
+@media (min-width: 651px) and (max-width: 1100px) {
+  .topbar > .mobile-nav-panel {
+    height: calc(100dvh - 72px);
+    max-height: calc(100dvh - 72px);
+  }
+}
+@media (min-width: 1000px) and (max-width: 1100px) {
+  .topbar > .mobile-nav-panel {
+    height: calc(100dvh - 82px);
+    max-height: calc(100dvh - 82px);
+  }
+}
