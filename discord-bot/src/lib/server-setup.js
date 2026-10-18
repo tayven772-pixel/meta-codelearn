@@ -101,6 +101,8 @@ export async function handleServerSetup(interaction, confirmed = false, alreadyD
   if (!alreadyDeferred) await interaction.deferReply({ ephemeral: true });
 
   const guild = interaction.guild;
+  await guild.channels.fetch();
+  await guild.roles.fetch();
   const botMember = guild.members.me ??
     await guild.members.fetchMe();
 
