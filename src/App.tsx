@@ -1799,7 +1799,7 @@ function SettingsPage() {
   const [wordWrap, setWordWrap] = useState(() => readFlag('meta-editor-word-wrap', true));
   const [settingsSearch, setSettingsSearch] = useState('');
   const visibleSettingsSections = useMemo(() => {
-    const terms = settingsSearch.trim().toLowerCase().split(/\\s+/).filter(Boolean);
+    const terms = settingsSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
     if (!terms.length) return SETTINGS_SECTIONS;
     return SETTINGS_SECTIONS.filter((section) => {
       const searchableText = `${section.label} ${section.keywords}`.toLowerCase();
