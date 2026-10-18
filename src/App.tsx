@@ -3698,6 +3698,7 @@ function BotControlPage() {
   const [status, setStatus] = useState('Checking Discord connection…');
   const [allowed, setAllowed] = useState(false);
   const [owner, setOwner] = useState('');
+  const [servers, setServers] = useState<Array<{id:string;name:string;icon:string|null;owner:boolean}>>([]);
   const [guildId, setGuildId] = useState('');
   const [commands, setCommands] = useState<string[]>([]);
   const [settings, setSettings] = useState<Record<string, string>>({});
@@ -3740,17 +3741,27 @@ function BotControlPage() {
         const ownerData = await ownerResponse.json().catch(() => ({}));
         if (!ownerResponse.ok) throw new Error(ownerData.error || 'Owner access denied. Sign in to your Meta owner account.');
         if (!active) return;
-        setOwner(String(ownerData.owner || 'Owner'));
+        const serverResponse = await fetch('/api/auth/admin/bot-control/servers', { credentials: 'same-origin', cache: 'no-store' });
+        const serverData = await serverResponse.json().catch(() => ({}));
+        if (!serverResponse.ok) throw new Error(serverData.error || 'Could not load your Discord servers.');
+        if (!active) return;
+        const availableServers = Array.isArray(serverData.servers) ? serverData.servers : [];
+        setOwner(String(ownerData.owner || 'Discord user'));
         setCommands(Array.isArray(ownerData.commands) ? ownerData.commands : []);
+        setServers(availableServers);
+        const firstOwned = availableServers.find((server: {owner:boolean}) => server.owner);
+        setGuildId(firstOwned?.id || '');
         setAllowed(true);
-        setStatus('Discord connected and owner access verified. Enter your Discord server ID to load settings.');
+        setStatus(firstOwned ? 'Choose one of your servers to manage its Meta Bot settings.' : 'Your Discord servers loaded, but you do not own any of them. Server settings are read-only until you own a server.');
       })
       .catch(error => { if (active) setStatus(error instanceof Error ? error.message : 'Could not check Discord connection.'); });
     return () => { active = false; };
   }, []);
+  const selectedServer = servers.find(server => server.id === guildId);
   const loadSettings = async () => {
     const id = guildId.trim();
-    if (!/^\d{17,20}$/.test(id)) { setStatus('Enter your Discord server ID (17–20 digits).'); return; }
+    if (!selectedServer?.owner) { setStatus('You must own the selected Discord server to edit its bot settings.'); return; }
+    if (!/^\d{17,20}$/.test(id)) { setStatus('Select one of your owned servers first.'); return; }
     setBusy(true);
     try {
       const response = await fetch('/api/auth/admin/bot-control/settings?guildId=' + encodeURIComponent(id), { credentials: 'same-origin', cache: 'no-store' });
@@ -3855,22 +3866,26 @@ function BotControlPage() {
           <a className="button-primary" href="/api/auth/discord?returnTo=%2Fbot-control">Sign in with Discord</a>
         </section>}
         {discordReady && !allowed && discordChecked && <section className="admin-publishing-guide">
-          <h2>Owner access required</h2>
-          <p>Discord is connected, but bot control also requires the authorized Meta owner account.</p>
+          <h2>Reconnect Discord</h2>
+          <p>To load your server list, reconnect Discord and approve the updated server-list permission.</p>
+          <a className="button-primary" href="/api/auth/discord?returnTo=%2Fbot-control">Reconnect Discord</a>
         </section>}
         {allowed && discordReady && <>
           <section className="admin-publishing-guide">
             <h2>Owner session</h2>
             <p>Authorized account: <strong>{owner}</strong></p>
-            <p>Discord server ID</p>
-            <input value={guildId} onChange={event => setGuildId(event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Example: 123456789012345678" style={fieldStyle} inputMode="numeric" />
+            <p>Your Discord servers</p>
+            <select value={guildId} onChange={event => { setGuildId(event.target.value); setSettings({}); setPartners([]); setTemplateText(defaultTemplate); }} style={fieldStyle}>
+              <option value="">Choose a server…</option>
+              {servers.map(server => <option key={server.id} value={server.id}>{server.name} {server.owner ? '— You own this server' : '— Not owner (read-only)'}</option>)}
+            </select>
+            {selectedServer && <p>{selectedServer.owner ? 'You own this server. You can edit its Meta Bot settings.' : 'You are a member, not the owner. Editing is disabled for this server.'}</p>}
             <div className="admin-publishing-actions">
-              <button type="button" className="button-primary" onClick={loadSettings} disabled={busy}>Load server settings</button>
-              <button type="button" className="button-secondary" onClick={saveSettings} disabled={busy || !guildId}>Save all settings</button>
+              <button type="button" className="button-primary" onClick={loadSettings} disabled={busy || !selectedServer?.owner}>Load server settings</button>
+              <button type="button" className="button-secondary" onClick={saveSettings} disabled={busy || !selectedServer?.owner}>Save all settings</button>
             </div>
-            <p>Find the server ID in Discord with Developer Mode enabled → right-click the server icon → Copy Server ID.</p>
           </section>
-          {guildId.length >= 17 && <>
+          {selectedServer?.owner && guildId.length >= 17 && <>
             <section className="admin-publishing-guide">
               <h2>Command controls</h2>
               <p>Turn commands off here without editing code. Staff-only permissions are still enforced by Discord and the bot.</p>
