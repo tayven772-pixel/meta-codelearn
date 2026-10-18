@@ -76,17 +76,28 @@ jobs:
         run: ./gradlew assembleRelease
       - name: Publish APK to website
         run: |
-          # Base the APK artifact commit on the latest main, not the older build checkout.
+          set -euo pipefail
+          APK_SOURCE="android/app/build/outputs/apk/release/app-release.apk"
+          test -s "$APK_SOURCE"
+          # Keep the generated APK outside the checkout before switching to latest main.
+          # Checking out main can remove ignored/untracked build output under android/.
+          cp "$APK_SOURCE" "$RUNNER_TEMP/Meta-latest.apk"
           git fetch origin main
           git checkout -B main origin/main
-          mkdir -p public/downloads
-          cp android/app/build/outputs/apk/release/app-release.apk public/downloads/Meta-latest.apk
+          mkdir -p public/downloads android/app/build/outputs/apk/release
+          cp "$RUNNER_TEMP/Meta-latest.apk" public/downloads/Meta-latest.apk
+          cp "$RUNNER_TEMP/Meta-latest.apk" android/app/build/outputs/apk/release/app-release.apk
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f public/downloads/Meta-latest.apk
-          git commit -m "Update downloadable Meta APK [skip ci]" || exit 0
-          git push origin main
+          if git diff --cached --quiet; then
+            echo "Published APK is already current."
+          else
+            git commit -m "Update downloadable Meta APK [skip ci]"
+            git push origin HEAD:main
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: Meta-Android-APK
           path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
