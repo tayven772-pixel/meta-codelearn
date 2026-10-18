@@ -263,12 +263,11 @@ export async function handleServerSetup(interaction, confirmed = false, alreadyD
       );
 
       if (!alreadyPosted) {
+        const welcomeOverride = getSetting(guild.id, 'bot_welcome_message');
         const embed = new EmbedBuilder()
           .setColor(0x54C8D8)
-          .setTitle('Welcome to Meta CodeLearn!')
-          .setDescription(
-            'A friendly community for learning, building projects, and helping each other grow.'
-          )
+          .setTitle('Welcome to Meta Code!')
+          .setDescription((welcomeOverride || 'A friendly community for learning, building projects, and helping each other grow.').slice(0, 4096))
           .addFields(
             {
               name: '💻 Learn',
@@ -321,7 +320,7 @@ export async function handleServerSetup(interaction, confirmed = false, alreadyD
         const embed = new EmbedBuilder()
           .setColor(0x54C8D8)
           .setTitle('Meta CodeLearn Community Rules')
-          .setDescription([
+          .setDescription((getSetting(guild.id, 'bot_rules_text') || [
             '1. Treat everyone with respect.',
             '2. No harassment, hate, or threats.',
             '3. Keep messages in the appropriate channels.',
@@ -330,7 +329,7 @@ export async function handleServerSetup(interaction, confirmed = false, alreadyD
             '6. Only share projects and content you have permission to share.',
             '7. Follow Discord’s Terms of Service and Community Guidelines.',
             '8. Follow moderator instructions and use support tickets when needed.'
-          ].join('\n\n'))
+          ].join('\n\n')).slice(0, 4096))
           .setFooter({
             text: 'Help us keep Meta CodeLearn friendly and welcoming.'
           });
