@@ -11,7 +11,7 @@ import { getSetting } from './database.js';
 
 export const serverSetupCommand = new SlashCommandBuilder()
   .setName('setup-server')
-  .setDescription('Safely add the Meta Code community template without deleting existing channels')
+  .setDescription('Reset server channels and rebuild the Meta Code template (asks for confirmation)')
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
 const roleDefinitions = [
@@ -126,8 +126,46 @@ export async function handleServerSetup(interaction, confirmed = false, alreadyD
   }
 
 
-  // Setup is deliberately additive: existing channels and message history are never deleted.
+  if (!confirmed) {
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('setup_server_confirm')
+        .setLabel('Delete channels and rebuild')
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId('setup_server_cancel')
+        .setLabel('Cancel')
+        .setStyle(ButtonStyle.Secondary)
+    );
+    return interaction.editReply({
+      content: '⚠️ **Confirm server reset**\n\nThis will delete every regular channel, category, and its message history in this server, then recreate the Meta Code template. **Roles will be kept.** This cannot be undone. Only continue if you are sure.',
+      components: [row]
+    });
+  }
+
   const errors = [];
+  const channelDeletionErrors = [];
+  const channelsToDelete = [...guild.channels.cache.values()]
+    .sort((a, b) => {
+      const aCategory = a.type === ChannelType.GuildCategory ? 1 : 0;
+      const bCategory = b.type === ChannelType.GuildCategory ? 1 : 0;
+      return aCategory - bCategory;
+    });
+  for (const channel of channelsToDelete) {
+    try {
+      await channel.delete('Administrator confirmed Meta Code server channel reset');
+    } catch (error) {
+      channelDeletionErrors.push(`${channel.name}: ${error.message}`);
+    }
+  }
+  await guild.channels.fetch();
+  if (channelDeletionErrors.length) {
+    return interaction.editReply(
+      '⚠️ I could not delete all channels, so I stopped before rebuilding. Please check my Manage Channels permission. Failed: ' +
+      channelDeletionErrors.slice(0, 8).join('; ')
+    );
+  }
+
   let activeRoleDefinitions = roleDefinitions;
   let activeLayout = layout;
   const savedTemplate = getSetting(guild.id, 'server_setup_template');
@@ -307,7 +345,7 @@ export async function handleServerSetup(interaction, confirmed = false, alreadyD
   }
 
   const summary = [
-    '✅ **Meta Code setup finished. Existing channels and messages were preserved.**',
+    '✅ **Meta Code setup finished. Existing channels were deleted and the template was rebuilt. Roles were preserved.**',
     `Created: ${created.length} items`,
     `Already existed: ${reused.length} items`,
     `Issues: ${errors.length}`
@@ -340,6 +378,14 @@ export async function handleServerSetupButton(interaction) {
   }
 
   if (interaction.customId === 'setup_server_confirm') {
-    return interaction.update({ content: 'The destructive reset option has been retired. Run `/setup-server` to add missing template channels safely.', components: [], embeds: [] });
+    if (!interaction.inGuild() ||
+        !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+      return interaction.reply({
+        content: 'Only a server administrator can confirm this reset.',
+        ephemeral: true
+      });
+    }
+    await interaction.deferUpdate();
+    return handleServerSetup(interaction, true, true);
   }
 }
