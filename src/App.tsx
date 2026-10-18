@@ -16,6 +16,7 @@ import {
   Compass,
   Lightbulb,
   LockKeyhole,
+  LogOut,
   Mail,
   EyeOff,
   Moon,
@@ -523,11 +524,65 @@ const NAV_LINKS = [
 ];
 
 function Header({ progressCount }: { progressCount: number }) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState('');
   const completion = Math.round((progressCount / lessons.length) * 100);
 
   useEffect(() => { setMenuOpen(false); }, [location]);
+
+  useEffect(() => {
+    let active = true;
+    async function checkHeaderSession() {
+      const [emailResult, discordResult] = await Promise.allSettled([
+        fetch('/api/auth/me', { credentials: 'same-origin' }),
+        fetch('/api/auth/discord/me', { credentials: 'same-origin' }),
+      ]);
+      let emailSignedIn = false;
+      let discordSignedIn = false;
+      if (emailResult.status === 'fulfilled' && emailResult.value.ok) {
+        const data = await emailResult.value.json().catch(() => ({}));
+        emailSignedIn = Boolean(data?.user);
+      }
+      if (discordResult.status === 'fulfilled' && discordResult.value.ok) {
+        const data = await discordResult.value.json().catch(() => ({}));
+        discordSignedIn = Boolean(data?.authenticated && data?.user);
+      }
+      if (active) {
+        setSignedIn(emailSignedIn || discordSignedIn);
+        setAuthChecked(true);
+      }
+    }
+    checkHeaderSession().catch(() => { if (active) setAuthChecked(true); });
+    return () => { active = false; };
+  }, [location]);
+
+  async function handleSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    setSignOutError('');
+    try {
+      const responses = await Promise.all([
+        fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }),
+        fetch('/api/auth/discord/logout', { method: 'POST', credentials: 'same-origin' }),
+      ]);
+      if (responses.some((response) => !response.ok)) {
+        throw new Error('One or more sign-out requests failed.');
+      }
+      setSignedIn(false);
+      setMenuOpen(false);
+      try { localStorage.removeItem(ACTIVE_ACCOUNT_KEY); } catch { /* storage may be unavailable */ }
+      window.dispatchEvent(new CustomEvent(ACCOUNT_SCOPE_EVENT));
+      setLocation('/sign-in');
+    } catch {
+      setSignOutError('Could not sign out. Please try again.');
+    } finally {
+      setSigningOut(false);
+    }
+  }
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -565,6 +620,12 @@ function Header({ progressCount }: { progressCount: number }) {
           <span className="top-progress-track" aria-hidden="true"><span className="top-progress-fill" style={{ width: `${completion}%` }} /></span>
         </span>
         <ThemeToggle />
+        {authChecked && signedIn && (
+          <button type="button" className="header-signout-button" onClick={() => void handleSignOut()} disabled={signingOut} data-testid="button-header-sign-out">
+            <LogOut aria-hidden="true" />
+            <span>{signingOut ? 'Signing out…' : 'Sign out'}</span>
+          </button>
+        )}
         <Link href="/pricing" className="nav-cta" data-testid="link-nav-upgrade">Get Meta Pro</Link>
         <button
           type="button"
@@ -588,11 +649,20 @@ function Header({ progressCount }: { progressCount: number }) {
                 <ArrowRight aria-hidden="true" />
               </Link>
             ))}
-            <Link href="/sign-in" className="mobile-nav-link" onClick={() => setMenuOpen(false)}>
-              <LockKeyhole aria-hidden="true" />
-              <span>Sign in</span>
-              <ArrowRight aria-hidden="true" />
-            </Link>
+            {authChecked && (signedIn ? (
+              <button type="button" className="mobile-nav-link mobile-nav-action" onClick={() => void handleSignOut()} disabled={signingOut} data-testid="button-menu-sign-out">
+                <LogOut aria-hidden="true" />
+                <span>{signingOut ? 'Signing out…' : 'Sign out'}</span>
+                <ArrowRight aria-hidden="true" />
+              </button>
+            ) : (
+              <Link href="/sign-in" className="mobile-nav-link" onClick={() => setMenuOpen(false)}>
+                <LockKeyhole aria-hidden="true" />
+                <span>Sign in</span>
+                <ArrowRight aria-hidden="true" />
+              </Link>
+            ))}
+            {signOutError && <p className="header-signout-error" role="alert">{signOutError}</p>}
           </nav>
         </div>
       )}
