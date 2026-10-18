@@ -3852,7 +3852,7 @@ function BotControlPage() {
         {discordChecked && !discordReady && <section className="admin-publishing-guide">
           <h2>Connect your Discord account</h2>
           <p>Sign in with Discord to connect your account before using bot control.</p>
-          <a className="button-primary" href="/api/auth/discord">Sign in with Discord</a>
+          <a className="button-primary" href="/api/auth/discord?returnTo=%2Fbot-control">Sign in with Discord</a>
         </section>}
         {discordReady && !allowed && discordChecked && <section className="admin-publishing-guide">
           <h2>Owner access required</h2>
