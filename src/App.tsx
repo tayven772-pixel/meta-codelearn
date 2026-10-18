@@ -3767,7 +3767,7 @@ function BotControlPage() {
         throw new Error('Use roles and categories arrays. Each channel must be ["text" or "voice", "channel-name"]. Limits: 40 roles, 30 categories, 50 channels each.');
       }
     } catch (error) { setStatus('Setup template JSON is invalid: ' + (error instanceof Error ? error.message : 'check the JSON')); return; }
-    const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_template','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help','ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description']);
+    const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_template','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help','ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id']);
     const payload = Object.fromEntries(Object.entries(settings).filter(([key]) => editableKeys.has(key) || key.startsWith('bot_command_enabled:')));
     payload.server_setup_template = template;
     setBusy(true);
@@ -3884,6 +3884,19 @@ function BotControlPage() {
               <h2>Ticket system builder</h2>
               <p>Choose how members select a ticket category, customize the panel text, and configure the form they must complete before a private ticket channel is created. Save all settings, then run <code>/ticket panel</code> again to post the updated panel.</p>
               <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Discord category ID for ticket channels</strong>
+                <input value={settings.ticket_category_id || ''} onChange={event => setValue('ticket_category_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Discord category ID" style={fieldStyle} inputMode="numeric" />
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Ticket staff role ID</strong>
+                <input value={settings.ticket_staff_role_id || ''} onChange={event => setValue('ticket_staff_role_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Discord role ID" style={fieldStyle} inputMode="numeric" />
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Ticket log channel ID</strong>
+                <input value={settings.ticket_log_channel_id || ''} onChange={event => setValue('ticket_log_channel_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Discord text channel ID" style={fieldStyle} inputMode="numeric" />
+              </label>
+              <p>These IDs can be copied in Discord with Developer Mode enabled. The bot needs permission to view and manage the selected channels.</p>
+              <label style={{ display: 'block', marginTop: 12 }}>
                 <strong>Category picker style</strong>
                 <select value={settings.ticket_panel_style || 'dropdown'} onChange={event => setValue('ticket_panel_style', event.target.value)} style={fieldStyle}>
                   <option value="dropdown">Dropdown menu</option>
@@ -3908,7 +3921,7 @@ function BotControlPage() {
                 <textarea value={settings.ticket_form_questions || '["Briefly describe what you need help with."]'} onChange={event => setValue('ticket_form_questions', event.target.value)} rows={5} spellCheck={false} style={{ ...fieldStyle, fontFamily: 'monospace' }} />
                 <small>Use 1–5 questions. Each question becomes a required field shown before the bot creates the ticket channel. Each question must be 45 characters or fewer.</small>
               </label>
-              <p>Important: the ticket category and staff role used for channel permissions still need to be configured with <code>/ticket setup</code>. This editor controls the categories members choose on the panel.</p>
+              <p>Important: the ticket category and staff role used for channel permissions still need to be configured with <code>/ticket setup</code>. This editor controls the categories members choose on the panel. The channel category, staff role, and log channel can be set here or with `/ticket setup`.</p>
             </section>
             <section className="admin-publishing-guide">
               <h2>Automatic partnerships</h2>
