@@ -742,6 +742,17 @@ function HomePage() {
           <div className="hero-copy-block">
             <div className="eyebrow"><span className="eyebrow-line" /> A hands-on academy for curious minds</div>
             <h1 id="home-heading">Learn the idea.<br /><em>Then the code.</em></h1>
+            <p className="hero-typewriter">
+              <span className="hero-typewriter-sr-only">Make games, websites, and apps.</span>
+              <span className="hero-typewriter-visual" aria-hidden="true">
+                <span>Make </span>
+                <span className="hero-typewriter-rotator">
+                  <span className="hero-typewriter-word typewriter-games">games</span>
+                  <span className="hero-typewriter-word typewriter-websites">websites</span>
+                  <span className="hero-typewriter-word typewriter-apps">apps</span>
+                </span>
+              </span>
+            </p>
             <p className="hero-copy">Programming makes more sense when you can see the same idea in different languages. Start with the shared foundations, then follow the syntax wherever your curiosity goes.</p>
             <div className="hero-actions">
               <Link
