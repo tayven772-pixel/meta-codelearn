@@ -250,7 +250,7 @@ export const lessons: Lesson[] = [
       cpp: 'struct Profile { std::string name; int score; };\\nProfile profile = {"Mina", 12};',
       csharp: 'var profile = new { Name = "Mina", Score = 12 };\\nConsole.WriteLine(profile.Name);',
       go: 'profile := map[string]interface{}{"name": "Mina", "score": 12}\\nfmt.Println(profile["name"])',
-      rust: 'struct Profile { name: &\\'static str, score: u32 }\\nlet profile = Profile { name: "Mina", score: 12 };\\nprintln!("{}", profile.name);',
+      rust: 'struct Profile { name: &\'static str, score: u32 }\\nlet profile = Profile { name: "Mina", score: 12 };\\nprintln!("{}", profile.name);',
       sql: "SELECT 'Mina' AS name, 12 AS score;",
       ruby: 'profile = { name: "Mina", score: 12 }\\nputs profile[:name]',
     },
