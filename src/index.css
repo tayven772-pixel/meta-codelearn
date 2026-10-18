@@ -2811,3 +2811,7 @@ html[data-reduced-motion='true'] *::after {
   .code-editor-toolbar > div { gap: 7px; }
   .project-bottom-tabs button { padding-inline: 8px; }
 }
+
+@media (min-width: 1000px) and (max-width: 1100px) {
+  .mobile-nav-panel { top: 82px; }
+}
