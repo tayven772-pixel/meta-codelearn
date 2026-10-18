@@ -93,7 +93,7 @@ export default async function handler(req, res) {
     } catch {
       joinResult = { joined: false, reason: 'request_failed' };
     }
-    setCookie(res, 'meta_discord_session', createSession({ ...user, email: user.email, verified: user.verified }), 7 * 24 * 60 * 60);
+    setCookie(res, 'meta_discord_session', createSession({ ...user, email: user.email, verified: user.verified, access_token: tokenData.access_token }), 7 * 24 * 60 * 60);
     const status = joinResult.joined ? 'joined' : joinResult.reason === 'not_configured' ? 'join_setup_needed' : 'join_failed';
     return res.redirect(302, withStatus(returnTo, status));
   } catch (error) {
