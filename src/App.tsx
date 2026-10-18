@@ -3757,7 +3757,15 @@ function BotControlPage() {
     let template = templateText;
     try {
       const parsed = JSON.parse(template);
-      if (!Array.isArray(parsed.roles) || !Array.isArray(parsed.categories)) throw new Error('Template needs roles and categories arrays.');
+      if (!Array.isArray(parsed.roles) || !Array.isArray(parsed.categories) ||
+          parsed.roles.length > 40 || parsed.categories.length > 30 ||
+          parsed.roles.some((role: {name?: unknown}) => typeof role?.name !== 'string' || !role.name.trim() || role.name.length > 100) ||
+          parsed.categories.some((group: {name?: unknown; channels?: unknown}) => typeof group?.name !== 'string' || !group.name.trim() ||
+            !Array.isArray(group.channels) || group.channels.length > 50 ||
+            group.channels.some((channel: unknown) => !Array.isArray(channel) || !['text','voice'].includes(channel[0] as string) ||
+              typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
+        throw new Error('Use roles and categories arrays. Each channel must be ["text" or "voice", "channel-name"]. Limits: 40 roles, 30 categories, 50 channels each.');
+      }
     } catch (error) { setStatus('Setup template JSON is invalid: ' + (error instanceof Error ? error.message : 'check the JSON')); return; }
     const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_template','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help']);
     const payload = Object.fromEntries(Object.entries(settings).filter(([key]) => editableKeys.has(key) || key.startsWith('bot_command_enabled:')));
