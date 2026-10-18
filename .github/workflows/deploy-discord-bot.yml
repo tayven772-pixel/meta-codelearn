@@ -111,31 +111,7 @@ jobs:
           TARGET="/opt/meta-codelearn"
           SERVICE="meta-codelearn-discord.service"
           test -s "$PACKAGE"
-          sudo -n test -d "$TARGET/discord-bot"
-          BACKUP="/tmp/meta-discord-bot-backup-$DEPLOY_SHA.tar.gz"
-          sudo -n tar --exclude='discord-bot/.env' \
-            --exclude='discord-bot/.env.*' \
-            --exclude='discord-bot/node_modules' \
-            --exclude='discord-bot/data' \
-            --exclude='discord-bot/*.sqlite' \
-            --exclude='discord-bot/*.sqlite-*' \
-            -czf "$BACKUP" -C "$TARGET" discord-bot
-          sudo -n tar --no-same-owner -xzf "$PACKAGE" -C "$TARGET"
+          sudo -n /usr/local/sbin/meta-codelearn-deploy-discord-bot "$DEPLOY_SHA"
           rm -f "$PACKAGE"
-          if ! sudo -n bash -lc 'cd /opt/meta-codelearn/discord-bot && npm ci --omit=dev'; then
-            echo "Dependency installation failed. Bot service was not restarted."
-            exit 1
-          fi
-          if ! sudo -n systemctl restart "$SERVICE"; then
-            echo "Bot service restart failed; collecting logs."
-            sudo -n journalctl -u "$SERVICE" -n 40 --no-pager || true
-            echo "Code backup is available at $BACKUP"
-            exit 1
-          fi
-          if ! sudo -n systemctl is-active --quiet "$SERVICE"; then
-            sudo -n journalctl -u "$SERVICE" -n 40 --no-pager || true
-            echo "Bot service is not active after restart. Code backup: $BACKUP"
-            exit 1
-          fi
-          echo "Discord bot deployed and service is active. Code backup: $BACKUP"
+          echo "Discord bot deployment script completed successfully."
           REMOTE
