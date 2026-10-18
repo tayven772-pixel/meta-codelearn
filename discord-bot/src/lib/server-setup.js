@@ -249,97 +249,60 @@ export async function handleServerSetup(interaction, confirmed = false, alreadyD
   }
 
   const welcome = guild.channels.cache.find(
-    channel => channel.name === 'welcome' &&
-      channel.type === ChannelType.GuildText
+    channel => channel.name === 'welcome' && channel.type === ChannelType.GuildText
   );
-
   if (welcome) {
     try {
-      const alreadyPosted = (await welcome.messages.fetch({
-        limit: 10
-      })).some(message =>
-        message.author.id === botMember.id &&
-        message.embeds.some(embed =>
-          embed.title === 'Welcome to Meta CodeLearn!'
+      const messages = await welcome.messages.fetch({ limit: 20 });
+      const existing = messages.find(message => message.author.id === botMember.id &&
+        message.embeds.some(embed => ['Welcome to Meta Code!', 'Welcome to Meta CodeLearn!'].includes(embed.title)));
+      const welcomeOverride = getSetting(guild.id, 'bot_welcome_message');
+      const embed = new EmbedBuilder()
+        .setColor(0x54C8D8)
+        .setTitle('Welcome to Meta Code!')
+        .setDescription((welcomeOverride || 'A friendly community for learning, building projects, and helping each other grow.').slice(0, 4096))
+        .addFields(
+          { name: '💻 Learn', value: 'Explore coding topics and resources.', inline: true },
+          { name: '🛠️ Build', value: 'Share websites, bots, and projects.', inline: true },
+          { name: '🤝 Connect', value: 'Meet other learners and creators.', inline: true },
+          { name: '🚀 Get started', value: 'Read #rules, introduce yourself, and join the conversation.' }
         )
-      );
-
-      if (!alreadyPosted) {
-        const welcomeOverride = getSetting(guild.id, 'bot_welcome_message');
-        const embed = new EmbedBuilder()
-          .setColor(0x54C8D8)
-          .setTitle('Welcome to Meta Code!')
-          .setDescription((welcomeOverride || 'A friendly community for learning, building projects, and helping each other grow.').slice(0, 4096))
-          .addFields(
-            {
-              name: '💻 Learn',
-              value: 'Explore coding topics and resources.',
-              inline: true
-            },
-            {
-              name: '🛠️ Build',
-              value: 'Share websites, bots, and projects.',
-              inline: true
-            },
-            {
-              name: '🤝 Connect',
-              value: 'Meet other learners and creators.',
-              inline: true
-            },
-            {
-              name: '🚀 Get started',
-              value: 'Read #rules, introduce yourself, and join the conversation.'
-            }
-          )
-          .setFooter({
-            text: 'Learn together. Build together. Grow together.'
-          });
-
-        await welcome.send({ embeds: [embed] });
-      }
+        .setFooter({ text: 'Learn together. Build together. Grow together.' });
+      if (existing) await existing.edit({ embeds: [embed] });
+      else await welcome.send({ embeds: [embed], allowedMentions: { parse: [] } });
     } catch (error) {
-      errors.push(`Welcome message: ${error.message}`);
+      errors.push('Welcome message: ' + error.message);
     }
   }
 
   const rules = guild.channels.cache.find(
-    channel => channel.name === 'rules' &&
-      channel.type === ChannelType.GuildText
+    channel => channel.name === 'rules' && channel.type === ChannelType.GuildText
   );
-
   if (rules) {
     try {
-      const alreadyPosted = (await rules.messages.fetch({
-        limit: 10
-      })).some(message =>
-        message.author.id === botMember.id &&
-        message.embeds.some(embed =>
-          embed.title === 'Meta CodeLearn Community Rules'
-        )
-      );
-
-      if (!alreadyPosted) {
-        const embed = new EmbedBuilder()
-          .setColor(0x54C8D8)
-          .setTitle('Meta CodeLearn Community Rules')
-          .setDescription((getSetting(guild.id, 'bot_rules_text') || [
-            '1. Treat everyone with respect.',
-            '2. No harassment, hate, or threats.',
-            '3. Keep messages in the appropriate channels.',
-            '4. No spam or unsolicited advertising.',
-            '5. Never share passwords, tokens, or private information.',
-            '6. Only share projects and content you have permission to share.',
-            '7. Follow Discord’s Terms of Service and Community Guidelines.',
-            '8. Follow moderator instructions and use support tickets when needed.'
-          ].join('\n\n')).slice(0, 4096))
-          .setFooter({
-            text: 'Help us keep Meta CodeLearn friendly and welcoming.'
-          });
-
-        await rules.send({ embeds: [embed] });
-      }
+      const messages = await rules.messages.fetch({ limit: 20 });
+      const existing = messages.find(message => message.author.id === botMember.id &&
+        message.embeds.some(embed => ['Meta Code Community Rules', 'Meta CodeLearn Community Rules'].includes(embed.title)));
+      const rulesOverride = getSetting(guild.id, 'bot_rules_text');
+      const defaultRules = [
+        '1. Treat everyone with respect.',
+        '2. No harassment, hate, or threats.',
+        '3. Keep messages in the appropriate channels.',
+        '4. No spam or unsolicited advertising.',
+        '5. Never share passwords, tokens, or private information.',
+        '6. Only share projects and content you have permission to share.',
+        '7. Follow Discord’s Terms of Service and Community Guidelines.',
+        '8. Follow moderator instructions and use support tickets when needed.'
+      ].join('\n\n');
+      const embed = new EmbedBuilder()
+        .setColor(0x54C8D8)
+        .setTitle('Meta Code Community Rules')
+        .setDescription((rulesOverride || defaultRules).slice(0, 4096))
+        .setFooter({ text: 'Help us keep Meta Code friendly and welcoming.' });
+      if (existing) await existing.edit({ embeds: [embed] });
+      else await rules.send({ embeds: [embed], allowedMentions: { parse: [] } });
     } catch (error) {
-      errors.push(`Rules message: ${error.message}`);
+      errors.push('Rules message: ' + error.message);
     }
   }
 
