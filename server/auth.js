@@ -258,6 +258,140 @@ app.get('/api/auth/me', (req, res) => {
 });
 
 // Private Discord bot owner dashboard. URL secrecy is not used as authorization.
+// The website owner console shares the bot's local SQLite settings database.
+// It never exposes bot tokens or other runtime secrets.
+const botDatabasePath = process.env.META_BOT_DB_PATH || path.resolve(__dirname, '../discord-bot/data/meta-codelearn.sqlite');
+fs.mkdirSync(path.dirname(botDatabasePath), { recursive: true, mode: 0o700 });
+const botDb = new Database(botDatabasePath);
+botDb.pragma('journal_mode = WAL');
+botDb.pragma('busy_timeout = 5000');
+botDb.exec(`
+  CREATE TABLE IF NOT EXISTS settings (
+    guild_id TEXT NOT NULL,
+    setting_key TEXT NOT NULL,
+    setting_value TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (guild_id, setting_key)
+  );
+  CREATE TABLE IF NOT EXISTS autopartner_partners (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id TEXT NOT NULL,
+    name TEXT NOT NULL COLLATE NOCASE,
+    invite_url TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    created_by TEXT NOT NULL DEFAULT 'website',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (guild_id, name)
+  );
+  CREATE INDEX IF NOT EXISTS autopartner_partners_guild ON autopartner_partners(guild_id);
+`);
+const botCommandNames = [
+  'meta','lessons','ping','membercount','avatar','roleinfo','slowmode','lock','unlock','embed','help',
+  'serverinfo','userinfo','poll','suggest','coinflip','roll','choose','8ball','announce',
+  'setup-applications','ticket','ticket-panel','setup-server','warn','warnings','timeout','untimeout','purge',
+  'autopartner-setup','partner-add','partner-remove','partner-list','partner-settings','partner-template','partner-post',
+  'thread','topic','randomcolor','remindme'
+];
+function requireBotOwner(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
+  const user = sessionUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Sign in with the owner Meta account to continue.' });
+    return null;
+  }
+  if (normalizeEmail(user.email) !== 'metasupport43@gmail.com') {
+    res.status(403).json({ error: 'This account is not authorized to control the bot.' });
+    return null;
+  }
+  return user;
+}
+function validGuildId(value) {
+  return typeof value === 'string' && /^\\d{17,20}$/.test(value);
+}
+function botSettingsForGuild(guildId) {
+  return Object.fromEntries(botDb.prepare('SELECT setting_key, setting_value FROM settings WHERE guild_id = ?').all(guildId).map(row => [row.setting_key, row.setting_value]));
+}
+app.get('/api/auth/admin/bot-control/settings', (req, res) => {
+  if (!requireBotOwner(req, res)) return;
+  const guildId = String(req.query.guildId || '').trim();
+  if (!validGuildId(guildId)) return res.status(400).json({ error: 'Enter a valid Discord server ID (17–20 digits).' });
+  const settings = botSettingsForGuild(guildId);
+  const partners = botDb.prepare('SELECT id, name, invite_url, description, created_at FROM autopartner_partners WHERE guild_id = ? ORDER BY name COLLATE NOCASE').all(guildId);
+  return res.json({ guildId, settings, commands: botCommandNames, partners });
+});
+app.put('/api/auth/admin/bot-control/settings', (req, res) => {
+  if (!requireBotOwner(req, res)) return;
+  const guildId = String(req.body?.guildId || '').trim();
+  const values = req.body?.settings;
+  if (!validGuildId(guildId) || !values || typeof values !== 'object' || Array.isArray(values)) {
+    return res.status(400).json({ error: 'Provide a valid server ID and a settings object.' });
+  }
+  const allowed = new Set([
+    'autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_template',
+    'server_setup_template','bot_welcome_message','bot_rules_text','bot_status_text',
+    ...botCommandNames.map(name => `bot_command_enabled:${name}`),
+    ...['meta','lessons','ping','help'].map(name => `bot_response:${name}`)
+  ]);
+  const put = botDb.prepare(`
+    INSERT INTO settings (guild_id, setting_key, setting_value, updated_at)
+    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT (guild_id, setting_key) DO UPDATE SET setting_value = excluded.setting_value, updated_at = CURRENT_TIMESTAMP
+  `);
+  const transaction = botDb.transaction(() => {
+    for (const [key, rawValue] of Object.entries(values)) {
+      if (!allowed.has(key)) throw new Error(`Unsupported setting: ${key}`);
+      const value = String(rawValue ?? '');
+      if (value.length > (key === 'server_setup_template' ? 30000 : key.endsWith('template') ? 1800 : 5000)) {
+        throw new Error(`Setting ${key} is too long.`);
+      }
+      if (key === 'autopartner_enabled' && !['true','false'].includes(value)) throw new Error('Autopartner enabled must be true or false.');
+      if (key === 'autopartner_interval_hours' && (!/^\\d+$/.test(value) || Number(value) < 6 || Number(value) > 168)) throw new Error('Autopartner interval must be 6–168 hours.');
+      if (key === 'autopartner_channel_id' && value && !/^\\d{17,20}$/.test(value)) throw new Error('Autopartner channel ID must be a Discord ID.');
+      if (key.startsWith('bot_command_enabled:') && !['true','false'].includes(value)) throw new Error('Command toggles must be true or false.');
+      if (key === 'server_setup_template' && value) {
+        const template = JSON.parse(value);
+        if (!Array.isArray(template.roles) || !Array.isArray(template.categories) || template.roles.length > 40 || template.categories.length > 30) {
+          throw new Error('Setup template must include roles and categories (up to 40 roles and 30 categories).');
+        }
+      }
+      put.run(guildId, key, value);
+    }
+  });
+  try {
+    transaction();
+    return res.json({ saved: Object.keys(values).length, settings: botSettingsForGuild(guildId) });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || 'Could not save bot settings.' });
+  }
+});
+app.post('/api/auth/admin/bot-control/partners', (req, res) => {
+  if (!requireBotOwner(req, res)) return;
+  const guildId = String(req.body?.guildId || '').trim();
+  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  const inviteUrl = typeof req.body?.invite_url === 'string' ? req.body.invite_url.trim() : '';
+  const description = typeof req.body?.description === 'string' ? req.body.description.trim() : '';
+  if (!validGuildId(guildId) || !name || name.length > 80 || description.length > 300) return res.status(400).json({ error: 'Check the server ID, partner name (1–80 chars), and description (up to 300 chars).' });
+  let url;
+  try { url = new URL(inviteUrl); } catch { return res.status(400).json({ error: 'Enter a valid Discord invite URL.' }); }
+  if (url.protocol !== 'https:' || !['discord.gg','www.discord.gg','discord.com','www.discord.com'].includes(url.hostname) || (url.hostname.includes('discord.com') && !url.pathname.startsWith('/invite/'))) {
+    return res.status(400).json({ error: 'Only official HTTPS Discord invite links are accepted.' });
+  }
+  try {
+    const result = botDb.prepare('INSERT INTO autopartner_partners (guild_id, name, invite_url, description, created_by) VALUES (?, ?, ?, ?, ?)').run(guildId, name, inviteUrl, description, 'website');
+    return res.status(201).json({ partner: botDb.prepare('SELECT id, name, invite_url, description, created_at FROM autopartner_partners WHERE id = ?').get(result.lastInsertRowid) });
+  } catch (error) {
+    return res.status(409).json({ error: String(error.message).includes('UNIQUE') ? 'A partner with that name already exists.' : 'Could not save partner.' });
+  }
+});
+app.delete('/api/auth/admin/bot-control/partners/:id', (req, res) => {
+  if (!requireBotOwner(req, res)) return;
+  const guildId = String(req.query.guildId || '').trim();
+  const id = Number(req.params.id);
+  if (!validGuildId(guildId) || !Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid server or partner ID.' });
+  const result = botDb.prepare('DELETE FROM autopartner_partners WHERE id = ? AND guild_id = ?').run(id, guildId);
+  return result.changes ? res.json({ deleted: true }) : res.status(404).json({ error: 'Partner not found.' });
+});
+
 app.get('/api/auth/admin/bot-control', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const user = sessionUser(req);
@@ -269,7 +403,7 @@ app.get('/api/auth/admin/bot-control', (req, res) => {
   return res.json({
     owner: user.email,
     dashboard: 'Meta Code bot owner console',
-    commands: ['/help', '/meta', '/lessons', '/ping', '/serverinfo', '/userinfo', '/poll', '/suggest', '/coinflip', '/roll', '/choose', '/8ball', '/announce', '/ticket', '/ticket-panel', '/setup-server', '/setup-applications']
+    commands: botCommandNames.map(name => '/' + name)
   });
 });
 
