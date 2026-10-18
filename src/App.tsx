@@ -3759,7 +3759,9 @@ function BotControlPage() {
       const parsed = JSON.parse(template);
       if (!Array.isArray(parsed.roles) || !Array.isArray(parsed.categories)) throw new Error('Template needs roles and categories arrays.');
     } catch (error) { setStatus('Setup template JSON is invalid: ' + (error instanceof Error ? error.message : 'check the JSON')); return; }
-    const payload = { ...settings, server_setup_template: template };
+    const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_template','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help']);
+    const payload = Object.fromEntries(Object.entries(settings).filter(([key]) => editableKeys.has(key) || key.startsWith('bot_command_enabled:')));
+    payload.server_setup_template = template;
     setBusy(true);
     try {
       const response = await fetch('/api/auth/admin/bot-control/settings', {
