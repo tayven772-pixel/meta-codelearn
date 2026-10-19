@@ -3850,6 +3850,9 @@ function BotControlPage() {
   };
   const toggleCommand = (name: string, enabled: boolean) => setValue('bot_command_enabled:' + name, enabled ? 'true' : 'false');
   const isEnabled = (name: string) => settings['bot_command_enabled:' + name] !== 'false';
+  useEffect(() => {
+    if (editorOpen) document.getElementById('bot-settings-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [editorOpen]);
   const fieldStyle: CSSProperties = { width: '100%', marginTop: 8, padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border, #d1d5db)', background: 'var(--surface, #fff)', color: 'var(--text, #111827)' };
   return (
     <AppShell>
@@ -3881,14 +3884,16 @@ function BotControlPage() {
             <p>Authorized account: <strong>{owner}</strong></p>
             <p>Global Meta bot settings. The configured bot is selected automatically; you don't need to connect Discord or choose a server here.</p>
             <div className="admin-publishing-actions">
-              <button type="button" className="button-primary" onClick={() => { setEditorOpen(true); void loadSettings(); }} disabled={busy}><Settings aria-hidden="true" /> Edit bot settings</button>
+              <button type="button" className="button-primary" onClick={() => { setEditorOpen(true); setStatus('Opening the bot settings editor…'); void loadSettings(); }} disabled={busy}><Settings aria-hidden="true" /> {editorOpen ? 'Editor open' : 'Edit bot settings'}</button>
               {editorOpen && <button type="button" className="button-secondary" onClick={saveSettings} disabled={busy}>Save all settings</button>}
             </div>
             <p>Settings can be edited while the bot is offline and will take effect when it reconnects.</p>
           </section>
           {editorOpen && <>
-            <section className="admin-publishing-guide">
-              <h2>Command controls</h2>
+            <section id="bot-settings-editor" className="admin-publishing-guide">
+              <h2>Bot settings editor</h2>
+              <p>The editor is open. Change any fields below, then choose Save all settings.</p>
+              <h3>Command controls</h3>
               <p>Turn commands off here without editing code. Staff-only permissions are still enforced by Discord and the bot.</p>
               <div className="admin-content-list">
                 {commands.map(command => <label className="admin-content-list-item" key={command} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
