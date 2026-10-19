@@ -75,6 +75,30 @@ const commands = [
 ].map(command => command.toJSON());
 client.once(Events.ClientReady, async readyClient => {
  console.log(`Meta bot ready as ${readyClient.user.tag}`);
+ const syncBotGuilds = () => {
+  const upsert = db.prepare(`INSERT INTO bot_guild_presence (guild_id, name, icon, updated_at)
+   VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+   ON CONFLICT(guild_id) DO UPDATE SET name=excluded.name, icon=excluded.icon, updated_at=CURRENT_TIMESTAMP`);
+  const sync = db.transaction(() => {
+   const liveIds = new Set(readyClient.guilds.cache.map(guild => guild.id));
+   for (const guild of readyClient.guilds.cache.values()) upsert.run(guild.id, guild.name, guild.icon);
+   const existing = db.prepare('SELECT guild_id FROM bot_guild_presence').all();
+   const remove = db.prepare('DELETE FROM bot_guild_presence WHERE guild_id=?');
+   for (const row of existing) if (!liveIds.has(row.guild_id)) remove.run(row.guild_id);
+  });
+  sync();
+ };
+ syncBotGuilds();
+ readyClient.on(Events.GuildCreate, guild => {
+  db.prepare(`INSERT INTO bot_guild_presence (guild_id, name, icon, updated_at)
+   VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+   ON CONFLICT(guild_id) DO UPDATE SET name=excluded.name, icon=excluded.icon, updated_at=CURRENT_TIMESTAMP`)
+   .run(guild.id, guild.name, guild.icon);
+ });
+ readyClient.on(Events.GuildDelete, guild => {
+  db.prepare('DELETE FROM bot_guild_presence WHERE guild_id=?').run(guild.id);
+ });
+
  const configuredStatus = getSetting(guildId || readyClient.guilds.cache.first()?.id || '', 'bot_status_text');
  if (configuredStatus) readyClient.user.setPresence({ activities: [{ name: configuredStatus.slice(0, 128), type: ActivityType.Playing }], status: 'online' });
  runAutoPartnerScheduler(readyClient).catch(error => console.error('Autopartner startup check failed:', error.message));
