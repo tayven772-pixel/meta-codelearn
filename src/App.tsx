@@ -3763,10 +3763,9 @@ function BotControlPage() {
   }, []);
   const loadSettings = async () => {
     const id = guildId.trim();
-    if (!/^\d{17,20}$/.test(id)) { setStatus('The Meta home server ID is not configured yet.'); return; }
     setBusy(true);
     try {
-      const response = await fetch('/api/auth/admin/bot-control/settings?guildId=' + encodeURIComponent(id), { credentials: 'same-origin', cache: 'no-store' });
+      const response = await fetch('/api/auth/admin/bot-control/settings' + (id ? '?guildId=' + encodeURIComponent(id) : ''), { credentials: 'same-origin', cache: 'no-store' });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Could not load settings.');
       setSettings(data.settings || {});
@@ -3778,7 +3777,6 @@ function BotControlPage() {
   };
   const setValue = (key: string, value: string) => setSettings(current => ({ ...current, [key]: value }));
   const saveSettings = async () => {
-    if (!/^\d{17,20}$/.test(guildId.trim())) { setStatus('Load a valid server ID first.'); return; }
     let template = templateText;
     try {
       const parsed = JSON.parse(template);
@@ -3799,7 +3797,7 @@ function BotControlPage() {
     try {
       const response = await fetch('/api/auth/admin/bot-control/settings', {
         method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guildId: guildId.trim(), settings: payload })
+        body: JSON.stringify({ ...(guildId.trim() ? { guildId: guildId.trim() } : {}), settings: payload })
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Could not save settings.');
@@ -3883,12 +3881,12 @@ function BotControlPage() {
             <p>Authorized account: <strong>{owner}</strong></p>
             <p>Global Meta bot settings. The configured bot is selected automatically; you don't need to connect Discord or choose a server here.</p>
             <div className="admin-publishing-actions">
-              <button type="button" className="button-primary" onClick={() => { setEditorOpen(true); void loadSettings(); }} disabled={busy || !/^\d{17,20}$/.test(guildId)}><Settings aria-hidden="true" /> Edit bot settings</button>
-              {editorOpen && <button type="button" className="button-secondary" onClick={saveSettings} disabled={busy || !/^\d{17,20}$/.test(guildId)}>Save all settings</button>}
+              <button type="button" className="button-primary" onClick={() => { setEditorOpen(true); void loadSettings(); }} disabled={busy}><Settings aria-hidden="true" /> Edit bot settings</button>
+              {editorOpen && <button type="button" className="button-secondary" onClick={saveSettings} disabled={busy}>Save all settings</button>}
             </div>
             <p>Settings can be edited while the bot is offline and will take effect when it reconnects.</p>
           </section>
-          {editorOpen && /^\d{17,20}$/.test(guildId) && <>
+          {editorOpen && <>
             <section className="admin-publishing-guide">
               <h2>Command controls</h2>
               <p>Turn commands off here without editing code. Staff-only permissions are still enforced by Discord and the bot.</p>
