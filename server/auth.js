@@ -321,13 +321,27 @@ async function fetchDiscordGuilds(user) {
   const guilds = await response.json().catch(() => null);
   return Array.isArray(guilds) ? guilds : null;
 }
+function getHomeGuildId() {
+  const direct = String(process.env.META_HOME_GUILD_ID || process.env.DISCORD_GUILD_ID || '').trim();
+  if (validGuildId(direct)) return direct;
+  // The bot's .env is local server-side configuration; never expose its contents.
+  try {
+    const file = fs.readFileSync(path.resolve(__dirname, '../discord-bot/.env'), 'utf8');
+    const line = file.split(/\\r?\\n/).find(row => /^(META_HOME_GUILD_ID|DISCORD_GUILD_ID)=/.test(row));
+    if (!line) return '';
+    const value = line.slice(line.indexOf('=') + 1).trim().replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1');
+    return validGuildId(value) ? value : '';
+  } catch {
+    return '';
+  }
+}
 async function requireOwnedGuild(req, res, _requestedGuildId) {
   const user = readSession(req);
   if (!user || !user.access_token) {
     res.status(401).json({ error: 'Reconnect Discord to verify ownership of the Meta home server.' });
     return false;
   }
-  const homeGuildId = String(process.env.META_HOME_GUILD_ID || process.env.DISCORD_GUILD_ID || '').trim();
+  const homeGuildId = getHomeGuildId();
   if (!validGuildId(homeGuildId)) {
     res.status(503).json({ error: 'The bot home server is not configured on the server.' });
     return false;
@@ -346,7 +360,7 @@ async function requireOwnedGuild(req, res, _requestedGuildId) {
 }
 function botSettingsForGuild(guildId) {
   const rows = getBotDb().prepare(
-    "SELECT setting_key, setting_value FROM settings WHERE guild_id IN (?, 'global') ORDER BY CASE WHEN guild_id = 'global' THEN 0 ELSE 1 END"
+    "SELECT setting_key, setting_value FROM settings WHERE guild_id IN (?, 'global') ORDER BY CASE WHEN guild_id = 'global' THEN 1 ELSE 0 END"
   ).all(guildId);
   return Object.fromEntries(rows.map(row => [row.setting_key, row.setting_value]));
 }
