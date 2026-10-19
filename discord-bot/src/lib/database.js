@@ -92,6 +92,10 @@ const setSettingStatement = db.prepare(`
 `);
 
 export function getSetting(guildId, key) {
+  // Prefer global bot settings; retain guild-specific values only as a fallback
+  // for settings that existed before the bot control panel became global.
+  const globalRow = getSettingStatement.get('global', key);
+  if (globalRow) return globalRow.setting_value;
   const row = getSettingStatement.get(guildId, key);
   return row ? row.setting_value : null;
 }
