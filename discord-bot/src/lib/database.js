@@ -27,6 +27,13 @@ db.exec(`
     PRIMARY KEY (guild_id, setting_key)
   );
 
+  CREATE TABLE IF NOT EXISTS bot_guild_presence (
+    guild_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    icon TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE TABLE IF NOT EXISTS tickets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     guild_id TEXT NOT NULL,
