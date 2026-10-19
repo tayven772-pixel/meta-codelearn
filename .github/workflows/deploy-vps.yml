@@ -179,27 +179,16 @@ jobs:
           sudo -n cp -a "$BOT_INDEX_STAGE" /opt/meta-codelearn/discord-bot/src/index.js
           sudo -n nginx -t
           sudo -n systemctl reload nginx
-          if ! sudo -n systemctl restart meta-codelearn-discord.service; then
-            sudo -n cp -a "$BOT_INDEX_BACKUP" /opt/meta-codelearn/discord-bot/src/index.js
-            sudo -n systemctl restart meta-codelearn-discord.service || true
-            echo "Discord bot restart failed; previous bot entrypoint restored."
-            exit 1
-          fi
-          sleep 3
-          if ! sudo -n systemctl is-active --quiet meta-codelearn-discord.service; then
-            sudo -n journalctl -u meta-codelearn-discord.service -n 25 --no-pager || true
-            sudo -n cp -a "$BOT_INDEX_BACKUP" /opt/meta-codelearn/discord-bot/src/index.js
-            sudo -n systemctl restart meta-codelearn-discord.service || true
-            echo "Discord bot health check failed; previous bot entrypoint restored."
-            exit 1
-          fi
+
+          # Restart and health-check the settings API before attempting the bot restart.
+          # The VPS sudoers may allow auth restarts but not Discord bot restarts.
           if ! sudo -n systemctl restart meta-codelearn-auth.service; then
             sudo -n cp -a "$AUTH_BACKUP" /opt/meta-codelearn/server/auth.js
             sudo -n cp -a "$DISCORD_START_BACKUP" /opt/meta-codelearn/api/auth/discord.js
             sudo -n cp -a "$DISCORD_CALLBACK_BACKUP" /opt/meta-codelearn/api/auth/callback.js
             sudo -n cp -a "$DISCORD_AUTH_LIB_BACKUP" /opt/meta-codelearn/lib/discord-auth.js
             sudo -n systemctl restart meta-codelearn-auth.service || true
-            echo "Auth service restart failed; previous auth server file restored."
+            echo "Auth service restart failed; previous auth server files restored."
             exit 1
           fi
           AUTH_HEALTHY=0
@@ -214,10 +203,26 @@ jobs:
             echo "Auth health check failed after retries; collecting service logs."
             sudo -n journalctl -u meta-codelearn-auth.service -n 25 --no-pager || true
             sudo -n cp -a "$AUTH_BACKUP" /opt/meta-codelearn/server/auth.js
+            sudo -n cp -a "$DISCORD_START_BACKUP" /opt/meta-codelearn/api/auth/discord.js
+            sudo -n cp -a "$DISCORD_CALLBACK_BACKUP" /opt/meta-codelearn/api/auth/callback.js
             sudo -n cp -a "$DISCORD_AUTH_LIB_BACKUP" /opt/meta-codelearn/lib/discord-auth.js
             sudo -n systemctl restart meta-codelearn-auth.service || true
-            echo "Previous auth server file restored."
+            echo "Previous auth server files restored."
             exit 1
+          fi
+
+          # Bot code is staged safely. A missing sudo permission for this service
+          # must not prevent the website and settings API from being published.
+          if sudo -n systemctl restart meta-codelearn-discord.service; then
+            sleep 3
+            if sudo -n systemctl is-active --quiet meta-codelearn-discord.service; then
+              echo "Discord bot service restarted successfully."
+            else
+              echo "WARNING: website and settings API deployed, but Discord bot service is not active; check VPS service permissions/logs."
+              sudo -n journalctl -u meta-codelearn-discord.service -n 15 --no-pager || true
+            fi
+          else
+            echo "WARNING: website and settings API deployed, but sudo cannot restart meta-codelearn-discord.service. Bot code is staged on the VPS; grant the deploy user permission to restart this service to apply bot code changes."
           fi
           rm -rf "$STAGING"
           rm -f "$AUTH_STAGE" "$DISCORD_START_STAGE" "$DISCORD_CALLBACK_STAGE" "$DISCORD_AUTH_LIB_STAGE" "$BOT_INDEX_STAGE"
