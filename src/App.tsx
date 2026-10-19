@@ -3857,7 +3857,7 @@ function BotControlPage() {
         <div className="admin-publishing-heading">
           <p className="section-kicker">Private · owner access only</p>
           <h1>Meta Code bot control</h1>
-          <p>Manage command access, partnership rotation, server setup templates, and editable bot messages from the website. Bot tokens and secrets are never displayed.</p>
+          <p>Manage Meta bot globally from one private control panel: commands, partnership rotation, server setup templates, tickets, and bot messages. Settings apply to the bot as a whole, not separate servers. Bot tokens and secrets are never displayed.</p>
         </div>
         <p className="admin-publishing-status" role="status">{status}</p>
         {discordChecked && !discordReady && <section className="admin-publishing-guide">
@@ -3879,12 +3879,12 @@ function BotControlPage() {
           <section className="admin-publishing-guide">
             <h2>Owner session</h2>
             <p>Authorized account: <strong>{owner}</strong></p>
-            <p>Your Discord servers</p>
+            <p>Meta home server · Global bot settings</p>
             <select value={guildId} onChange={event => { setGuildId(event.target.value); setSettings({}); setPartners([]); setTemplateText(defaultTemplate); }} style={fieldStyle}>
-              <option value="">Choose a server…</option>
+              <option value="">Meta home server…</option>
               {servers.map(server => <option key={server.id} value={server.id}>{server.name} {server.botPresent ? '' : '— Add Meta bot'} {server.owner ? '— You own this server' : '— Read-only'}</option>)}
             </select>
-            {selectedServer && <p>{!selectedServer.botPresent ? 'Meta bot is not in this server yet. Add the bot to this server before managing its settings.' : selectedServer.owner ? 'You own this server and Meta bot is present. You can edit its settings.' : 'You are a member, not the owner. Editing is disabled for this server.'}</p>}
+            {selectedServer && <p>{!selectedServer.botPresent ? 'Meta bot is not in this server yet. Add the bot to this server before managing its settings.' : selectedServer.owner ? 'You own the Meta home server. You can edit global Meta bot settings.' : 'You are a member, not the owner. Editing is disabled for this server.'}</p>}
             <div className="admin-publishing-actions">
               <button type="button" className="button-primary" onClick={loadSettings} disabled={busy || !selectedServer?.owner || !selectedServer?.botPresent}>Load server settings</button>
               <button type="button" className="button-secondary" onClick={saveSettings} disabled={busy || !selectedServer?.owner || !selectedServer?.botPresent}>Save all settings</button>
