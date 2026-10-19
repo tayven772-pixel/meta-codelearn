@@ -3708,6 +3708,7 @@ function BotControlPage() {
   const [partnerInvite, setPartnerInvite] = useState('');
   const [partnerDescription, setPartnerDescription] = useState('');
   const [busy, setBusy] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
   const defaultTemplate = JSON.stringify({
     roles: [
       { name: 'Founder', color: 16042333 }, { name: 'Administrator', color: 9289215 },
@@ -3760,11 +3761,9 @@ function BotControlPage() {
       .catch(error => { if (active) setStatus(error instanceof Error ? error.message : 'Could not check Meta owner access.'); });
     return () => { active = false; };
   }, []);
-  const selectedServer = servers.find(server => server.id === guildId);
   const loadSettings = async () => {
     const id = guildId.trim();
-    if (!selectedServer?.owner) { setStatus('You must own the selected Discord server to edit its bot settings.'); return; }
-    if (!/^\d{17,20}$/.test(id)) { setStatus('Select one of your owned servers first.'); return; }
+    if (!/^\d{17,20}$/.test(id)) { setStatus('The Meta home server ID is not configured yet.'); return; }
     setBusy(true);
     try {
       const response = await fetch('/api/auth/admin/bot-control/settings?guildId=' + encodeURIComponent(id), { credentials: 'same-origin', cache: 'no-store' });
@@ -3884,12 +3883,12 @@ function BotControlPage() {
             <p>Authorized account: <strong>{owner}</strong></p>
             <p>Global Meta bot settings. The configured bot is selected automatically; you don't need to connect Discord or choose a server here.</p>
             <div className="admin-publishing-actions">
-              <button type="button" className="button-primary" onClick={loadSettings} disabled={busy || !selectedServer?.owner || !guildId}>Load bot settings</button>
-              <button type="button" className="button-secondary" onClick={saveSettings} disabled={busy || !selectedServer?.owner || !guildId}>Save all settings</button>
+              <button type="button" className="button-primary" onClick={() => { setEditorOpen(true); void loadSettings(); }} disabled={busy || !/^\d{17,20}$/.test(guildId)}><Settings aria-hidden="true" /> Edit bot settings</button>
+              {editorOpen && <button type="button" className="button-secondary" onClick={saveSettings} disabled={busy || !/^\d{17,20}$/.test(guildId)}>Save all settings</button>}
             </div>
             <p>Settings can be edited while the bot is offline and will take effect when it reconnects.</p>
           </section>
-          {selectedServer?.owner && guildId.length >= 17 && <>
+          {editorOpen && /^\d{17,20}$/.test(guildId) && <>
             <section className="admin-publishing-guide">
               <h2>Command controls</h2>
               <p>Turn commands off here without editing code. Staff-only permissions are still enforced by Discord and the bot.</p>
