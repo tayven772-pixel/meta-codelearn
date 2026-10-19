@@ -353,24 +353,36 @@ app.get('/api/auth/admin/bot-control/servers', async (req, res) => {
     if (user.access_token) {
       try { userGuilds = await fetchDiscordGuilds(user); } catch { userGuilds = null; }
     }
-    const ownership = new Map((userGuilds || []).map(guild => [String(guild.id), guild.owner === true]));
-    const servers = botServers.map(guild => ({
-      id: String(guild.guild_id),
-      name: String(guild.name || 'Unnamed server'),
-      icon: guild.icon ? `https://cdn.discordapp.com/icons/${guild.guild_id}/${guild.icon}.png?size=96` : null,
-      owner: ownership.get(String(guild.guild_id)) === true,
-      botPresent: true
-    })).sort((left, right) => Number(right.owner) - Number(left.owner) || left.name.localeCompare(right.name));
-    return res.json({
+
+    // Show every server the connected user belongs to, not only servers already
+    // joined by the bot. This makes it clear which servers still need the bot.
+    const botById = new Map(botServers.map(guild => [String(guild.guild_id), guild]));
+    const userById = new Map((userGuilds || []).map(guild => [String(guild.id), guild]));
+    const allIds = new Set([...botById.keys(), ...userById.keys()]);
+    const servers = [...allIds].map(id => {
+      const botGuild = botById.get(id);
+      const userGuild = userById.get(id);
+      const guild = botGuild || userGuild;
+      const iconHash = botGuild?.icon || userGuild?.icon;
+      return {
+        id,
+        name: String(guild?.name || 'Unnamed server'),
+        icon: iconHash ? `https://cdn.discordapp.com/icons/${id}/${iconHash}.png?size=96` : null,
+        owner: userGuild?.owner === true,
+        botPresent: Boolean(botGuild)
+      };
+    }).sort((left, right) => Number(right.owner) - Number(left.owner) || Number(right.botPresent) - Number(left.botPresent) || left.name.localeCompare(right.name));
+
+    return res.setHeader('Cache-Control', 'no-store'), res.json({
       servers,
       ownershipVerified: Array.isArray(userGuilds),
-      message: botServers.length === 0
-        ? 'No bot servers have been synced yet. Make sure the Meta bot is online and restart its service.'
-        : (Array.isArray(userGuilds) ? null : 'Bot servers are detected. Reconnect Discord only when you want to verify server ownership.')
+      message: !Array.isArray(userGuilds)
+        ? (botServers.length ? 'Bot servers are detected, but Discord ownership could not be verified. Reconnect Discord to load your full server list.' : 'Reconnect Discord to load the servers you belong to.')
+        : (servers.length === 0 ? 'No Discord servers were returned for this account. Reconnect Discord and approve the server-list permission.' : null)
     });
   } catch (error) {
     console.error('Bot server list failed:', error?.message || 'unknown error');
-    return res.status(502).json({ error: 'Could not load the bot server list. Make sure the Meta bot is online and updated.' });
+    return res.status(502).json({ error: 'Could not load the Discord server list. Reconnect Discord and try again.' });
   }
 });
 app.get('/api/auth/admin/bot-control/settings', async (req, res) => {
