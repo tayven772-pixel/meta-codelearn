@@ -305,10 +305,8 @@ function requireBotOwner(req, res) {
     res.status(401).json({ error: 'Connect your Discord account to manage bot settings.' });
     return null;
   }
-  if (!user.access_token) {
-    res.status(401).json({ error: 'Reconnect Discord to grant permission to list your servers.' });
-    return null;
-  }
+  // Do not require an OAuth guild-list token just to detect the bot's servers.
+  // Ownership is checked separately before any server settings can be changed.
   return user;
 }
 function validGuildId(value) {
@@ -348,14 +346,14 @@ app.get('/api/auth/admin/bot-control/servers', async (req, res) => {
   const user = requireBotOwner(req, res);
   if (!user) return;
   try {
-    // The bot process records its actual guild cache in the shared SQLite database.
-    // OAuth is used only to verify which of those bot servers the signed-in user owns.
     const botServers = getBotDb().prepare(
       'SELECT guild_id, name, icon FROM bot_guild_presence ORDER BY name COLLATE NOCASE'
     ).all();
-    const userGuilds = await fetchDiscordGuilds(user);
-    if (!userGuilds) return res.status(401).json({ error: 'Discord could not verify server ownership. Reconnect Discord once to approve the server-list permission.' });
-    const ownership = new Map(userGuilds.map(guild => [String(guild.id), guild.owner === true]));
+    let userGuilds = null;
+    if (user.access_token) {
+      try { userGuilds = await fetchDiscordGuilds(user); } catch { userGuilds = null; }
+    }
+    const ownership = new Map((userGuilds || []).map(guild => [String(guild.id), guild.owner === true]));
     const servers = botServers.map(guild => ({
       id: String(guild.guild_id),
       name: String(guild.name || 'Unnamed server'),
@@ -363,10 +361,16 @@ app.get('/api/auth/admin/bot-control/servers', async (req, res) => {
       owner: ownership.get(String(guild.guild_id)) === true,
       botPresent: true
     })).sort((left, right) => Number(right.owner) - Number(left.owner) || left.name.localeCompare(right.name));
-    return res.json({ servers });
+    return res.json({
+      servers,
+      ownershipVerified: Array.isArray(userGuilds),
+      message: botServers.length === 0
+        ? 'No bot servers have been synced yet. Make sure the Meta bot is online and restart its service.'
+        : (Array.isArray(userGuilds) ? null : 'Bot servers are detected. Reconnect Discord only when you want to verify server ownership.')
+    });
   } catch (error) {
     console.error('Bot server list failed:', error?.message || 'unknown error');
-    return res.status(502).json({ error: 'Could not load the bot server list. Make sure the Meta bot is online.' });
+    return res.status(502).json({ error: 'Could not load the bot server list. Make sure the Meta bot is online and updated.' });
   }
 });
 app.get('/api/auth/admin/bot-control/settings', async (req, res) => {
