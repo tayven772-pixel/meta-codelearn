@@ -3777,6 +3777,7 @@ function BotControlPage() {
   };
   const setValue = (key: string, value: string) => setSettings(current => ({ ...current, [key]: value }));
   const saveSettings = async () => {
+    setStatus('Saving bot settings…');
     let template = templateText;
     try {
       const parsed = JSON.parse(template);
@@ -3885,8 +3886,9 @@ function BotControlPage() {
             <p>Global Meta bot settings. The configured bot is selected automatically; you don't need to connect Discord or choose a server here.</p>
             <div className="admin-publishing-actions">
               <button type="button" className="button-primary" onClick={() => { setEditorOpen(true); setStatus('Opening the bot settings editor…'); void loadSettings(); }} disabled={busy}><Settings aria-hidden="true" /> {editorOpen ? 'Editor open' : 'Edit bot settings'}</button>
-              {editorOpen && <button type="button" className="button-secondary" onClick={saveSettings} disabled={busy}>Save all settings</button>}
+              {editorOpen && <button type="button" className="button-secondary" onClick={() => { void saveSettings(); }} disabled={busy}>{busy ? 'Saving…' : 'Save all settings'}</button>}
             </div>
+            {editorOpen && <p className="admin-publishing-status" role="status" aria-live="polite">{status}</p>}
             <p>Settings can be edited while the bot is offline and will take effect when it reconnects.</p>
           </section>
           {editorOpen && <>
