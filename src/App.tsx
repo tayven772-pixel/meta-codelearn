@@ -3752,7 +3752,7 @@ function BotControlPage() {
         const firstOwned = availableServers.find((server: {owner:boolean}) => server.owner);
         setGuildId(firstOwned?.id || '');
         setAllowed(true);
-        setStatus(firstOwned ? 'Choose one of your servers to manage its Meta Bot settings.' : 'Your Discord servers loaded, but you do not own any of them. Server settings are read-only until you own a server.');
+        setStatus(firstOwned ? 'Choose a server where Meta bot is present and that you own to manage its settings.' : 'Meta bot servers were detected, but none are owned by your connected Discord account. Settings are read-only for those servers.');
       })
       .catch(error => { if (active) setStatus(error instanceof Error ? error.message : 'Could not check Discord connection.'); });
     return () => { active = false; };
@@ -3867,12 +3867,12 @@ function BotControlPage() {
         </section>}
         {discordReady && !allowed && discordChecked && <section className="admin-publishing-guide">
           <h2>Reconnect Discord</h2>
-          <p>To load your server list, reconnect Discord and approve the updated server-list permission.</p>
+          <p>Meta detects servers directly from the running bot. Connect Discord once to verify which detected servers you own.</p>
           <a className="button-primary" href="/api/auth/discord?returnTo=%2Fbot-control">Reconnect Discord</a>
         </section>}
         {discordReady && <section className="admin-publishing-guide">
           <h2>Discord connection</h2>
-          <p>If your server list is missing or out of date, reconnect Discord and approve the requested permissions.</p>
+          <p>The server list is synced from the bot automatically. Reconnect only if Discord ownership verification asks you to refresh permissions.</p>
           <a className="button-primary" href="/api/auth/discord?returnTo=%2Fbot-control">Reconnect Discord</a>
         </section>}
         {allowed && discordReady && <>
