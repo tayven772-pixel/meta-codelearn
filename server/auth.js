@@ -300,14 +300,8 @@ const botCommandNames = [
 ];
 function requireBotOwner(req, res) {
   res.setHeader('Cache-Control', 'no-store');
-  const user = readSession(req);
-  if (!user || !user.id) {
-    res.status(401).json({ error: 'Connect your Discord account to manage bot settings.' });
-    return null;
-  }
-  // Do not require an OAuth guild-list token just to detect the bot's servers.
-  // Ownership is checked separately before any server settings can be changed.
-  return user;
+  // Use the verified Meta website owner account. Discord OAuth is not required.
+  return requireAdmin(req, res);
 }
 function validGuildId(value) {
   return typeof value === 'string' && /^\d{17,20}$/.test(value);
@@ -335,29 +329,17 @@ function getHomeGuildId() {
     return '';
   }
 }
-async function requireOwnedGuild(req, res, _requestedGuildId) {
-  const user = readSession(req);
-  if (!user || !user.access_token) {
-    res.status(401).json({ error: 'Reconnect Discord to verify ownership of the Meta home server.' });
-    return false;
-  }
+async function requireOwnedGuild(req, res, requestedGuildId) {
+  // Access is granted only after requireAdmin verifies the server-side owner email allowlist.
+  // The Meta bot uses one configured home server, so Discord OAuth ownership checks are unnecessary.
+  if (!requireAdmin(req, res)) return false;
   const homeGuildId = getHomeGuildId();
   if (!validGuildId(homeGuildId)) {
     res.status(503).json({ error: 'The bot home server is not configured on the server.' });
     return false;
   }
-  if (_requestedGuildId && String(_requestedGuildId) !== homeGuildId) {
-    res.status(403).json({ error: 'Meta bot settings are global and can only be managed from the configured home server.' });
-    return false;
-  }
-  let guilds;
-  try { guilds = await fetchDiscordGuilds(user); } catch { guilds = null; }
-  if (!guilds) {
-    res.status(401).json({ error: 'Discord could not verify your servers. Reconnect Discord and try again.' });
-    return false;
-  }
-  if (!guilds.some(guild => String(guild.id) === homeGuildId && guild.owner === true)) {
-    res.status(403).json({ error: 'Only the owner of the configured Meta home server can edit global bot settings.' });
+  if (requestedGuildId && String(requestedGuildId) !== homeGuildId) {
+    res.status(403).json({ error: 'Meta bot settings are global and can only be managed for the configured Meta home server.' });
     return false;
   }
   return true;
@@ -368,44 +350,31 @@ function botSettingsForGuild(guildId) {
   ).all(guildId);
   return Object.fromEntries(rows.map(row => [row.setting_key, row.setting_value]));
 }
-app.get('/api/auth/admin/bot-control/servers', async (req, res) => {
+app.get('/api/auth/admin/bot-control/servers', (req, res) => {
   const user = requireBotOwner(req, res);
   if (!user) return;
-  const homeGuildId = String(process.env.META_HOME_GUILD_ID || process.env.DISCORD_GUILD_ID || '').trim();
+  const homeGuildId = getHomeGuildId();
   if (!validGuildId(homeGuildId)) return res.status(503).json({ error: 'The bot home server is not configured on the server.' });
   try {
     const botGuild = getBotDb().prepare(
       'SELECT guild_id, name, icon FROM bot_guild_presence WHERE guild_id = ?'
     ).get(homeGuildId);
-    let userGuilds = null;
-    if (user.access_token) {
-      try { userGuilds = await fetchDiscordGuilds(user); } catch { userGuilds = null; }
-    }
-    const userHomeGuild = (userGuilds || []).find(guild => String(guild.id) === homeGuildId);
     const servers = [{
       id: homeGuildId,
-      name: String(botGuild?.name || userHomeGuild?.name || 'Meta home server'),
-      icon: botGuild?.icon || userHomeGuild?.icon
-        ? `https://cdn.discordapp.com/icons/${homeGuildId}/${botGuild?.icon || userHomeGuild?.icon}.png?size=96`
-        : null,
-      owner: userHomeGuild?.owner === true,
+      name: String(botGuild?.name || 'Meta home server'),
+      icon: botGuild?.icon ? `https://cdn.discordapp.com/icons/${homeGuildId}/${botGuild.icon}.png?size=96` : null,
+      owner: true,
       botPresent: Boolean(botGuild)
     }];
     res.setHeader('Cache-Control', 'no-store');
     return res.json({
       servers,
-      ownershipVerified: Array.isArray(userGuilds),
-      message: !Array.isArray(userGuilds)
-        ? 'Reconnect Discord to verify ownership of the Meta home server.'
-        : !userHomeGuild?.owner
-          ? 'The connected Discord account must own the configured Meta home server.'
-          : !botGuild
-            ? 'Meta bot is not currently connected to its configured home server.'
-            : null
+      ownershipVerified: true,
+      message: !botGuild ? 'Owner verified. Settings can be saved, but the bot is not currently reporting its connection to the home server.' : null
     });
   } catch (error) {
     console.error('Bot home server lookup failed:', error?.message || 'unknown error');
-    return res.status(502).json({ error: 'Could not load the Meta home server. Reconnect Discord and try again.' });
+    return res.status(502).json({ error: 'Could not load the Meta home server.' });
   }
 });
 app.get('/api/auth/admin/bot-control/settings', async (req, res) => {
@@ -546,7 +515,7 @@ app.delete('/api/auth/admin/bot-control/partners/:id', async (req, res) => {
 app.get('/api/auth/admin/bot-control', (req, res) => {
   const user = requireBotOwner(req, res);
   if (!user) return;
-  return res.json({ owner: user.global_name || user.username || 'Discord user', dashboard: 'Meta Code bot server control', commands: botCommandNames });
+  return res.json({ owner: user.display_name || user.email || 'Meta owner', dashboard: 'Meta Code bot server control', commands: botCommandNames });
 });
 
 // Content publishing API. Administrator privileges are granted only by server environment,
