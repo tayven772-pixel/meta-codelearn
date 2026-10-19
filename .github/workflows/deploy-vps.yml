@@ -191,6 +191,13 @@ jobs:
           else
             printf '%s\n' 'META_ADMIN_EMAILS=metasupport43@gmail.com' | sudo -n tee -a /etc/meta-codelearn-auth.env >/dev/null
           fi
+          # Keep the bot home server ID in the auth service environment.
+          # The bot .env is intentionally private to the bot account and unreadable by www-data.
+          if sudo -n grep -q '^META_HOME_GUILD_ID=' /etc/meta-codelearn-auth.env; then
+            sudo -n sed -i 's/^META_HOME_GUILD_ID=.*/META_HOME_GUILD_ID=1558568288307650633/' /etc/meta-codelearn-auth.env
+          else
+            printf '%s\n' 'META_HOME_GUILD_ID=1558568288307650633' | sudo -n tee -a /etc/meta-codelearn-auth.env >/dev/null
+          fi
           if ! sudo -n nginx -t; then
             sudo -n cp -a "$NGINX_BACKUP" "$NGINX_SNIPPET"
             sudo -n nginx -t || true
