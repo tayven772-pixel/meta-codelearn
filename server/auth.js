@@ -316,7 +316,7 @@ async function fetchDiscordGuilds(user) {
   return Array.isArray(guilds) ? guilds : null;
 }
 function getHomeGuildId() {
-  const direct = String(process.env.META_HOME_GUILD_ID || process.env.DISCORD_GUILD_ID || '').trim();
+  const direct = String(process.env.META_HOME_GUILD_ID || process.env.DISCORD_GUILD_ID || '1558568288307650633').trim();
   if (validGuildId(direct)) return direct;
   // The bot's .env is local server-side configuration; never expose its contents.
   try {
