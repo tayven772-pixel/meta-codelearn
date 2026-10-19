@@ -3882,18 +3882,14 @@ function BotControlPage() {
           <section className="admin-publishing-guide">
             <h2>Owner session</h2>
             <p>Authorized account: <strong>{owner}</strong></p>
-            <p>Meta home server · Global bot settings</p>
-            <select value={guildId} onChange={event => { setGuildId(event.target.value); setSettings({}); setPartners([]); setTemplateText(defaultTemplate); }} style={fieldStyle}>
-              <option value="">Meta home server…</option>
-              {servers.map(server => <option key={server.id} value={server.id}>{server.name} {server.botPresent ? '' : '— Add Meta bot'} {server.owner ? '— You own this server' : '— Read-only'}</option>)}
-            </select>
-            {selectedServer && <p>{!selectedServer.botPresent ? 'Meta bot is not currently reporting its connection. You can still save settings; they take effect when the bot is online.' : selectedServer.owner ? 'Your Meta owner account is authorized to edit global bot settings.' : 'Editing is disabled for this server.'}</p>}
+            <p>Global Meta bot settings. The configured bot is selected automatically; you don't need to connect Discord or choose a server here.</p>
             <div className="admin-publishing-actions">
-              <button type="button" className="button-primary" onClick={loadSettings} disabled={busy || !selectedServer?.owner}>Load server settings</button>
-              <button type="button" className="button-secondary" onClick={saveSettings} disabled={busy || !selectedServer?.owner}>Save all settings</button>
+              <button type="button" className="button-primary" onClick={loadSettings} disabled={busy || !selectedServer?.owner || !guildId}>Load bot settings</button>
+              <button type="button" className="button-secondary" onClick={saveSettings} disabled={busy || !selectedServer?.owner || !guildId}>Save all settings</button>
             </div>
+            <p>Settings can be edited while the bot is offline and will take effect when it reconnects.</p>
           </section>
-          {selectedServer?.owner && selectedServer?.botPresent && guildId.length >= 17 && <>
+          {selectedServer?.owner && guildId.length >= 17 && <>
             <section className="admin-publishing-guide">
               <h2>Command controls</h2>
               <p>Turn commands off here without editing code. Staff-only permissions are still enforced by Discord and the bot.</p>
