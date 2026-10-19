@@ -103,10 +103,20 @@ client.once(Events.ClientReady, async readyClient => {
   db.prepare('DELETE FROM bot_guild_presence WHERE guild_id=?').run(guild.id);
  });
 
- const configuredStatus = getSetting(guildId || readyClient.guilds.cache.first()?.id || '', 'bot_status_text');
- if (configuredStatus) readyClient.user.setPresence({ activities: [{ name: configuredStatus.slice(0, 128), type: ActivityType.Playing }], status: 'online' });
+ const applyConfiguredPresence = () => {
+  const configuredStatus = getSetting('global', 'bot_status_text')?.trim();
+  readyClient.user.setPresence({
+   activities: configuredStatus ? [{ name: configuredStatus.slice(0, 128), type: ActivityType.Playing }] : [],
+   status: 'online'
+  });
+ };
+ applyConfiguredPresence();
  runAutoPartnerScheduler(readyClient).catch(error => console.error('Autopartner startup check failed:', error.message));
- setInterval(() => runAutoPartnerScheduler(readyClient).catch(error => console.error('Autopartner scheduler failed:', error.message)), 60_000).unref();
+ setInterval(() => {
+  try { applyConfiguredPresence(); }
+  catch (error) { console.error('Bot presence refresh failed:', error.message); }
+  runAutoPartnerScheduler(readyClient).catch(error => console.error('Autopartner scheduler failed:', error.message));
+ }, 60_000).unref();
  try {
   // Register commands globally so the bot works in every server it is invited to.
   // Global commands can take a little while to appear in Discord.
