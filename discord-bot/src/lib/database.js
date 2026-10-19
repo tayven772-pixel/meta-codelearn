@@ -9,10 +9,10 @@ const projectDir = path.resolve(
 );
 
 const dataDir = path.join(projectDir, 'data');
-fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+fs.mkdirSync(dataDir, { recursive: true, mode: 0o2770 });
 
 const db = new Database(path.join(dataDir, 'meta-codelearn.sqlite'));
-fs.chmodSync(path.join(dataDir, 'meta-codelearn.sqlite'), 0o600);
+fs.chmodSync(path.join(dataDir, 'meta-codelearn.sqlite'), 0o660);
 
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
