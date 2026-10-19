@@ -3746,7 +3746,7 @@ function BotControlPage() {
         if (!serverResponse.ok) throw new Error(serverData.error || 'Could not load your Discord servers.');
         if (!active) return;
         const availableServers = Array.isArray(serverData.servers) ? serverData.servers : [];
-        setOwner(String(ownerData.owner || 'Discord user'));
+        setOwner(String((ownerData.owner && ownerData.owner !== 'Discord user') ? ownerData.owner : (data?.user?.displayName || data?.user?.username || 'Discord user')));
         setCommands(Array.isArray(ownerData.commands) ? ownerData.commands : []);
         setServers(availableServers);
         const firstOwned = availableServers.find((server: {owner:boolean}) => server.owner);
