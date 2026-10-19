@@ -346,6 +346,10 @@ async function requireOwnedGuild(req, res, _requestedGuildId) {
     res.status(503).json({ error: 'The bot home server is not configured on the server.' });
     return false;
   }
+  if (_requestedGuildId && String(_requestedGuildId) !== homeGuildId) {
+    res.status(403).json({ error: 'Meta bot settings are global and can only be managed from the configured home server.' });
+    return false;
+  }
   let guilds;
   try { guilds = await fetchDiscordGuilds(user); } catch { guilds = null; }
   if (!guilds) {
