@@ -3752,7 +3752,7 @@ function BotControlPage() {
         const firstOwned = availableServers.find((server: {owner:boolean}) => server.owner);
         setGuildId(firstOwned?.id || '');
         setAllowed(true);
-        setStatus(firstOwned ? 'Choose a server where Meta bot is present and that you own to manage its settings.' : 'Meta bot servers were detected, but none are owned by your connected Discord account. Settings are read-only for those servers.');
+        setStatus(firstOwned ? 'Choose a server where Meta bot is present and that you own to manage its settings.' : availableServers.length === 0 ? (serverData.message || 'No bot servers have been synced yet. Make sure Meta bot is online and updated.') : serverData.ownershipVerified === false ? (serverData.message || 'Bot servers detected. Reconnect Discord to verify which servers you own before editing settings.') : 'Meta bot servers were detected, but none are owned by your connected Discord account. Settings are read-only for those servers.');
       })
       .catch(error => { if (active) setStatus(error instanceof Error ? error.message : 'Could not check Discord connection.'); });
     return () => { active = false; };
