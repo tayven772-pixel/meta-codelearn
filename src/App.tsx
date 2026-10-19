@@ -3749,7 +3749,7 @@ function BotControlPage() {
         if (!serverResponse.ok) throw new Error(serverData.error || 'Could not load the Meta home server.');
         if (!active) return;
         const availableServers = Array.isArray(serverData.servers) ? serverData.servers : [];
-        setOwner(String(ownerData.owner || data?.user?.email || 'Meta owner'));
+        setOwner(String(ownerData.owner || 'Meta owner'));
         setCommands(Array.isArray(ownerData.commands) ? ownerData.commands : []);
         setServers(availableServers);
         const homeServer = availableServers[0];
