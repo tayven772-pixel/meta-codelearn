@@ -3727,21 +3727,23 @@ function BotControlPage() {
   useEffect(() => {
     let active = true;
     setStatus('Checking Meta owner account…');
-    fetch('/api/auth/me', { credentials: 'same-origin', cache: 'no-store' })
-      .then(async response => {
-        const data = await response.json().catch(() => ({}));
+    fetch('/api/auth/admin/bot-control', { credentials: 'same-origin', cache: 'no-store' })
+      .then(async ownerResponse => {
+        const ownerData = await ownerResponse.json().catch(() => ({}));
         if (!active) return;
         setDiscordChecked(true);
-        const signedIn = Boolean(response.ok && data?.user?.id != null);
-        setDiscordReady(signedIn);
-        if (!signedIn) {
+        // This endpoint checks the actual Meta email session and owner allowlist.
+        // Do not use /api/auth/me here because deployments may route that URL to Discord OAuth.
+        if (ownerResponse.status === 401) {
+          setDiscordReady(false);
           setStatus('Sign in with the authorized Meta owner email to manage bot settings.');
           return;
         }
-        const ownerResponse = await fetch('/api/auth/admin/bot-control', { credentials: 'same-origin', cache: 'no-store' });
-        const ownerData = await ownerResponse.json().catch(() => ({}));
-        if (!ownerResponse.ok) throw new Error(ownerData.error || 'This account is not authorized to manage Meta bot settings.');
-        if (!active) return;
+        if (!ownerResponse.ok) {
+          setDiscordReady(true);
+          throw new Error(ownerData.error || 'This account is not authorized to manage Meta bot settings.');
+        }
+        setDiscordReady(true);
         const serverResponse = await fetch('/api/auth/admin/bot-control/servers', { credentials: 'same-origin', cache: 'no-store' });
         const serverData = await serverResponse.json().catch(() => ({}));
         if (!serverResponse.ok) throw new Error(serverData.error || 'Could not load the Meta home server.');
