@@ -368,9 +368,6 @@ function botSettingsForGuild(guildId) {
   ).all(guildId);
   return Object.fromEntries(rows.map(row => [row.setting_key, row.setting_value]));
 }
-function botSettingsForGuild(guildId) {
-  return Object.fromEntries(getBotDb().prepare('SELECT setting_key, setting_value FROM settings WHERE guild_id = ?').all(guildId).map(row => [row.setting_key, row.setting_value]));
-}
 app.get('/api/auth/admin/bot-control/servers', async (req, res) => {
   const user = requireBotOwner(req, res);
   if (!user) return;
