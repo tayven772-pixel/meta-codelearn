@@ -321,10 +321,15 @@ async function fetchDiscordGuilds(user) {
   const guilds = await response.json().catch(() => null);
   return Array.isArray(guilds) ? guilds : null;
 }
-async function requireOwnedGuild(req, res, guildId) {
+async function requireOwnedGuild(req, res, _requestedGuildId) {
   const user = readSession(req);
   if (!user || !user.access_token) {
-    res.status(401).json({ error: 'Reconnect Discord to verify server ownership.' });
+    res.status(401).json({ error: 'Reconnect Discord to verify ownership of the Meta home server.' });
+    return false;
+  }
+  const homeGuildId = String(process.env.META_HOME_GUILD_ID || process.env.DISCORD_GUILD_ID || '').trim();
+  if (!validGuildId(homeGuildId)) {
+    res.status(503).json({ error: 'The bot home server is not configured on the server.' });
     return false;
   }
   let guilds;
@@ -333,11 +338,17 @@ async function requireOwnedGuild(req, res, guildId) {
     res.status(401).json({ error: 'Discord could not verify your servers. Reconnect Discord and try again.' });
     return false;
   }
-  if (!guilds.some(guild => String(guild.id) === guildId && guild.owner === true)) {
-    res.status(403).json({ error: 'You must be the owner of this Discord server to edit its bot settings.' });
+  if (!guilds.some(guild => String(guild.id) === homeGuildId && guild.owner === true)) {
+    res.status(403).json({ error: 'Only the owner of the configured Meta home server can edit global bot settings.' });
     return false;
   }
   return true;
+}
+function botSettingsForGuild(guildId) {
+  const rows = getBotDb().prepare(
+    "SELECT setting_key, setting_value FROM settings WHERE guild_id IN (?, 'global') ORDER BY CASE WHEN guild_id = 'global' THEN 0 ELSE 1 END"
+  ).all(guildId);
+  return Object.fromEntries(rows.map(row => [row.setting_key, row.setting_value]));
 }
 function botSettingsForGuild(guildId) {
   return Object.fromEntries(getBotDb().prepare('SELECT setting_key, setting_value FROM settings WHERE guild_id = ?').all(guildId).map(row => [row.setting_key, row.setting_value]));
@@ -345,44 +356,41 @@ function botSettingsForGuild(guildId) {
 app.get('/api/auth/admin/bot-control/servers', async (req, res) => {
   const user = requireBotOwner(req, res);
   if (!user) return;
+  const homeGuildId = String(process.env.META_HOME_GUILD_ID || process.env.DISCORD_GUILD_ID || '').trim();
+  if (!validGuildId(homeGuildId)) return res.status(503).json({ error: 'The bot home server is not configured on the server.' });
   try {
-    const botServers = getBotDb().prepare(
-      'SELECT guild_id, name, icon FROM bot_guild_presence ORDER BY name COLLATE NOCASE'
-    ).all();
+    const botGuild = getBotDb().prepare(
+      'SELECT guild_id, name, icon FROM bot_guild_presence WHERE guild_id = ?'
+    ).get(homeGuildId);
     let userGuilds = null;
     if (user.access_token) {
       try { userGuilds = await fetchDiscordGuilds(user); } catch { userGuilds = null; }
     }
-
-    // Show every server the connected user belongs to, not only servers already
-    // joined by the bot. This makes it clear which servers still need the bot.
-    const botById = new Map(botServers.map(guild => [String(guild.guild_id), guild]));
-    const userById = new Map((userGuilds || []).map(guild => [String(guild.id), guild]));
-    const allIds = new Set([...botById.keys(), ...userById.keys()]);
-    const servers = [...allIds].map(id => {
-      const botGuild = botById.get(id);
-      const userGuild = userById.get(id);
-      const guild = botGuild || userGuild;
-      const iconHash = botGuild?.icon || userGuild?.icon;
-      return {
-        id,
-        name: String(guild?.name || 'Unnamed server'),
-        icon: iconHash ? `https://cdn.discordapp.com/icons/${id}/${iconHash}.png?size=96` : null,
-        owner: userGuild?.owner === true,
-        botPresent: Boolean(botGuild)
-      };
-    }).sort((left, right) => Number(right.owner) - Number(left.owner) || Number(right.botPresent) - Number(left.botPresent) || left.name.localeCompare(right.name));
-
-    return res.setHeader('Cache-Control', 'no-store'), res.json({
+    const userHomeGuild = (userGuilds || []).find(guild => String(guild.id) === homeGuildId);
+    const servers = [{
+      id: homeGuildId,
+      name: String(botGuild?.name || userHomeGuild?.name || 'Meta home server'),
+      icon: botGuild?.icon || userHomeGuild?.icon
+        ? `https://cdn.discordapp.com/icons/${homeGuildId}/${botGuild?.icon || userHomeGuild?.icon}.png?size=96`
+        : null,
+      owner: userHomeGuild?.owner === true,
+      botPresent: Boolean(botGuild)
+    }];
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json({
       servers,
       ownershipVerified: Array.isArray(userGuilds),
       message: !Array.isArray(userGuilds)
-        ? (botServers.length ? 'Bot servers are detected, but Discord ownership could not be verified. Reconnect Discord to load your full server list.' : 'Reconnect Discord to load the servers you belong to.')
-        : (servers.length === 0 ? 'No Discord servers were returned for this account. Reconnect Discord and approve the server-list permission.' : null)
+        ? 'Reconnect Discord to verify ownership of the Meta home server.'
+        : !userHomeGuild?.owner
+          ? 'The connected Discord account must own the configured Meta home server.'
+          : !botGuild
+            ? 'Meta bot is not currently connected to its configured home server.'
+            : null
     });
   } catch (error) {
-    console.error('Bot server list failed:', error?.message || 'unknown error');
-    return res.status(502).json({ error: 'Could not load the Discord server list. Reconnect Discord and try again.' });
+    console.error('Bot home server lookup failed:', error?.message || 'unknown error');
+    return res.status(502).json({ error: 'Could not load the Meta home server. Reconnect Discord and try again.' });
   }
 });
 app.get('/api/auth/admin/bot-control/settings', async (req, res) => {
@@ -390,9 +398,9 @@ app.get('/api/auth/admin/bot-control/settings', async (req, res) => {
   const guildId = String(req.query.guildId || '').trim();
   if (!validGuildId(guildId)) return res.status(400).json({ error: 'Select a valid Discord server.' });
   if (!(await requireOwnedGuild(req, res, guildId))) return;
-  const settings = botSettingsForGuild(guildId);
+  const settings = botSettingsForGuild('global');
   const partners = getBotDb().prepare('SELECT id, name, invite_url, description, created_at FROM autopartner_partners WHERE guild_id = ? ORDER BY name COLLATE NOCASE').all(guildId);
-  return res.json({ guildId, settings, commands: botCommandNames, partners });
+  return res.json({ guildId: 'global', settings, commands: botCommandNames, partners });
 });
 app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
   if (!requireBotOwner(req, res)) return;
@@ -453,12 +461,12 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
           throw new Error('Setup template needs valid roles and categories. Each channel must be ["text" or "voice", "channel-name"]. Limits: 40 roles, 30 categories, 50 channels per category.');
         }
       }
-      put.run(guildId, key, value);
+      put.run('global', key, value);
     }
   });
   try {
     transaction();
-    return res.json({ saved: Object.keys(values).length, settings: botSettingsForGuild(guildId) });
+    return res.json({ saved: Object.keys(values).length, settings: botSettingsForGuild('global') });
   } catch (error) {
     return res.status(400).json({ error: error.message || 'Could not save bot settings.' });
   }
