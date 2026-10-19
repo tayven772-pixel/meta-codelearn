@@ -3698,7 +3698,7 @@ function BotControlPage() {
   const [status, setStatus] = useState('Checking Discord connection…');
   const [allowed, setAllowed] = useState(false);
   const [owner, setOwner] = useState('');
-  const [servers, setServers] = useState<Array<{id:string;name:string;icon:string|null;owner:boolean}>>([]);
+  const [servers, setServers] = useState<Array<{id:string;name:string;icon:string|null;owner:boolean;botPresent:boolean}>>([]);
   const [guildId, setGuildId] = useState('');
   const [commands, setCommands] = useState<string[]>([]);
   const [settings, setSettings] = useState<Record<string, string>>({});
@@ -3749,10 +3749,10 @@ function BotControlPage() {
         setOwner(String((ownerData.owner && ownerData.owner !== 'Discord user') ? ownerData.owner : (data?.user?.displayName || data?.user?.username || 'Discord user')));
         setCommands(Array.isArray(ownerData.commands) ? ownerData.commands : []);
         setServers(availableServers);
-        const firstOwned = availableServers.find((server: {owner:boolean}) => server.owner);
+        const firstOwned = availableServers.find((server: {owner:boolean;botPresent:boolean}) => server.owner && server.botPresent);
         setGuildId(firstOwned?.id || '');
         setAllowed(true);
-        setStatus(firstOwned ? 'Choose a server where Meta bot is present and that you own to manage its settings.' : availableServers.length === 0 ? (serverData.message || 'No bot servers have been synced yet. Make sure Meta bot is online and updated.') : serverData.ownershipVerified === false ? (serverData.message || 'Bot servers detected. Reconnect Discord to verify which servers you own before editing settings.') : 'Meta bot servers were detected, but none are owned by your connected Discord account. Settings are read-only for those servers.');
+        setStatus(firstOwned ? 'Choose a server you own where Meta bot is present to manage its settings.' : availableServers.length === 0 ? (serverData.message || 'No Discord servers were returned. Reconnect Discord to refresh access.') : serverData.ownershipVerified === false ? (serverData.message || 'Reconnect Discord to verify server ownership.') : availableServers.some((server: {owner:boolean;botPresent:boolean}) => server.owner && !server.botPresent) ? 'Your servers are loaded. Meta bot must be added to a server before its settings can be managed.' : 'Your servers are loaded, but none are owned by this Discord account. Settings are read-only.');
       })
       .catch(error => { if (active) setStatus(error instanceof Error ? error.message : 'Could not check Discord connection.'); });
     return () => { active = false; };
@@ -3882,15 +3882,15 @@ function BotControlPage() {
             <p>Your Discord servers</p>
             <select value={guildId} onChange={event => { setGuildId(event.target.value); setSettings({}); setPartners([]); setTemplateText(defaultTemplate); }} style={fieldStyle}>
               <option value="">Choose a server…</option>
-              {servers.map(server => <option key={server.id} value={server.id}>{server.name} {server.owner ? '— You own this server' : '— Not owner (read-only)'}</option>)}
+              {servers.map(server => <option key={server.id} value={server.id}>{server.name} {server.botPresent ? '' : '— Add Meta bot'} {server.owner ? '— You own this server' : '— Read-only'}</option>)}
             </select>
-            {selectedServer && <p>{selectedServer.owner ? 'You own this server. You can edit its Meta Bot settings.' : 'You are a member, not the owner. Editing is disabled for this server.'}</p>}
+            {selectedServer && <p>{!selectedServer.botPresent ? 'Meta bot is not in this server yet. Add the bot to this server before managing its settings.' : selectedServer.owner ? 'You own this server and Meta bot is present. You can edit its settings.' : 'You are a member, not the owner. Editing is disabled for this server.'}</p>}
             <div className="admin-publishing-actions">
-              <button type="button" className="button-primary" onClick={loadSettings} disabled={busy || !selectedServer?.owner}>Load server settings</button>
-              <button type="button" className="button-secondary" onClick={saveSettings} disabled={busy || !selectedServer?.owner}>Save all settings</button>
+              <button type="button" className="button-primary" onClick={loadSettings} disabled={busy || !selectedServer?.owner || !selectedServer?.botPresent}>Load server settings</button>
+              <button type="button" className="button-secondary" onClick={saveSettings} disabled={busy || !selectedServer?.owner || !selectedServer?.botPresent}>Save all settings</button>
             </div>
           </section>
-          {selectedServer?.owner && guildId.length >= 17 && <>
+          {selectedServer?.owner && selectedServer?.botPresent && guildId.length >= 17 && <>
             <section className="admin-publishing-guide">
               <h2>Command controls</h2>
               <p>Turn commands off here without editing code. Staff-only permissions are still enforced by Discord and the bot.</p>
