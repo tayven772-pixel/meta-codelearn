@@ -379,7 +379,7 @@ app.get('/api/auth/admin/bot-control/servers', (req, res) => {
 });
 app.get('/api/auth/admin/bot-control/settings', async (req, res) => {
   if (!requireBotOwner(req, res)) return;
-  const guildId = String(req.query.guildId || '').trim();
+  const guildId = String(req.query.guildId || getHomeGuildId()).trim();
   if (!validGuildId(guildId)) return res.status(400).json({ error: 'Select a valid Discord server.' });
   if (!(await requireOwnedGuild(req, res, guildId))) return;
   const settings = botSettingsForGuild('global');
@@ -388,7 +388,7 @@ app.get('/api/auth/admin/bot-control/settings', async (req, res) => {
 });
 app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
   if (!requireBotOwner(req, res)) return;
-  const guildId = String(req.body?.guildId || '').trim();
+  const guildId = String(req.body?.guildId || getHomeGuildId()).trim();
   const values = req.body?.settings;
   if (!validGuildId(guildId) || !values || typeof values !== 'object' || Array.isArray(values)) {
     return res.status(400).json({ error: 'Select a valid server and provide a settings object.' });
