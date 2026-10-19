@@ -3870,6 +3870,11 @@ function BotControlPage() {
           <p>To load your server list, reconnect Discord and approve the updated server-list permission.</p>
           <a className="button-primary" href="/api/auth/discord?returnTo=%2Fbot-control">Reconnect Discord</a>
         </section>}
+        {discordReady && <section className="admin-publishing-guide">
+          <h2>Discord connection</h2>
+          <p>If your server list is missing or out of date, reconnect Discord and approve the requested permissions.</p>
+          <a className="button-primary" href="/api/auth/discord?returnTo=%2Fbot-control">Reconnect Discord</a>
+        </section>}
         {allowed && discordReady && <>
           <section className="admin-publishing-guide">
             <h2>Owner session</h2>
