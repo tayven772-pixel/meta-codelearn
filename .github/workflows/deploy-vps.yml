@@ -51,6 +51,7 @@ jobs:
           node --check server/auth.js
           node --check api/auth/discord.js
           node --check api/auth/callback.js
+          node --check discord-bot/src/index.js
 
       - name: Build production website
         run: npm run build
@@ -91,6 +92,7 @@ jobs:
           scp -P "$VPS_SSH_PORT" -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes api/auth/discord.js "$VPS_USER@$VPS_HOST:/tmp/meta-codelearn-discord-start-$DEPLOY_SHA.js"
           scp -P "$VPS_SSH_PORT" -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes api/auth/callback.js "$VPS_USER@$VPS_HOST:/tmp/meta-codelearn-discord-callback-$DEPLOY_SHA.js"
           scp -P "$VPS_SSH_PORT" -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes lib/discord-auth.js "$VPS_USER@$VPS_HOST:/tmp/meta-codelearn-discord-auth-lib-$DEPLOY_SHA.js"
+          scp -P "$VPS_SSH_PORT" -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes discord-bot/src/index.js "$VPS_USER@$VPS_HOST:/tmp/meta-codelearn-bot-index-$DEPLOY_SHA.js"
 
       - name: Back up and publish site
         env:
@@ -111,15 +113,18 @@ jobs:
           DISCORD_START_STAGE="/tmp/meta-codelearn-discord-start-$DEPLOY_SHA.js"
           DISCORD_CALLBACK_STAGE="/tmp/meta-codelearn-discord-callback-$DEPLOY_SHA.js"
           DISCORD_AUTH_LIB_STAGE="/tmp/meta-codelearn-discord-auth-lib-$DEPLOY_SHA.js"
+          BOT_INDEX_STAGE="/tmp/meta-codelearn-bot-index-$DEPLOY_SHA.js"
           test -s "$AUTH_STAGE"
           test -s "$DISCORD_START_STAGE"
           test -s "$DISCORD_CALLBACK_STAGE"
           test -s "$DISCORD_AUTH_LIB_STAGE"
+          test -s "$BOT_INDEX_STAGE"
           BACKUP="/var/www/html.backup-$DEPLOY_SHA-$(date +%Y%m%d-%H%M%S)"
           AUTH_BACKUP="/opt/meta-codelearn/server/auth.js.backup-$DEPLOY_SHA"
           DISCORD_START_BACKUP="/opt/meta-codelearn/api/auth/discord.js.backup-$DEPLOY_SHA"
           DISCORD_CALLBACK_BACKUP="/opt/meta-codelearn/api/auth/callback.js.backup-$DEPLOY_SHA"
           DISCORD_AUTH_LIB_BACKUP="/opt/meta-codelearn/lib/discord-auth.js.backup-$DEPLOY_SHA"
+          BOT_INDEX_BACKUP="/opt/meta-codelearn/discord-bot/src/index.js.backup-$DEPLOY_SHA"
           NGINX_SNIPPET="/etc/nginx/snippets/meta-codelearn-auth.conf"
           NGINX_BACKUP="$NGINX_SNIPPET.backup-$DEPLOY_SHA"
           sudo -n cp -a /var/www/html "$BACKUP"
@@ -127,6 +132,7 @@ jobs:
           sudo -n cp -a /opt/meta-codelearn/api/auth/discord.js "$DISCORD_START_BACKUP"
           sudo -n cp -a /opt/meta-codelearn/api/auth/callback.js "$DISCORD_CALLBACK_BACKUP"
           sudo -n cp -a /opt/meta-codelearn/lib/discord-auth.js "$DISCORD_AUTH_LIB_BACKUP"
+          sudo -n cp -a /opt/meta-codelearn/discord-bot/src/index.js "$BOT_INDEX_BACKUP"
           sudo -n cp -a "$NGINX_SNIPPET" "$NGINX_BACKUP"
           if ! sudo -n grep -Fq 'location = /api/auth/content' "$NGINX_SNIPPET"; then
             sudo -n tee -a "$NGINX_SNIPPET" >/dev/null <<'NGINX'
@@ -170,8 +176,23 @@ jobs:
           sudo -n cp -a "$DISCORD_START_STAGE" /opt/meta-codelearn/api/auth/discord.js
           sudo -n cp -a "$DISCORD_CALLBACK_STAGE" /opt/meta-codelearn/api/auth/callback.js
           sudo -n cp -a "$DISCORD_AUTH_LIB_STAGE" /opt/meta-codelearn/lib/discord-auth.js
+          sudo -n cp -a "$BOT_INDEX_STAGE" /opt/meta-codelearn/discord-bot/src/index.js
           sudo -n nginx -t
           sudo -n systemctl reload nginx
+          if ! sudo -n systemctl restart meta-codelearn-discord.service; then
+            sudo -n cp -a "$BOT_INDEX_BACKUP" /opt/meta-codelearn/discord-bot/src/index.js
+            sudo -n systemctl restart meta-codelearn-discord.service || true
+            echo "Discord bot restart failed; previous bot entrypoint restored."
+            exit 1
+          fi
+          sleep 3
+          if ! sudo -n systemctl is-active --quiet meta-codelearn-discord.service; then
+            sudo -n journalctl -u meta-codelearn-discord.service -n 25 --no-pager || true
+            sudo -n cp -a "$BOT_INDEX_BACKUP" /opt/meta-codelearn/discord-bot/src/index.js
+            sudo -n systemctl restart meta-codelearn-discord.service || true
+            echo "Discord bot health check failed; previous bot entrypoint restored."
+            exit 1
+          fi
           if ! sudo -n systemctl restart meta-codelearn-auth.service; then
             sudo -n cp -a "$AUTH_BACKUP" /opt/meta-codelearn/server/auth.js
             sudo -n cp -a "$DISCORD_START_BACKUP" /opt/meta-codelearn/api/auth/discord.js
@@ -199,6 +220,6 @@ jobs:
             exit 1
           fi
           rm -rf "$STAGING"
-          rm -f "$AUTH_STAGE" "$DISCORD_START_STAGE" "$DISCORD_CALLBACK_STAGE" "$DISCORD_AUTH_LIB_STAGE"
-          echo "Website, auth server, Discord OAuth routes, and versioned Discord session library deployed. Website backup: $BACKUP; auth backup: $AUTH_BACKUP; Discord route backups: $DISCORD_START_BACKUP, $DISCORD_CALLBACK_BACKUP; session library backup: $DISCORD_AUTH_LIB_BACKUP; Nginx snippet backup: $NGINX_BACKUP"
+          rm -f "$AUTH_STAGE" "$DISCORD_START_STAGE" "$DISCORD_CALLBACK_STAGE" "$DISCORD_AUTH_LIB_STAGE" "$BOT_INDEX_STAGE"
+          echo "Website, auth server, Discord bot entrypoint, Discord OAuth routes, and versioned Discord session library deployed. Website backup: $BACKUP; auth backup: $AUTH_BACKUP; Discord route backups: $DISCORD_START_BACKUP, $DISCORD_CALLBACK_BACKUP; session library backup: $DISCORD_AUTH_LIB_BACKUP; Nginx snippet backup: $NGINX_BACKUP"
           REMOTE
