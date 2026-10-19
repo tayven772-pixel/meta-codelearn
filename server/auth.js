@@ -384,7 +384,7 @@ app.get('/api/auth/admin/bot-control/settings', async (req, res) => {
   if (!(await requireOwnedGuild(req, res, guildId))) return;
   const settings = botSettingsForGuild('global');
   const partners = getBotDb().prepare('SELECT id, name, invite_url, description, created_at FROM autopartner_partners WHERE guild_id = ? ORDER BY name COLLATE NOCASE').all(guildId);
-  return res.json({ guildId: 'global', settings, commands: botCommandNames, partners });
+  return res.json({ guildId, settings, commands: botCommandNames, partners });
 });
 app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
   if (!requireBotOwner(req, res)) return;
