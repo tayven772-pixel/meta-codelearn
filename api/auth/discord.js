@@ -15,6 +15,8 @@ export default function handler(req, res) {
   url.searchParams.set('redirect_uri', redirectUri);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('scope', 'identify email guilds.join guilds');
+  // Force Discord to show the consent screen again so existing grants include guild-list access.
+  url.searchParams.set('prompt', 'consent');
   url.searchParams.set('state', state);
   return res.redirect(302, url.toString());
 }
