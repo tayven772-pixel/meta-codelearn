@@ -275,6 +275,7 @@ function getBotDb() {
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (guild_id, setting_key)
     );
+    CREATE TABLE IF NOT EXISTS bot_guild_presence (guild_id TEXT PRIMARY KEY, name TEXT NOT NULL, icon TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
     CREATE TABLE IF NOT EXISTS autopartner_partners (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       guild_id TEXT NOT NULL,
@@ -347,11 +348,25 @@ app.get('/api/auth/admin/bot-control/servers', async (req, res) => {
   const user = requireBotOwner(req, res);
   if (!user) return;
   try {
-    const guilds = await fetchDiscordGuilds(user);
-    if (!guilds) return res.status(401).json({ error: 'Discord could not list your servers. Reconnect Discord and try again.' });
-    return res.json({ servers: guilds.map(guild => ({ id: String(guild.id), name: String(guild.name || 'Unnamed server'), icon: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=96` : null, owner: guild.owner === true })).sort((left, right) => Number(right.owner) - Number(left.owner) || left.name.localeCompare(right.name)) });
-  } catch {
-    return res.status(502).json({ error: 'Could not contact Discord to list your servers.' });
+    // The bot process records its actual guild cache in the shared SQLite database.
+    // OAuth is used only to verify which of those bot servers the signed-in user owns.
+    const botServers = getBotDb().prepare(
+      'SELECT guild_id, name, icon FROM bot_guild_presence ORDER BY name COLLATE NOCASE'
+    ).all();
+    const userGuilds = await fetchDiscordGuilds(user);
+    if (!userGuilds) return res.status(401).json({ error: 'Discord could not verify server ownership. Reconnect Discord once to approve the server-list permission.' });
+    const ownership = new Map(userGuilds.map(guild => [String(guild.id), guild.owner === true]));
+    const servers = botServers.map(guild => ({
+      id: String(guild.guild_id),
+      name: String(guild.name || 'Unnamed server'),
+      icon: guild.icon ? `https://cdn.discordapp.com/icons/${guild.guild_id}/${guild.icon}.png?size=96` : null,
+      owner: ownership.get(String(guild.guild_id)) === true,
+      botPresent: true
+    })).sort((left, right) => Number(right.owner) - Number(left.owner) || left.name.localeCompare(right.name));
+    return res.json({ servers });
+  } catch (error) {
+    console.error('Bot server list failed:', error?.message || 'unknown error');
+    return res.status(502).json({ error: 'Could not load the bot server list. Make sure the Meta bot is online.' });
   }
 });
 app.get('/api/auth/admin/bot-control/settings', async (req, res) => {
