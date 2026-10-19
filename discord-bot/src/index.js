@@ -90,7 +90,7 @@ client.once(Events.ClientReady, async readyClient => {
  };
  syncBotGuilds();
  const homeGuildId = String(process.env.META_HOME_GUILD_ID || process.env.DISCORD_GUILD_ID || '').trim();
- if (!/^\\d{17,20}$/.test(homeGuildId)) {
+ if (!/^\d{17,20}$/.test(homeGuildId)) {
   console.error('META_HOME_GUILD_ID or DISCORD_GUILD_ID must be configured; refusing to leave any servers until the home server is known.');
  } else {
   for (const guild of readyClient.guilds.cache.values()) {
@@ -105,7 +105,7 @@ client.once(Events.ClientReady, async readyClient => {
  }
  readyClient.on(Events.GuildCreate, async guild => {
   const configuredHomeId = String(process.env.META_HOME_GUILD_ID || process.env.DISCORD_GUILD_ID || '').trim();
-  if (/^\\d{17,20}$/.test(configuredHomeId) && guild.id !== configuredHomeId) {
+  if (/^\d{17,20}$/.test(configuredHomeId) && guild.id !== configuredHomeId) {
    console.log(`Leaving newly joined non-home server ${guild.id} (${guild.name}).`);
    await guild.leave().catch(error => console.error(`Could not leave non-home server ${guild.id}:`, error.message));
    return;
