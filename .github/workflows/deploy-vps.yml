@@ -93,6 +93,7 @@ jobs:
           scp -P "$VPS_SSH_PORT" -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes api/auth/callback.js "$VPS_USER@$VPS_HOST:/tmp/meta-codelearn-discord-callback-$DEPLOY_SHA.js"
           scp -P "$VPS_SSH_PORT" -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes lib/discord-auth.js "$VPS_USER@$VPS_HOST:/tmp/meta-codelearn-discord-auth-lib-$DEPLOY_SHA.js"
           scp -P "$VPS_SSH_PORT" -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes discord-bot/src/index.js "$VPS_USER@$VPS_HOST:/tmp/meta-codelearn-bot-index-$DEPLOY_SHA.js"
+          scp -P "$VPS_SSH_PORT" -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes discord-bot/src/lib/database.js "$VPS_USER@$VPS_HOST:/tmp/meta-codelearn-bot-database-$DEPLOY_SHA.js"
 
       - name: Back up and publish site
         env:
@@ -114,17 +115,20 @@ jobs:
           DISCORD_CALLBACK_STAGE="/tmp/meta-codelearn-discord-callback-$DEPLOY_SHA.js"
           DISCORD_AUTH_LIB_STAGE="/tmp/meta-codelearn-discord-auth-lib-$DEPLOY_SHA.js"
           BOT_INDEX_STAGE="/tmp/meta-codelearn-bot-index-$DEPLOY_SHA.js"
+          BOT_DATABASE_STAGE="/tmp/meta-codelearn-bot-database-$DEPLOY_SHA.js"
           test -s "$AUTH_STAGE"
           test -s "$DISCORD_START_STAGE"
           test -s "$DISCORD_CALLBACK_STAGE"
           test -s "$DISCORD_AUTH_LIB_STAGE"
           test -s "$BOT_INDEX_STAGE"
+          test -s "$BOT_DATABASE_STAGE"
           BACKUP="/var/www/html.backup-$DEPLOY_SHA-$(date +%Y%m%d-%H%M%S)"
           AUTH_BACKUP="/opt/meta-codelearn/server/auth.js.backup-$DEPLOY_SHA"
           DISCORD_START_BACKUP="/opt/meta-codelearn/api/auth/discord.js.backup-$DEPLOY_SHA"
           DISCORD_CALLBACK_BACKUP="/opt/meta-codelearn/api/auth/callback.js.backup-$DEPLOY_SHA"
           DISCORD_AUTH_LIB_BACKUP="/opt/meta-codelearn/lib/discord-auth.js.backup-$DEPLOY_SHA"
           BOT_INDEX_BACKUP="/opt/meta-codelearn/discord-bot/src/index.js.backup-$DEPLOY_SHA"
+          BOT_DATABASE_BACKUP="/opt/meta-codelearn/discord-bot/src/lib/database.js.backup-$DEPLOY_SHA"
           NGINX_SNIPPET="/etc/nginx/snippets/meta-codelearn-auth.conf"
           NGINX_BACKUP="$NGINX_SNIPPET.backup-$DEPLOY_SHA"
           sudo -n cp -a /var/www/html "$BACKUP"
@@ -133,6 +137,7 @@ jobs:
           sudo -n cp -a /opt/meta-codelearn/api/auth/callback.js "$DISCORD_CALLBACK_BACKUP"
           sudo -n cp -a /opt/meta-codelearn/lib/discord-auth.js "$DISCORD_AUTH_LIB_BACKUP"
           sudo -n cp -a /opt/meta-codelearn/discord-bot/src/index.js "$BOT_INDEX_BACKUP"
+          sudo -n cp -a /opt/meta-codelearn/discord-bot/src/lib/database.js "$BOT_DATABASE_BACKUP"
           sudo -n cp -a "$NGINX_SNIPPET" "$NGINX_BACKUP"
           if ! sudo -n grep -Fq 'location = /api/auth/content' "$NGINX_SNIPPET"; then
             sudo -n tee -a "$NGINX_SNIPPET" >/dev/null <<'NGINX'
@@ -210,6 +215,12 @@ jobs:
           sudo -n cp -a "$DISCORD_CALLBACK_STAGE" /opt/meta-codelearn/api/auth/callback.js
           sudo -n cp -a "$DISCORD_AUTH_LIB_STAGE" /opt/meta-codelearn/lib/discord-auth.js
           sudo -n cp -a "$BOT_INDEX_STAGE" /opt/meta-codelearn/discord-bot/src/index.js
+          sudo -n cp -a "$BOT_DATABASE_STAGE" /opt/meta-codelearn/discord-bot/src/lib/database.js
+          # Share the database with the auth service without making it world-readable.
+          sudo -n chown administrator:www-data /opt/meta-codelearn/discord-bot/data
+          sudo -n chmod 2770 /opt/meta-codelearn/discord-bot/data
+          sudo -n chown administrator:www-data /opt/meta-codelearn/discord-bot/data/meta-codelearn.sqlite
+          sudo -n chmod 660 /opt/meta-codelearn/discord-bot/data/meta-codelearn.sqlite
           sudo -n nginx -t
           sudo -n systemctl reload nginx
 
@@ -258,6 +269,6 @@ jobs:
             echo "WARNING: website and settings API deployed, but sudo cannot restart meta-codelearn-discord.service. Bot code is staged on the VPS; grant the deploy user permission to restart this service to apply bot code changes."
           fi
           rm -rf "$STAGING"
-          rm -f "$AUTH_STAGE" "$DISCORD_START_STAGE" "$DISCORD_CALLBACK_STAGE" "$DISCORD_AUTH_LIB_STAGE" "$BOT_INDEX_STAGE"
+          rm -f "$AUTH_STAGE" "$DISCORD_START_STAGE" "$DISCORD_CALLBACK_STAGE" "$DISCORD_AUTH_LIB_STAGE" "$BOT_INDEX_STAGE" "$BOT_DATABASE_STAGE"
           echo "Website, auth server, Discord bot entrypoint, Discord OAuth routes, and versioned Discord session library deployed. Website backup: $BACKUP; auth backup: $AUTH_BACKUP; Discord route backups: $DISCORD_START_BACKUP, $DISCORD_CALLBACK_BACKUP; session library backup: $DISCORD_AUTH_LIB_BACKUP; Nginx snippet backup: $NGINX_BACKUP"
           REMOTE
