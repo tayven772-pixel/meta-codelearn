@@ -89,31 +89,15 @@ client.once(Events.ClientReady, async readyClient => {
   sync();
  };
  syncBotGuilds();
- const homeGuildId = String(process.env.META_HOME_GUILD_ID || process.env.DISCORD_GUILD_ID || '').trim();
- if (!/^\d{17,20}$/.test(homeGuildId)) {
-  console.error('META_HOME_GUILD_ID or DISCORD_GUILD_ID must be configured; refusing to leave any servers until the home server is known.');
- } else {
-  for (const guild of readyClient.guilds.cache.values()) {
-   if (guild.id === homeGuildId) continue;
-   try {
-    console.log(`Leaving non-home server ${guild.id} (${guild.name}) to keep Meta bot exclusive to its home server.`);
-    await guild.leave();
-   } catch (error) {
-    console.error(`Could not leave non-home server ${guild.id}:`, error.message);
-   }
-  }
- }
- readyClient.on(Events.GuildCreate, async guild => {
-  const configuredHomeId = String(process.env.META_HOME_GUILD_ID || process.env.DISCORD_GUILD_ID || '').trim();
-  if (/^\d{17,20}$/.test(configuredHomeId) && guild.id !== configuredHomeId) {
-   console.log(`Leaving newly joined non-home server ${guild.id} (${guild.name}).`);
-   await guild.leave().catch(error => console.error(`Could not leave non-home server ${guild.id}:`, error.message));
-   return;
-  }
-  db.prepare(`INSERT INTO bot_guild_presence (guild_id, name, icon, updated_at)
-   VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-   ON CONFLICT(guild_id) DO UPDATE SET name=excluded.name, icon=excluded.icon, updated_at=CURRENT_TIMESTAMP`)
-   .run(guild.id, guild.name, guild.icon);
+ // Keep the bot in every server it is invited to. Do not automatically leave guilds:
+ // the website and bot are intended to support multiple servers.
+ const recordGuildPresence = guild => db.prepare(`INSERT INTO bot_guild_presence (guild_id, name, icon, updated_at)
+  VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+  ON CONFLICT(guild_id) DO UPDATE SET name=excluded.name, icon=excluded.icon, updated_at=CURRENT_TIMESTAMP`)
+  .run(guild.id, guild.name, guild.icon);
+ readyClient.on(Events.GuildCreate, guild => {
+  recordGuildPresence(guild);
+  console.log(`Joined server ${guild.name} (${guild.id}); staying in the server.`);
  });
  readyClient.on(Events.GuildDelete, guild => {
   db.prepare('DELETE FROM bot_guild_presence WHERE guild_id=?').run(guild.id);
