@@ -327,7 +327,7 @@ function getHomeGuildId() {
   // The bot's .env is local server-side configuration; never expose its contents.
   try {
     const file = fs.readFileSync(path.resolve(__dirname, '../discord-bot/.env'), 'utf8');
-    const line = file.split(/\\r?\\n/).find(row => /^(META_HOME_GUILD_ID|DISCORD_GUILD_ID)=/.test(row));
+    const line = file.split(/\r?\n/).find(row => /^(META_HOME_GUILD_ID|DISCORD_GUILD_ID)=/.test(row));
     if (!line) return '';
     const value = line.slice(line.indexOf('=') + 1).trim().replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1');
     return validGuildId(value) ? value : '';
