@@ -388,10 +388,15 @@ app.get('/api/auth/admin/bot-control/settings', async (req, res) => {
 });
 app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
   if (!requireBotOwner(req, res)) return;
-  const guildId = String(req.body?.guildId || getHomeGuildId()).trim();
+  const requestedGuildId = String(req.body?.guildId || '').trim();
+  // Older open website tabs may still send the previous global settings identifier.
+  const guildId = requestedGuildId === 'global' ? getHomeGuildId() : (requestedGuildId || getHomeGuildId());
   const values = req.body?.settings;
-  if (!validGuildId(guildId) || !values || typeof values !== 'object' || Array.isArray(values)) {
-    return res.status(400).json({ error: 'Select a valid server and provide a settings object.' });
+  if (!validGuildId(guildId)) {
+    return res.status(400).json({ error: 'The configured Meta home server ID is invalid. Refresh the website and try again.' });
+  }
+  if (!values || typeof values !== 'object' || Array.isArray(values)) {
+    return res.status(400).json({ error: 'The settings data was missing or invalid. Refresh the website and try again.' });
   }
   if (!(await requireOwnedGuild(req, res, guildId))) return;
   const allowed = new Set([
