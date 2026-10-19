@@ -3726,35 +3726,36 @@ function BotControlPage() {
   }, null, 2);
   useEffect(() => {
     let active = true;
-    fetch('/api/auth/discord/me', { credentials: 'same-origin', cache: 'no-store' })
+    setStatus('Checking Meta owner account…');
+    fetch('/api/auth/me', { credentials: 'same-origin', cache: 'no-store' })
       .then(async response => {
         const data = await response.json().catch(() => ({}));
         if (!active) return;
-        const connected = Boolean(data?.authenticated && data?.user?.id);
-        setDiscordReady(connected);
         setDiscordChecked(true);
-        if (!connected) {
-          setStatus('Connect your Discord account to continue.');
+        const signedIn = Boolean(response.ok && data?.user?.id != null);
+        setDiscordReady(signedIn);
+        if (!signedIn) {
+          setStatus('Sign in with the authorized Meta owner email to manage bot settings.');
           return;
         }
         const ownerResponse = await fetch('/api/auth/admin/bot-control', { credentials: 'same-origin', cache: 'no-store' });
         const ownerData = await ownerResponse.json().catch(() => ({}));
-        if (!ownerResponse.ok) throw new Error(ownerData.error || 'Owner access denied. Sign in to your Meta owner account.');
+        if (!ownerResponse.ok) throw new Error(ownerData.error || 'This account is not authorized to manage Meta bot settings.');
         if (!active) return;
         const serverResponse = await fetch('/api/auth/admin/bot-control/servers', { credentials: 'same-origin', cache: 'no-store' });
         const serverData = await serverResponse.json().catch(() => ({}));
-        if (!serverResponse.ok) throw new Error(serverData.error || 'Could not load your Discord servers.');
+        if (!serverResponse.ok) throw new Error(serverData.error || 'Could not load the Meta home server.');
         if (!active) return;
         const availableServers = Array.isArray(serverData.servers) ? serverData.servers : [];
-        setOwner(String((ownerData.owner && ownerData.owner !== 'Discord user') ? ownerData.owner : (data?.user?.displayName || data?.user?.username || 'Discord user')));
+        setOwner(String(ownerData.owner || data?.user?.email || 'Meta owner'));
         setCommands(Array.isArray(ownerData.commands) ? ownerData.commands : []);
         setServers(availableServers);
-        const firstOwned = availableServers.find((server: {owner:boolean;botPresent:boolean}) => server.owner && server.botPresent);
-        setGuildId(firstOwned?.id || '');
+        const homeServer = availableServers[0];
+        setGuildId(homeServer?.id || '');
         setAllowed(true);
-        setStatus(firstOwned ? 'Choose a server you own where Meta bot is present to manage its settings.' : availableServers.length === 0 ? (serverData.message || 'No Discord servers were returned. Reconnect Discord to refresh access.') : serverData.ownershipVerified === false ? (serverData.message || 'Reconnect Discord to verify server ownership.') : availableServers.some((server: {owner:boolean;botPresent:boolean}) => server.owner && !server.botPresent) ? 'Your servers are loaded. Meta bot must be added to a server before its settings can be managed.' : 'Your servers are loaded, but none are owned by this Discord account. Settings are read-only.');
+        setStatus(homeServer ? (homeServer.botPresent ? 'Owner verified. You can edit global Meta bot settings.' : (serverData.message || 'Owner verified. Settings can be saved while the bot reconnects.')) : 'The Meta home server is not configured.');
       })
-      .catch(error => { if (active) setStatus(error instanceof Error ? error.message : 'Could not check Discord connection.'); });
+      .catch(error => { if (active) setStatus(error instanceof Error ? error.message : 'Could not check Meta owner access.'); });
     return () => { active = false; };
   }, []);
   const selectedServer = servers.find(server => server.id === guildId);
@@ -3861,19 +3862,19 @@ function BotControlPage() {
         </div>
         <p className="admin-publishing-status" role="status">{status}</p>
         {discordChecked && !discordReady && <section className="admin-publishing-guide">
-          <h2>Connect your Discord account</h2>
-          <p>Sign in with Discord to connect your account before using bot control.</p>
-          <a className="button-primary" href="/api/auth/discord?returnTo=%2Fbot-control">Sign in with Discord</a>
+          <h2>Sign in to manage Meta bot</h2>
+          <p>Discord sign-in is not needed. Sign in to the website using the authorized Meta owner email account.</p>
+          <a className="button-primary" href="/sign-in?next=%2Fbot-control">Sign in to Meta Code</a>
         </section>}
         {discordReady && !allowed && discordChecked && <section className="admin-publishing-guide">
-          <h2>Reconnect Discord</h2>
-          <p>Meta detects servers directly from the running bot. Connect Discord once to verify which detected servers you own.</p>
-          <a className="button-primary" href="/api/auth/discord?returnTo=%2Fbot-control">Reconnect Discord</a>
+          <h2>Owner access required</h2>
+          <p>{status}</p>
+          <a className="button-primary" href="/sign-in?next=%2Fbot-control">Switch Meta account</a>
         </section>}
-        {discordReady && <section className="admin-publishing-guide">
-          <h2>Discord connection</h2>
-          <p>The server list is synced from the bot automatically. Reconnect only if Discord ownership verification asks you to refresh permissions.</p>
-          <a className="button-primary" href="/api/auth/discord?returnTo=%2Fbot-control">Reconnect Discord</a>
+        {allowed && discordReady && <section className="admin-publishing-guide">
+          <h2>Meta owner access</h2>
+          <p>Authorized account: <strong>{owner}</strong></p>
+          <p>Discord OAuth is not required to edit global bot settings.</p>
         </section>}
         {allowed && discordReady && <>
           <section className="admin-publishing-guide">
@@ -3884,10 +3885,10 @@ function BotControlPage() {
               <option value="">Meta home server…</option>
               {servers.map(server => <option key={server.id} value={server.id}>{server.name} {server.botPresent ? '' : '— Add Meta bot'} {server.owner ? '— You own this server' : '— Read-only'}</option>)}
             </select>
-            {selectedServer && <p>{!selectedServer.botPresent ? 'Meta bot is not in this server yet. Add the bot to this server before managing its settings.' : selectedServer.owner ? 'You own the Meta home server. You can edit global Meta bot settings.' : 'You are a member, not the owner. Editing is disabled for this server.'}</p>}
+            {selectedServer && <p>{!selectedServer.botPresent ? 'Meta bot is not currently reporting its connection. You can still save settings; they take effect when the bot is online.' : selectedServer.owner ? 'Your Meta owner account is authorized to edit global bot settings.' : 'Editing is disabled for this server.'}</p>}
             <div className="admin-publishing-actions">
-              <button type="button" className="button-primary" onClick={loadSettings} disabled={busy || !selectedServer?.owner || !selectedServer?.botPresent}>Load server settings</button>
-              <button type="button" className="button-secondary" onClick={saveSettings} disabled={busy || !selectedServer?.owner || !selectedServer?.botPresent}>Save all settings</button>
+              <button type="button" className="button-primary" onClick={loadSettings} disabled={busy || !selectedServer?.owner}>Load server settings</button>
+              <button type="button" className="button-secondary" onClick={saveSettings} disabled={busy || !selectedServer?.owner}>Save all settings</button>
             </div>
           </section>
           {selectedServer?.owner && selectedServer?.botPresent && guildId.length >= 17 && <>
