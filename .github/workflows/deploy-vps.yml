@@ -216,11 +216,8 @@ jobs:
           sudo -n cp -a "$DISCORD_AUTH_LIB_STAGE" /opt/meta-codelearn/lib/discord-auth.js
           sudo -n cp -a "$BOT_INDEX_STAGE" /opt/meta-codelearn/discord-bot/src/index.js
           sudo -n cp -a "$BOT_DATABASE_STAGE" /opt/meta-codelearn/discord-bot/src/lib/database.js
-          # Share the database with the auth service without making it world-readable.
-          sudo -n chown administrator:www-data /opt/meta-codelearn/discord-bot/data
-          sudo -n chmod 2770 /opt/meta-codelearn/discord-bot/data
-          sudo -n chown administrator:www-data /opt/meta-codelearn/discord-bot/data/meta-codelearn.sqlite
-          sudo -n chmod 660 /opt/meta-codelearn/discord-bot/data/meta-codelearn.sqlite
+          # Database permissions are configured once on the VPS. Do not change ownership
+          # during every deployment because the deploy account is not authorized to do so.
           sudo -n nginx -t
           sudo -n systemctl reload nginx
 
