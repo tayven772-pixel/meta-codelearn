@@ -4085,7 +4085,7 @@ function MainRoutes() {
     <Switch>
       <Route path="/" component={HomePage} />
       <Route path="/admin" component={AdminPublishingPage} />
-      <Route path="/ai" component={MetaAIPage} />
+      <Route path="/ai" component={() => <ProtectedRoute><MetaAIPage /></ProtectedRoute>} />
       <Route path="/bot-control" component={BotControlPage} />
       <Route path="/user-portal" component={() => <ProtectedRoute><UserPortal /></ProtectedRoute>} />
       <Route path="/learn/:lessonId" component={() => <ProtectedRoute><LessonPage /></ProtectedRoute>} />
