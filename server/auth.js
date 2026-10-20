@@ -594,7 +594,7 @@ app.post('/api/auth/admin/ai/chat', aiRequestLimiter, async (req, res) => {
     'You are currently running in chat-only mode: you can propose code and edits, but you cannot directly modify the repository from this chat endpoint.'
   ].join('\n');
   try {
-    const response = await fetch(new URL('/chat/completions', baseUrl.endsWith('/v1') ? baseUrl + '/' : baseUrl + '/'), {
+    const response = await fetch(new URL(`${baseUrl}/chat/completions`), {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
