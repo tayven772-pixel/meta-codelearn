@@ -51,6 +51,7 @@ import { languageFor, languages, lessonFor, lessons, type LearnerSkillLevel, typ
 import { getProgressionStats, learnerSkillLevels } from './data/progression';
 import CodePlaygroundPage from './CodePlayground';
 import GlobalSearch from './GlobalSearch';
+import MetaAIPage from './MetaAIPage';
 import './code-playground.css';
 import './global-search.css';
 
@@ -4084,6 +4085,7 @@ function MainRoutes() {
     <Switch>
       <Route path="/" component={HomePage} />
       <Route path="/admin" component={AdminPublishingPage} />
+      <Route path="/ai" component={() => <ProtectedRoute><MetaAIPage /></ProtectedRoute>} />
       <Route path="/bot-control" component={BotControlPage} />
       <Route path="/user-portal" component={() => <ProtectedRoute><UserPortal /></ProtectedRoute>} />
       <Route path="/learn/:lessonId" component={() => <ProtectedRoute><LessonPage /></ProtectedRoute>} />
