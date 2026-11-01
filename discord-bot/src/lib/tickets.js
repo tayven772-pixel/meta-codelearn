@@ -25,6 +25,27 @@ const configured = (guildId, key) => {
     : null;
 };
 
+// A role mention only creates a Discord notification when the role is mentionable
+// or the bot has MentionEveryone. Prefer making the configured staff role mentionable
+// during setup so ticket alerts work without granting the bot broad mention permissions.
+export async function ensureStaffRolePingable(guild, role) {
+  if (role.mentionable) return true;
+
+  let botMember = guild.members?.me;
+  if (!botMember && typeof guild.members?.fetchMe === 'function') {
+    botMember = await guild.members.fetchMe().catch(() => null);
+  }
+
+  if (botMember?.permissions?.has(PermissionFlagsBits.MentionEveryone)) return true;
+  if (!botMember?.permissions?.has(PermissionFlagsBits.ManageRoles) ||
+      !role.editable || typeof role.setMentionable !== 'function') {
+    return false;
+  }
+
+  await role.setMentionable(true, 'Enable immediate ticket staff notifications');
+  return true;
+}
+
 const isStaff = (interaction, roleId) =>
   Boolean(
     interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
@@ -65,6 +86,14 @@ export async function handleTicketCommand(interaction, db) {
     if (category.type !== ChannelType.GuildCategory ||
         logChannel.type !== ChannelType.GuildText) {
       return replyPrivate(interaction, 'Choose a category and a text channel.');
+    }
+
+    const canNotifyStaff = await ensureStaffRolePingable(guild, role);
+    if (!canNotifyStaff) {
+      return replyPrivate(
+        interaction,
+        'I cannot enable staff pings. Give Meta the Manage Roles permission with the staff role below Meta’s highest role, or make the staff role mentionable, then run /ticket setup again.'
+      );
     }
 
     setSetting(guildId, 'ticket_category_id', category.id);
@@ -327,6 +356,15 @@ export async function handleTicketButton(interaction, db) {
     return true;
   }
 
+  const canNotifyStaff = await ensureStaffRolePingable(guild, staffRole);
+  if (!canNotifyStaff) {
+    await replyPrivate(
+      interaction,
+      'The ticket staff role cannot be pinged yet. Ask an administrator to make it mentionable or give Meta Manage Roles with the staff role below Meta’s highest role.'
+    );
+    return true;
+  }
+
   const questions = ticketQuestions(guildId);
   const answers = questions.map((question, index) => ({
     question,
@@ -378,7 +416,14 @@ export async function handleTicketButton(interaction, db) {
     const logChannelId = configured(guildId, 'ticket_log_channel_id');
     const logChannel = logChannelId ? await guild.channels.fetch(logChannelId).catch(() => null) : null;
     if (logChannel?.isTextBased()) {
-      await logChannel.send('🎫 Ticket #' + insert.lastInsertRowid + ' (' + selectedCategory + ') opened by ' + interaction.user + ' in ' + channel + '.');
+      await logChannel.send({
+        content: staffRole + ' · 🎫 Ticket #' + insert.lastInsertRowid +
+          ' (' + selectedCategory + ') opened by ' + interaction.user + ' in ' + channel + '. Please respond when available.',
+        allowedMentions: {
+          roles: [staffRole.id],
+          users: [interaction.user.id]
+        }
+      });
     }
   } catch (error) {
     if (channel) await channel.delete('Ticket setup failed').catch(() => {});
