@@ -3877,7 +3877,8 @@ function BotControlPage() {
     const deleteCategories = summary.deleteCategories?.length || 0;
     const deleteRoles = summary.deleteRoles?.length || 0;
     const totalDeletes = deleteChannels + deleteCategories + deleteRoles;
-    const detail = 'This will permanently delete ' + deleteChannels + ' channel(s), ' + deleteCategories + ' category/categories, and ' + deleteRoles + ' role(s) not in the JSON. Deleted channel message history cannot be recovered. Deleting a role also removes it from members who have it. Category permissions and child-channel overrides will be replaced to match the JSON, including private/public visibility. Discord-managed, administrator, and protected roles/channels are kept. Continue?';
+    const rename = summary.renameServer ? ' The Discord server will also be renamed from "' + summary.renameServer.current + '" to "' + summary.renameServer.desired + '".' : '';
+    const detail = 'This will permanently delete ' + deleteChannels + ' channel(s), ' + deleteCategories + ' category/categories, and ' + deleteRoles + ' role(s) not in the JSON. Deleted channel message history cannot be recovered. Deleting a role also removes it from members who have it. Role permissions listed in the JSON will be applied to matching roles. Category permissions and child-channel overrides will be replaced to match the JSON, including private/public visibility.' + rename + ' Discord-managed roles, administrator roles, roles above Meta, and protected channels are kept. Continue?';
     if (!window.confirm(detail)) return;
     setBusy(true); setStatus('Confirming sync and applying changes in Discord…');
     try {
