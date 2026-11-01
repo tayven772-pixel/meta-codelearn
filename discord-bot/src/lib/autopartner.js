@@ -45,14 +45,14 @@ export const autoPartnerCommands = [
     .addStringOption(o => o.setName('name').setDescription('Partner name (optional; next in rotation if omitted)').setMaxLength(60).setRequired(false)),
 ].map(command => command.toJSON());
 
-const defaultTemplate = () => '**Partner spotlight: {name}**\n{description}\n\nJoin their community: {invite}\n\nShared through our approved partner network.';
+const defaultTemplate = () => '**Partner spotlight: {name}**\n{description}\n\nJoin their community: {invite}\n\nMember-count verified through Discord.';
 
 function isAdmin(interaction) {
   return interaction.inGuild() && interaction.memberPermissions?.has(admin);
 }
 
 function getPartners(guildId) {
-  return db.prepare('SELECT id, name, invite_url, description FROM autopartner_partners WHERE guild_id = ? ORDER BY id').all(guildId);
+  return db.prepare('SELECT id, name, invite_url, description, member_count FROM autopartner_partners WHERE guild_id = ? ORDER BY id').all(guildId);
 }
 
 function renderEmbed(partner, guildId) {
@@ -92,10 +92,10 @@ export async function handleAutoPartnerCommand(interaction) {
     const hours = interaction.options.getInteger('interval_hours', true);
     const enabled = interaction.options.getBoolean('enabled', true);
     const minimumMembers = interaction.options.getInteger('minimum_members') ?? 100;
-    setSetting(interaction.guildId, 'autopartner_min_members', minimumMembers);
-    setSetting(interaction.guildId, 'autopartner_channel_id', channel.id);
-    setSetting(interaction.guildId, 'autopartner_interval_hours', hours);
-    setSetting(interaction.guildId, 'autopartner_enabled', enabled ? 'true' : 'false');
+    setSetting('global', 'autopartner_min_members', minimumMembers);
+    setSetting('global', 'autopartner_channel_id', channel.id);
+    setSetting('global', 'autopartner_interval_hours', hours);
+    setSetting('global', 'autopartner_enabled', enabled ? 'true' : 'false');
     await interaction.reply({ content: '🤝 Autopartner settings saved.\nChannel: <#' + channel.id + '>\nInterval: every ' + hours + ' hour(s)\nMinimum member count: ' + minimumMembers + '\nAutomatic posting: ' + (enabled ? 'ON' : 'OFF') + '\nMembers can submit a Discord invite with /partner-add; the bot verifies the approximate member count before saving and posting it.', flags: MessageFlags.Ephemeral });
     return true;
   }
@@ -181,7 +181,7 @@ export async function handleAutoPartnerCommand(interaction) {
 
   if (name === 'partner-list') {
     const partners = getPartners(interaction.guildId);
-    const embed = new EmbedBuilder().setColor(0x42B883).setTitle('🤝 Approved partners')
+    const embed = new EmbedBuilder().setColor(0x42B883).setTitle('🤝 Verified partner servers')
       .setDescription(partners.length ? partners.map((p, i) => '**' + (i + 1) + '. ' + p.name + '** (' + Number(p.member_count || 0).toLocaleString() + ' approx. members)\n' + p.description.slice(0, 180) + '\n[Join partner server](' + p.invite_url + ')').join('\n\n').slice(0, 4000) : 'No qualifying partners yet. Members can submit a Discord invite with /partner-add.')
       .setFooter({ text: partners.length + ' active partner(s)' });
     await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
@@ -272,6 +272,7 @@ export async function runAutoPartnerScheduler(client) {
     try {
       const invite = await client.fetchInvite(partner.invite_url, { withCounts: true });
       const memberCount = Number(invite.approximateMemberCount);
+      if (invite.guild?.id === guildId) { console.log('Autopartner skipped ' + partner.name + ': invite is for the Meta home server.'); continue; }
       if (!Number.isFinite(memberCount) || memberCount < minimum) {
         console.log('Autopartner skipped ' + partner.name + ': invite count unavailable or below minimum.');
         continue;
