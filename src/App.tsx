@@ -2747,6 +2747,9 @@ function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isRegistering, setIsRegistering] = useState(window.location.pathname.startsWith('/sign-up'));
   const [busy, setBusy] = useState(false);
+  const [messageChannelId, setMessageChannelId] = useState('');
+  const [messageContent, setMessageContent] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
   const [showResend, setShowResend] = useState(false);
   const [message, setMessage] = useState(() =>
     new URLSearchParams(window.location.search).get('account') === 'deleted'
@@ -3791,6 +3794,23 @@ function BotControlPage() {
     finally { setBusy(false); }
   };
   const setValue = (key: string, value: string) => setSettings(current => ({ ...current, [key]: value }));
+  const sendBotMessage = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (sendingMessage || !guildId || !messageChannelId.trim() || !messageContent.trim()) return;
+    setSendingMessage(true);
+    setStatus('Sending message through Meta bot…');
+    try {
+      const response = await fetch('/api/auth/admin/bot-control/messages', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guildId, channelId: messageChannelId.trim(), content: messageContent.trim() })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Could not send the message.');
+      setMessageContent('');
+      setStatus('Message queued for delivery by Meta bot. It should appear in Discord shortly.');
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not send the message.'); }
+    finally { setSendingMessage(false); }
+  };
   const saveSettings = async () => {
     setStatus('Saving bot settings…');
     let template = templateText;
@@ -3998,6 +4018,24 @@ function BotControlPage() {
                 <small>Use 1–5 questions. Each question becomes a required field shown before the bot creates the ticket channel. Each question must be 45 characters or fewer.</small>
               </label>
               <p>Important: the ticket category and staff role used for channel permissions still need to be configured with <code>/ticket setup</code>. This editor controls the categories members choose on the panel. The channel category, staff role, and log channel can be set here or with `/ticket setup`.</p>
+            </section>
+            <section className="admin-publishing-guide">
+              <h2>Send a message as Meta</h2>
+              <p>Post directly to a text channel in the configured Meta home server. Discord will show the message as sent by the bot.</p>
+              <form onSubmit={sendBotMessage}>
+                <label style={{ display: 'block', marginTop: 12 }}>
+                  <strong>Discord channel ID</strong>
+                  <input required value={messageChannelId} onChange={event => setMessageChannelId(event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Right-click a channel and copy its ID" style={fieldStyle} inputMode="numeric" />
+                </label>
+                <label style={{ display: 'block', marginTop: 12 }}>
+                  <strong>Message</strong>
+                  <textarea required value={messageContent} onChange={event => setMessageContent(event.target.value)} maxLength={2000} rows={5} placeholder="Write the message Meta should send…" style={fieldStyle} />
+                  <small>{messageContent.length}/2000 characters. Mentions will not ping members.</small>
+                </label>
+                <button type="submit" className="button-primary" disabled={sendingMessage || !guildId || !messageChannelId.trim() || !messageContent.trim()} style={{ marginTop: 12 }}>
+                  {sendingMessage ? 'Sending…' : 'Send as Meta'}
+                </button>
+              </form>
             </section>
             <section className="admin-publishing-guide">
               <h2>Community features</h2>
