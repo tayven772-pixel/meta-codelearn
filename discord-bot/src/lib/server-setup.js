@@ -67,6 +67,16 @@ export function validateServerTemplate(template) {
           typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
     throw new Error('Invalid template structure or values.');
   }
+  const roleNames = template.roles.map(role => role.name.trim().toLowerCase());
+  const categoryNames = template.categories.map(group => group.name.trim().toLowerCase());
+  if (new Set(roleNames).size !== roleNames.length) throw new Error('Role names must be unique (case-insensitive).');
+  if (new Set(categoryNames).size !== categoryNames.length) throw new Error('Category names must be unique (case-insensitive).');
+  for (const group of template.categories) {
+    const channelKeys = group.channels.map(([kind, name]) => kind + ':' + normalizeChannelName(name));
+    if (new Set(channelKeys).size !== channelKeys.length) {
+      throw new Error('Category "' + group.name + '" contains duplicate channel names of the same type.');
+    }
+  }
 
   const control = template.botControl ?? {};
   if (!control || typeof control !== 'object' || Array.isArray(control)) throw new Error('botControl must be an object.');
