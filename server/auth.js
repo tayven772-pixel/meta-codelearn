@@ -498,10 +498,54 @@ app.post('/api/auth/admin/bot-control/publish-template', async (req, res) => {
   const templateJson = JSON.stringify(template);
   if (templateJson.length > 30000) return res.status(413).json({ error: 'Setup JSON is too large (30 KB maximum).' });
   try {
-    getBotDb().prepare("INSERT INTO settings (guild_id, setting_key, setting_value, updated_at) VALUES ('global','server_setup_template',?,CURRENT_TIMESTAMP) ON CONFLICT(guild_id,setting_key) DO UPDATE SET setting_value=excluded.setting_value, updated_at=CURRENT_TIMESTAMP").run(templateJson);
-    const result = getBotDb().prepare("INSERT INTO bot_setup_outbox (guild_id, template_json) VALUES (?, ?)").run(guildId, templateJson);
-    return res.status(202).json({ queued: true, jobId: Number(result.lastInsertRowid), message: 'Template published. Meta is applying it to Discord now.' });
-  } catch (error) { return res.status(500).json({ error: error.message || 'Could not publish setup template.' }); }
+    const result = getBotDb().prepare("INSERT INTO bot_setup_outbox (guild_id, template_json, action) VALUES (?, ?, 'preview')").run(guildId, templateJson);
+    return res.status(202).json({ queued: true, jobId: Number(result.lastInsertRowid), message: 'Setup preview queued. No Discord changes have been made yet.' });
+  } catch (error) { return res.status(500).json({ error: error.message || 'Could not preview setup template.' }); }
+});
+
+app.get('/api/auth/admin/bot-control/setup-jobs/:id', (req, res) => {
+  if (!requireBotOwner(req, res)) return;
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid setup job ID.' });
+  const guildId = getHomeGuildId();
+  if (!validGuildId(guildId)) return res.status(503).json({ error: 'The bot home server is not configured.' });
+  try {
+    const job = getBotDb().prepare('SELECT id, action, status, result_json, error, created_at FROM bot_setup_outbox WHERE id = ? AND guild_id = ?').get(id, guildId);
+    if (!job) return res.status(404).json({ error: 'Setup job not found.' });
+    let result = null;
+    try { result = job.result_json ? JSON.parse(job.result_json) : null; } catch { /* malformed historical job result */ }
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json({ id: job.id, action: job.action, status: job.status, result, error: job.error, createdAt: job.created_at });
+  } catch (error) {
+    console.error('Setup job lookup failed:', error?.message || 'unknown error');
+    return res.status(500).json({ error: 'Could not read setup job status.' });
+  }
+});
+
+app.post('/api/auth/admin/bot-control/apply-template', (req, res) => {
+  if (!requireBotOwner(req, res)) return;
+  const previewJobId = Number(req.body?.previewJobId);
+  const guildId = getHomeGuildId();
+  if (!Number.isSafeInteger(previewJobId) || previewJobId < 1) return res.status(400).json({ error: 'A valid preview job is required.' });
+  if (!validGuildId(guildId)) return res.status(503).json({ error: 'The bot home server is not configured.' });
+  try {
+    const db = getBotDb();
+    const preview = db.prepare("SELECT * FROM bot_setup_outbox WHERE id = ? AND guild_id = ? AND action = 'preview' AND status = 'applied'").get(previewJobId, guildId);
+    if (!preview) return res.status(409).json({ error: 'The preview is not ready or has already been used. Publish the JSON again.' });
+    const age = Date.now() - new Date(preview.created_at.replace(' ', 'T') + 'Z').getTime();
+    if (!Number.isFinite(age) || age > 10 * 60 * 1000) return res.status(410).json({ error: 'This preview expired. Publish the JSON again to get a fresh deletion list.' });
+    let result;
+    try { result = JSON.parse(preview.result_json || 'null'); } catch { result = null; }
+    if (!result || result.mode !== 'preview' || typeof result.fingerprint !== 'string') {
+      return res.status(409).json({ error: 'The preview result is invalid. Publish the JSON again.' });
+    }
+    const queued = db.prepare("INSERT INTO bot_setup_outbox (guild_id, template_json, action, confirmation_hash) VALUES (?, ?, 'apply', ?)").run(guildId, preview.template_json, result.fingerprint);
+    db.prepare("UPDATE bot_setup_outbox SET error = 'Confirmed by owner; apply job ' || ? WHERE id = ?").run(String(queued.lastInsertRowid), previewJobId);
+    return res.status(202).json({ queued: true, jobId: Number(queued.lastInsertRowid), message: 'Confirmed. Meta is applying the reviewed setup.' });
+  } catch (error) {
+    console.error('Setup confirmation failed:', error?.message || 'unknown error');
+    return res.status(500).json({ error: 'Could not queue the confirmed setup.' });
+  }
 });
 
 app.post('/api/auth/admin/bot-control/messages', async (req, res) => {
