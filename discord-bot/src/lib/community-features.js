@@ -312,12 +312,13 @@ export async function handleCommunityEvents(client) {
       const message = template.replaceAll('{user}', member.toString()).replaceAll('{server}', member.guild.name).replaceAll('{membercount}', String(member.guild.memberCount));
       if (channel?.isTextBased()) {
         const avatarUrl = member.displayAvatarURL({ size: 256, extension: 'png' });
+        const showAvatar = getSetting(member.guild.id, 'community_welcome_avatar') !== 'false';
         const welcomeEmbed = new EmbedBuilder().setColor(0x42B883)
-          .setAuthor({ name: 'Welcome ' + member.user.username, iconURL: avatarUrl })
+          .setAuthor({ name: 'Welcome ' + member.user.username, ...(showAvatar ? { iconURL: avatarUrl } : {}) })
           .setDescription(message)
           .setFooter({ text: member.guild.name + ' • Member #' + member.guild.memberCount })
           .setTimestamp();
-        if (getSetting(member.guild.id, 'community_welcome_avatar') !== 'false') welcomeEmbed.setThumbnail(avatarUrl);
+        if (showAvatar) welcomeEmbed.setThumbnail(avatarUrl);
         await channel.send({ embeds: [welcomeEmbed], allowedMentions: { users: [member.id] } }).catch(error => console.error('Welcome message failed:', error.message));
       }
     }
