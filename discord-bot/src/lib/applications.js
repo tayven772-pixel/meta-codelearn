@@ -11,6 +11,7 @@ db.exec(`
     guild_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
     username TEXT NOT NULL,
+    avatar_url TEXT NOT NULL DEFAULT '',
     requested_role TEXT NOT NULL,
     availability TEXT NOT NULL,
     experience TEXT NOT NULL,
@@ -25,6 +26,7 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS staff_applications_one_pending_per_user
     ON staff_applications(guild_id, user_id) WHERE status = 'pending';
 `);
+try { db.exec("ALTER TABLE staff_applications ADD COLUMN avatar_url TEXT NOT NULL DEFAULT ''"); } catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
 
 export const staffApplicationCommands = [
   new SlashCommandBuilder()
@@ -48,7 +50,7 @@ function buildApplicationEmbed(application, guild) {
   return new EmbedBuilder()
     .setColor(application.status === 'accepted' ? 0x2EAD68 : application.status === 'rejected' ? 0xC94C4C : 0x5865F2)
     .setTitle('Staff application #' + application.id)
-    .setAuthor({ name: application.username, iconURL: 'https://cdn.discordapp.com/embed/avatars/0.png' })
+    .setAuthor({ name: application.username, iconURL: application.avatar_url || 'https://cdn.discordapp.com/embed/avatars/0.png' })
     .setDescription('Applicant: <@' + application.user_id + '>\nStatus: **' + application.status.toUpperCase() + '**')
     .addFields(
       { name: 'Role requested', value: application.requested_role.slice(0, 300), inline: true },
@@ -79,8 +81,8 @@ export async function handleStaffApplicationCommand(interaction) {
     await interaction.reply({ content: 'Choose a regular text channel for staff application reviews.', flags: MessageFlags.Ephemeral });
     return true;
   }
-  setSetting(interaction.guildId, 'staff_applications_channel_id', staffChannel.id);
-  setSetting(interaction.guildId, 'staff_applications_enabled', 'true');
+  setSetting('global', 'staff_applications_channel_id', staffChannel.id);
+  setSetting('global', 'staff_applications_enabled', 'true');
   const title = getSetting(interaction.guildId, 'staff_applications_title') || 'Meta Code | Staff Applications';
   const description = getSetting(interaction.guildId, 'staff_applications_description') ||
     'Help make Meta Code a welcoming place to learn and build. Apply privately using the button below. Applications are sent to the configured staff review channel.';
@@ -139,6 +141,7 @@ export async function handleStaffApplicationComponent(interaction) {
       guild_id: interaction.guildId,
       user_id: interaction.user.id,
       username: interaction.user.tag || interaction.user.username,
+      avatar_url: interaction.user.displayAvatarURL({ size: 256, extension: 'png' }),
       requested_role: interaction.fields.getTextInputValue('requested_role').trim(),
       availability: interaction.fields.getTextInputValue('availability').trim(),
       experience: interaction.fields.getTextInputValue('experience').trim(),
@@ -152,8 +155,8 @@ export async function handleStaffApplicationComponent(interaction) {
     let id;
     try {
       const inserted = db.prepare(`INSERT INTO staff_applications
-        (guild_id, user_id, username, requested_role, availability, experience, motivation, scenario)
-        VALUES (@guild_id, @user_id, @username, @requested_role, @availability, @experience, @motivation, @scenario)`).run(application);
+        (guild_id, user_id, username, avatar_url, requested_role, availability, experience, motivation, scenario)
+        VALUES (@guild_id, @user_id, @username, @avatar_url, @requested_role, @availability, @experience, @motivation, @scenario)`).run(application);
       id = Number(inserted.lastInsertRowid);
     } catch (error) {
       if (String(error.code || '').includes('CONSTRAINT')) {
