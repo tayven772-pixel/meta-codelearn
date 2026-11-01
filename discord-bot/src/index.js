@@ -3,6 +3,7 @@ import { ticketCommand } from './lib/ticket-commands.js';
 import { serverSetupCommand } from './lib/server-setup.js';
 import { handleTicketCommand, handleTicketButton, handleTicketPanelCommand } from './lib/tickets.js';
 import { applyServerTemplate, handleServerSetup, handleServerSetupButton } from './lib/server-setup.js';
+import { handleStaffApplicationInteraction, postStaffApplicationPanel } from './lib/staff-applications.js';
 import { db, getSetting } from './lib/database.js';
 import { moderationCommands, handleModerationCommand } from './lib/moderation.js';
 import { autoPartnerCommands, handleAutoPartnerCommand, runAutoPartnerScheduler } from './lib/autopartner.js';
@@ -397,15 +398,10 @@ client.on(Events.InteractionCreate, async interaction => {
    else if (interaction.commandName === 'ping') await interaction.reply({ content: 'Meta bot is online ✅', flags: MessageFlags.Ephemeral });
    else if (interaction.commandName === 'lessons') await interaction.reply({ content: `Start learning: ${siteUrl}/play`, flags: MessageFlags.Ephemeral });
    else if (interaction.commandName === 'meta') await interaction.reply({ content: `Welcome to Meta CodeLearn!\nWebsite: ${siteUrl}\nLessons: ${siteUrl}/play\nProjects: ${siteUrl}/projects\nAccount: ${siteUrl}/account`, flags: MessageFlags.Ephemeral });
-   else if (interaction.commandName === 'setup-applications') {
-    if (!interaction.inGuild() || !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) { await interaction.reply({ content: 'Only server administrators can post this panel.', flags: MessageFlags.Ephemeral }); return; }
-    const embed = new EmbedBuilder().setColor(0x5865F2).setTitle('Meta CodeLearn | Staff Applications').setDescription('Want to help Meta CodeLearn grow? We are looking for friendly, responsible people to support our community.\n\n**Available areas**\n• Community Moderator\n• Support Team\n• Coding Helper\n\n**How it works**\nClick **Apply for Staff** to begin privately through Discord DMs. Keep your DMs open so the bot can contact you.').setFooter({ text: 'Meta CodeLearn • Staff Recruitment' });
-    const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('staff_apply_start').setLabel('Apply for Staff').setEmoji('📋').setStyle(ButtonStyle.Primary));
-    await interaction.channel.send({ embeds: [embed], components: [row] });
-    await interaction.reply({ content: 'Staff application panel posted.', flags: MessageFlags.Ephemeral });
-   }
+   else if (interaction.commandName === 'setup-applications') await postStaffApplicationPanel(interaction);
    return;
   }
+    if (await handleStaffApplicationInteraction(interaction)) return;
     if (await handleCommunityComponent(interaction)) return;
     if (
       interaction.isButton() &&
@@ -424,10 +420,6 @@ client.on(Events.InteractionCreate, async interaction => {
       await handleTicketButton(interaction, db);
       return;
     }
-  if (interaction.isButton() && interaction.customId === 'staff_apply_start') {
-   try { await interaction.user.send('Welcome to Meta CodeLearn staff recruitment! 📋\n\nYou started the staff application process. The private questionnaire and submission workflow are the next setup step. Please keep your DMs open.'); await interaction.reply({ content: 'I sent you a DM. Check your Discord messages.', flags: MessageFlags.Ephemeral }); }
-   catch { await interaction.reply({ content: 'I could not DM you. Please enable DMs from server members and try again.', flags: MessageFlags.Ephemeral }); }
-  }
  } catch (error) {
   console.error('Interaction failed:', error.message);
   if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) await interaction.reply({ content: 'Something went wrong. Please try again later.', flags: MessageFlags.Ephemeral }).catch(() => {});
