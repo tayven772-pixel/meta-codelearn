@@ -128,9 +128,11 @@ export async function applyServerTemplate(guild, template) {
       if (!category) {
         category = await guild.channels.create({ name: group.name.trim(), type: ChannelType.GuildCategory, permissionOverwrites: overwrites, reason: 'Published Meta Code setup template' });
         created.push('category ' + category.name);
-      } else {
+      } else if (group.private) {
         await category.edit({ permissionOverwrites: overwrites, reason: 'Published Meta Code setup template' });
         updated.push('category ' + category.name);
+      } else {
+        skipped.push('category ' + category.name);
       }
       for (const [kind, rawName] of group.channels) {
         const name = rawName.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 100) || 'new-channel';
