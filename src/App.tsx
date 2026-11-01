@@ -3745,18 +3745,32 @@ function BotControlPage() {
           throw new Error(ownerData.error || 'This account is not authorized to manage Meta bot settings.');
         }
         setDiscordReady(true);
-        const serverResponse = await fetch('/api/auth/admin/bot-control/servers', { credentials: 'same-origin', cache: 'no-store' });
-        const serverData = await serverResponse.json().catch(() => ({}));
-        if (!serverResponse.ok) throw new Error(serverData.error || 'Could not load the Meta home server.');
-        if (!active) return;
-        const availableServers = Array.isArray(serverData.servers) ? serverData.servers : [];
         setOwner(String(ownerData.owner || 'Meta owner'));
         setCommands(Array.isArray(ownerData.commands) ? ownerData.commands : []);
-        setServers(availableServers);
-        const homeServer = availableServers[0];
-        setGuildId(homeServer?.id || '');
+        // Owner authorization is sufficient for global settings. A temporary
+        // Discord presence lookup failure must not hide or disable the editor.
         setAllowed(true);
-        setStatus(homeServer ? (homeServer.botPresent ? 'Owner verified. You can edit global Meta bot settings.' : (serverData.message || 'Owner verified. Settings can be saved while the bot reconnects.')) : 'The Meta home server is not configured.');
+        try {
+          const serverResponse = await fetch('/api/auth/admin/bot-control/servers', { credentials: 'same-origin', cache: 'no-store' });
+          const serverData = await serverResponse.json().catch(() => ({}));
+          if (!serverResponse.ok) throw new Error(serverData.error || 'Could not load the Meta home server.');
+          if (!active) return;
+          const availableServers = Array.isArray(serverData.servers) ? serverData.servers : [];
+          setServers(availableServers);
+          const homeServer = availableServers[0];
+          setGuildId(homeServer?.id || '');
+          setStatus(homeServer
+            ? (homeServer.botPresent
+              ? 'Owner verified. Global Meta bot settings are ready.'
+              : (serverData.message || 'Owner verified. Settings can be saved while the bot reconnects.'))
+            : 'Owner verified. Global settings are available, but the Meta home server could not be identified.');
+        } catch (serverError) {
+          if (!active) return;
+          setServers([]);
+          setGuildId('');
+          const detail = serverError instanceof Error ? serverError.message : 'Discord status is temporarily unavailable.';
+          setStatus('Owner verified. The global settings editor is still available. Server status: ' + detail);
+        }
       })
       .catch(error => { if (active) setStatus(error instanceof Error ? error.message : 'Could not check Meta owner access.'); });
     return () => { active = false; };
@@ -3771,7 +3785,7 @@ function BotControlPage() {
       setSettings(data.settings || {});
       setPartners(Array.isArray(data.partners) ? data.partners : []);
       setTemplateText(data.settings?.server_setup_template || defaultTemplate);
-      setStatus('Loaded settings for server ' + id + '.');
+      setStatus(id ? 'Loaded global Meta bot settings for home server ' + id + '.' : 'Loaded global Meta bot settings.');
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not load settings.'); }
     finally { setBusy(false); }
   };
