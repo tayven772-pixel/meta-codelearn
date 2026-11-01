@@ -3892,6 +3892,7 @@ function BotControlPage() {
       const updateRoles = Array.isArray(plan.updateRoles) ? plan.updateRoles.length : 0;
       const createCategories = Array.isArray(plan.createCategories) ? plan.createCategories.length : 0;
       const createChannels = Array.isArray(plan.createChannels) ? plan.createChannels.length : 0;
+      const moveChannels = Array.isArray(plan.moveChannels) ? plan.moveChannels.length : 0;
       const deleteChannels = Array.isArray(plan.deleteChannels) ? plan.deleteChannels.length : 0;
       const deleteCategories = Array.isArray(plan.deleteCategories) ? plan.deleteCategories.length : 0;
       const deleteRoles = Array.isArray(plan.deleteRoles) ? plan.deleteRoles.length : 0;
@@ -3901,6 +3902,7 @@ function BotControlPage() {
         'Update roles: ' + updateRoles + '\n' +
         'Create categories: ' + createCategories + '\n' +
         'Create channels: ' + createChannels + '\n' +
+        'Move existing channels: ' + moveChannels + '\n' +
         'DELETE channels (messages and threads included): ' + deleteChannels + '\n' +
         'DELETE categories: ' + deleteCategories + '\n' +
         'DELETE removable roles: ' + deleteRoles + '\n' +
