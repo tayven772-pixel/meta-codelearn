@@ -507,26 +507,55 @@ function validateBotSetupTemplate(template) {
       !Array.isArray(template.roles) || !Array.isArray(template.categories) ||
       template.roles.length > 40 || template.categories.length > 30 ||
       template.roles.some(role => !role || typeof role.name !== 'string' || !role.name.trim() || role.name.length > 100 ||
-        (role.color !== undefined && (!Number.isInteger(role.color) || role.color < 0 || role.color > 0xFFFFFF))) ||
+        (role.color !== undefined && !((Number.isInteger(role.color) && role.color >= 0 && role.color <= 0xFFFFFF) ||
+          (typeof role.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(role.color)))) ||
+        (role.hoist !== undefined && typeof role.hoist !== 'boolean') ||
+        (role.permissions !== undefined && (!Array.isArray(role.permissions) || role.permissions.some(p => typeof p !== 'string')))) ||
       template.categories.some(group => !group || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 100 ||
         (group.private !== undefined && typeof group.private !== 'boolean') ||
-        (group.private !== undefined && typeof group.private !== 'boolean') ||
+        (group.allowed_roles !== undefined && (!Array.isArray(group.allowed_roles) || group.allowed_roles.some(name => typeof name !== 'string'))) ||
         !Array.isArray(group.channels) || group.channels.length > 50 ||
-        group.channels.some(channel => !Array.isArray(channel) || !['text','voice'].includes(channel[0]) ||
-          typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
-    return 'Invalid setup JSON. Check roles, categories, and ["text" or "voice", "channel-name"] entries.';
+        group.channels.some(channel => {
+          const type = Array.isArray(channel) ? channel[0] : channel?.type;
+          const name = Array.isArray(channel) ? channel[1] : channel?.name;
+          return !['text','voice'].includes(type) || typeof name !== 'string' || !name.trim() || name.length > 100 ||
+            (!Array.isArray(channel) && (!channel || typeof channel !== 'object' || (channel.read_only !== undefined && typeof channel.read_only !== 'boolean') ||
+              (channel.bot_panel !== undefined && !['tickets','logging'].includes(channel.bot_panel))));
+        })) {
+    return 'Invalid setup JSON. Check roles, categories, and text/voice channel definitions.';
+  }
+  const branding = template.branding ?? {};
+  const botSettings = template.bot_settings ?? {};
+  const permissions = template.permissions ?? {};
+  if (!branding || typeof branding !== 'object' || Array.isArray(branding) ||
+      !botSettings || typeof botSettings !== 'object' || Array.isArray(botSettings) ||
+      !permissions || typeof permissions !== 'object' || Array.isArray(permissions)) {
+    return 'branding, bot_settings, and permissions must be JSON objects.';
   }
   if (template.serverName !== undefined &&
       (typeof template.serverName !== 'string' || template.serverName.trim().length < 2 || template.serverName.trim().length > 100)) {
-    return 'serverName must be 2–100 characters when provided. Omit it to keep the current server name.';
+    return 'serverName must be 2–100 characters when provided.';
   }
+  if (branding.server_name !== undefined &&
+      (typeof branding.server_name !== 'string' || branding.server_name.trim().length < 2 || branding.server_name.trim().length > 100)) {
+    return 'branding.server_name must be 2–100 characters.';
+  }
+  if (branding.embed_color !== undefined && (typeof branding.embed_color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(branding.embed_color))) {
+    return 'branding.embed_color must be a six-digit hex color such as #5865F2.';
+  }
+  if (branding.bot_name !== undefined && (typeof branding.bot_name !== 'string' || branding.bot_name.length > 80)) return 'branding.bot_name must be 80 characters or fewer.';
+  if (branding.footer !== undefined && (typeof branding.footer !== 'string' || branding.footer.length > 200)) return 'branding.footer must be 200 characters or fewer.';
 
   const roleNames = template.roles.map(role => role.name.trim().toLowerCase());
   const categoryNames = template.categories.map(group => group.name.trim().toLowerCase());
   if (new Set(roleNames).size !== roleNames.length) return 'Role names must be unique (case-insensitive).';
   if (new Set(categoryNames).size !== categoryNames.length) return 'Category names must be unique (case-insensitive).';
   for (const group of template.categories) {
-    const keys = group.channels.map(([kind, name]) => kind + ':' + (name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'new-channel'));
+    const keys = group.channels.map(channel => {
+      const kind = Array.isArray(channel) ? channel[0] : channel.type;
+      const name = Array.isArray(channel) ? channel[1] : channel.name;
+      return kind + ':' + (name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'new-channel');
+    });
     if (new Set(keys).size !== keys.length) return 'Category "' + group.name + '" contains duplicate channel names of the same type.';
   }
 
@@ -560,7 +589,9 @@ function validateBotSetupTemplate(template) {
   if (applications.approvedRole && !definedRoleNames.has(String(applications.approvedRole).trim().toLowerCase())) return 'The staff application approvedRole must also be listed in the JSON roles array.';
   const privateGroups = template.categories.filter(group => group.private === true);
   if (privateGroups.length) {
-    const roleNames = new Set(['Founder','Administrator','Moderator','Support Team',String(applications.reviewRole || '')].map(name => name.trim().toLowerCase()).filter(Boolean));
+    const configuredNames = privateGroups.flatMap(group => group.allowed_roles || []);
+    const roleNames = new Set(['Founder','Administrator','Moderator','Support Team',String(applications.reviewRole || ''), ...configuredNames,
+      ...(permissions.staff_category?.allowed_roles || [])].map(name => name.trim().toLowerCase()).filter(Boolean));
     if (!template.roles.some(role => roleNames.has(role.name.trim().toLowerCase()))) return 'Private categories need at least one staff role in the JSON roles array.';
   }
   if (applications.questions !== undefined &&
@@ -587,6 +618,62 @@ function validateBotSetupTemplate(template) {
   if (control.welcome?.channel && !hasTextChannel(control.welcome.channel)) return 'botControl.welcome.channel must reference a text channel in the JSON categories.';
   if (control.staffApplications?.reviewChannel && !hasTextChannel(control.staffApplications.reviewChannel)) return 'botControl.staffApplications.reviewChannel must reference a text channel in the JSON categories.';
   if (control.autopartner?.channel && !hasTextChannel(control.autopartner.channel)) return 'botControl.autopartner.channel must reference a text channel in the JSON categories.';
+
+  const knownPermissions = new Set([
+    'CreateInstantInvite','KickMembers','BanMembers','Administrator','ManageChannels','ManageGuild','AddReactions',
+    'ViewAuditLog','PrioritySpeaker','Stream','ViewChannel','SendMessages','SendTTSMessages','ManageMessages',
+    'EmbedLinks','AttachFiles','ReadMessageHistory','MentionEveryone','UseExternalEmojis','ViewGuildInsights',
+    'Connect','Speak','MuteMembers','DeafenMembers','MoveMembers','UseVAD','ChangeNickname','ManageNicknames',
+    'ManageRoles','ManageWebhooks','ManageGuildExpressions','UseApplicationCommands','RequestToSpeak',
+    'ManageEvents','ManageThreads','CreatePublicThreads','CreatePrivateThreads','UseExternalStickers',
+    'SendMessagesInThreads','UseEmbeddedActivities','ModerateMembers','ViewCreatorMonetizationAnalytics',
+    'UseSoundboard','CreateGuildExpressions','CreateEvents','UseExternalSounds','SendVoiceMessages','SendPolls',
+    'UseExternalApps'
+  ]);
+  for (const [label, block] of Object.entries({
+    everyone: permissions.everyone,
+    read_only_channels: permissions.read_only_channels,
+    muted_role: permissions.muted_role
+  })) {
+    if (block !== undefined && (!block || typeof block !== 'object' || Array.isArray(block))) return 'permissions.' + label + ' must be an object.';
+    for (const key of ['allow','deny']) {
+      const values = block?.[key];
+      if (values !== undefined && (!Array.isArray(values) || values.some(p => typeof p !== 'string' || !knownPermissions.has(p)))) {
+        return 'permissions.' + label + '.' + key + ' contains an unknown Discord permission.';
+      }
+    }
+  }
+  if (permissions.read_only_channels?.channels !== undefined &&
+      (!Array.isArray(permissions.read_only_channels.channels) || permissions.read_only_channels.channels.some(name => typeof name !== 'string'))) {
+    return 'permissions.read_only_channels.channels must be an array of channel names.';
+  }
+  if (permissions.staff_category?.allowed_roles !== undefined &&
+      (!Array.isArray(permissions.staff_category.allowed_roles) || permissions.staff_category.allowed_roles.some(name => typeof name !== 'string'))) {
+    return 'permissions.staff_category.allowed_roles must be an array of role names.';
+  }
+  const roleNameSet = new Set(template.roles.map(role => role.name.trim().toLowerCase()));
+  for (const group of template.categories) for (const name of group.allowed_roles || []) {
+    if (!roleNameSet.has(name.trim().toLowerCase())) return 'Category "' + group.name + '" references unknown role "' + name + '".';
+  }
+  const channelNames = new Set(template.categories.flatMap(group => group.channels.map(channel =>
+    (Array.isArray(channel) ? channel[1] : channel.name).trim().toLowerCase()
+  )));
+  if (botSettings.welcome?.channel && !channelNames.has(String(botSettings.welcome.channel).trim().toLowerCase())) return 'bot_settings.welcome.channel must reference a channel in the categories.';
+  if (botSettings.welcome?.enabled !== undefined && typeof botSettings.welcome.enabled !== 'boolean') return 'bot_settings.welcome.enabled must be true or false.';
+  if (botSettings.autorole?.enabled !== undefined && typeof botSettings.autorole.enabled !== 'boolean') return 'bot_settings.autorole.enabled must be true or false.';
+  if (botSettings.logging?.enabled !== undefined && typeof botSettings.logging.enabled !== 'boolean') return 'bot_settings.logging.enabled must be true or false.';
+  if (botSettings.logging?.events !== undefined && (!Array.isArray(botSettings.logging.events) ||
+      botSettings.logging.events.some(event => !['member_join','member_leave','message_delete','channel_create','channel_delete','moderation_action'].includes(event)))) {
+    return 'bot_settings.logging.events contains an unsupported event.';
+  }
+  if (botSettings.tickets?.types !== undefined && (!Array.isArray(botSettings.tickets.types) || botSettings.tickets.types.length < 1 || botSettings.tickets.types.length > 25 ||
+      botSettings.tickets.types.some(type => typeof type !== 'string' || !type.trim() || type.length > 80))) return 'bot_settings.tickets.types must contain 1–25 ticket names.';
+  if (botSettings.partnerships?.enabled !== undefined && typeof botSettings.partnerships.enabled !== 'boolean') return 'bot_settings.partnerships.enabled must be true or false.';
+  if (botSettings.partnerships?.approval_required !== undefined && typeof botSettings.partnerships.approval_required !== 'boolean') return 'bot_settings.partnerships.approval_required must be true or false.';
+  if (botSettings.partnerships?.cooldown_hours !== undefined && (!Number.isInteger(botSettings.partnerships.cooldown_hours) || botSettings.partnerships.cooldown_hours < 6 || botSettings.partnerships.cooldown_hours > 168)) return 'bot_settings.partnerships.cooldown_hours must be 6–168.';
+  if (botSettings.leveling?.xp_per_message !== undefined && (!Number.isInteger(botSettings.leveling.xp_per_message) || botSettings.leveling.xp_per_message < 1 || botSettings.leveling.xp_per_message > 1000)) return 'bot_settings.leveling.xp_per_message must be 1–1000.';
+  if (botSettings.leveling?.cooldown_seconds !== undefined && (!Number.isInteger(botSettings.leveling.cooldown_seconds) || botSettings.leveling.cooldown_seconds < 1 || botSettings.leveling.cooldown_seconds > 3600)) return 'bot_settings.leveling.cooldown_seconds must be 1–3600.';
+  if (botSettings.automod?.mention_limit !== undefined && (!Number.isInteger(botSettings.automod.mention_limit) || botSettings.automod.mention_limit < 1 || botSettings.automod.mention_limit > 50)) return 'bot_settings.automod.mention_limit must be 1–50.';
   return null;
 }
 
