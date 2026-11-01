@@ -3841,15 +3841,54 @@ function BotControlPage() {
     let template;
     try { template = JSON.parse(templateText); } catch (error) { setStatus('Invalid JSON: ' + (error instanceof Error ? error.message : 'check the template')); return; }
     if (!Array.isArray(template.roles) || !Array.isArray(template.categories)) { setStatus('JSON must contain roles and categories arrays.'); return; }
-    if (!window.confirm('Publish this setup to Discord? Existing channels and messages will not be deleted.')) return;
-    setBusy(true); setStatus('Publishing setup to Discord…');
+    const warning = "REPLACEMENT MODE WILL DELETE every server channel/category not listed in this JSON and every removable role not listed. Deleting a channel permanently removes its messages and threads. Managed bot/integration roles and roles at or above Meta's highest role are protected. This cannot be rolled back. Continue?";
+    if (!window.confirm(warning)) return;
+    if (window.prompt('To confirm the Discord server replacement, type REPLACE exactly:') !== 'REPLACE') {
+      setStatus('Publish cancelled. Nothing was sent to Discord.');
+      return;
+    }
+    setBusy(true); setStatus('Publishing replacement template to Discord…');
     try {
-      const response = await fetch('/api/auth/admin/bot-control/publish-template', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guildId, template }) });
+      const response = await fetch('/api/auth/admin/bot-control/publish-template', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guildId, template })
+      });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Could not publish setup.');
-      setStatus(data.message || 'Template queued for Discord.');
-    } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not publish setup.'); }
-    finally { setBusy(false); }
+      const jobId = Number(data.jobId);
+      if (!Number.isSafeInteger(jobId) || jobId < 1) throw new Error('The server accepted the request but did not return a publish job ID.');
+      setStatus('Publish job #' + jobId + ' queued. Waiting for Discord to finish…');
+      for (let attempt = 0; attempt < 40; attempt++) {
+        await new Promise(resolve => window.setTimeout(resolve, 1500));
+        const statusResponse = await fetch('/api/auth/admin/bot-control/publish-template/' + jobId + '?guildId=' + encodeURIComponent(guildId), { credentials: 'same-origin', cache: 'no-store' });
+        const statusData = await statusResponse.json().catch(() => ({}));
+        if (!statusResponse.ok) throw new Error(statusData.error || 'Could not read publish job status. Job #' + jobId + ' may still be running.');
+        const job = statusData.job;
+        if (job?.status === 'applied' || job?.status === 'failed') {
+          const result = job.result || {};
+          const summary = 'Created ' + (result.created?.length || 0) +
+            ', updated ' + (result.updated?.length || 0) +
+            ', deleted ' + (result.deleted?.length || 0) +
+            ', skipped ' + (result.skipped?.length || 0) +
+            ', protected ' + (result.protected?.length || 0) +
+            ', errors ' + (result.errors?.length || 0) + '.';
+          if (job.status === 'applied') {
+            setSettings(current => ({ ...current, server_setup_template: templateText }));
+            setStatus('Discord template applied successfully. ' + summary);
+          } else {
+            const errorText = Array.isArray(result.errors) && result.errors.length
+              ? result.errors.slice(0, 4).join(' | ')
+              : (job.error || 'Discord reported a failure.');
+            setStatus('Discord applied the template only partially or failed. ' + summary + ' Details: ' + errorText);
+          }
+          return;
+        }
+        if (job?.status !== 'pending') throw new Error('Unexpected publish job status for job #' + jobId + '.');
+      }
+      setStatus('Publish job #' + jobId + ' is still pending after 60 seconds. The request is queued; check its status before submitting another copy.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Could not publish setup.');
+    } finally { setBusy(false); }
   };
   const saveSettings = async () => {
     setStatus('Saving bot settings…');
@@ -3866,7 +3905,7 @@ function BotControlPage() {
         throw new Error('Use roles and categories arrays. Each channel must be ["text" or "voice", "channel-name"]. Limits: 40 roles, 30 categories, 50 channels each.');
       }
     } catch (error) { setStatus('Setup template JSON is invalid: ' + (error instanceof Error ? error.message : 'check the JSON')); return; }
-    const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_template','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help','ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','community_welcome_channel_id','community_welcome_message','community_autorole_id','community_log_channel_id','community_xp_enabled']);
+    const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_min_members','autopartner_template','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help','ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','community_welcome_channel_id','community_welcome_message','community_welcome_avatar','community_autorole_id','community_log_channel_id','community_xp_enabled','staff_application_review_channel_id','staff_application_review_role_id','staff_application_approved_role_id','staff_application_questions']);
     const payload = Object.fromEntries(Object.entries(settings).filter(([key]) => editableKeys.has(key) || key.startsWith('bot_command_enabled:')));
     payload.server_setup_template = template;
     setBusy(true);
@@ -3952,8 +3991,8 @@ function BotControlPage() {
       <main className="admin-publishing-page">
         <div className="admin-publishing-heading">
           <p className="section-kicker">Private · owner access only</p>
-          <h1>Meta Code bot control</h1>
-          <p>Manage Meta bot globally from one private control panel: commands, partnership rotation, server setup templates, tickets, and bot messages. Settings apply to the bot as a whole, not separate servers. Bot tokens and secrets are never displayed.</p>
+          <h1>{dashboardConfig.title || 'Meta Code bot control'}</h1>
+          <p>{dashboardConfig.description || 'Manage Meta bot globally from one private control panel: commands, partnership rotation, server setup templates, tickets, and bot messages. Settings apply to the bot as a whole, not separate servers. Bot tokens and secrets are never displayed.'}</p>
         </div>
         <p className="admin-publishing-status" role="status">{status}</p>
         {discordChecked && !discordReady && <section className="admin-publishing-guide">
@@ -3986,7 +4025,8 @@ function BotControlPage() {
           {editorOpen && <>
             <section id="bot-settings-editor" className="admin-publishing-guide">
               <h2>Publish server setup JSON</h2>
-              <p>Paste a roles/categories template and publish it to Discord. Missing roles, categories, and channels are created; matching role colours and category privacy are updated. Existing channels and messages are preserved.</p>
+              <p>This JSON configures the Discord layout and the sections/settings shown in this control panel. Publishing replaces the server layout: unlisted channels, categories, and removable roles are deleted after the desired layout has been created.</p>
+              <p><strong>Warning:</strong> deleting a channel permanently removes its message history and threads. Meta cannot delete @everyone, managed bot/integration roles, or roles at/above its highest role.</p>
               <textarea value={templateText} onChange={event => setTemplateText(event.target.value)} rows={18} spellCheck={false} style={{ ...fieldStyle, fontFamily: 'monospace' }} aria-label="Discord setup JSON" />
               <button type="button" className="button-primary" onClick={() => { void publishSetupTemplate(); }} disabled={busy}>{busy ? 'Publishing…' : 'Publish JSON to Discord'}</button>
               <button type="button" className="button-secondary" onClick={() => setTemplateText(defaultTemplate)} disabled={busy}>Reset template</button>
