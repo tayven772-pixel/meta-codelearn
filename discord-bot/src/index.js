@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { ticketCommand } from './lib/ticket-commands.js';
 import { serverSetupCommand } from './lib/server-setup.js';
 import { handleTicketCommand, handleTicketButton, handleTicketPanelCommand } from './lib/tickets.js';
-import { applyServerTemplate, handleServerSetup, handleServerSetupButton } from './lib/server-setup.js';
+import { applyServerTemplate, previewServerTemplate, handleServerSetup, handleServerSetupButton } from './lib/server-setup.js';
 import { handleStaffApplicationInteraction, postStaffApplicationPanel } from './lib/staff-applications.js';
 import { db, getSetting } from './lib/database.js';
 import { moderationCommands, handleModerationCommand } from './lib/moderation.js';
@@ -438,12 +438,21 @@ async function processWebsiteSetups() {
     if (!homeGuildId || item.guild_id !== homeGuildId) throw new Error('This job is not for the configured Meta home server.');
     const guild = await client.guilds.fetch(homeGuildId);
     const template = JSON.parse(item.template_json);
-    const result = await applyServerTemplate(guild, template);
-    const failed = result.errors.length > 0;
-    const errorSummary = failed ? result.errors.slice(0, 8).join('; ').slice(0, 1000) : null;
+    const previewOnly = Number(item.preview_only) === 1;
+    const result = previewOnly
+      ? await previewServerTemplate(guild, template)
+      : await applyServerTemplate(guild, template);
+    const errors = Array.isArray(result.errors) ? result.errors : [];
+    const failed = errors.length > 0;
+    const payload = { ...result, mode: previewOnly ? 'preview' : 'applied' };
+    const errorSummary = failed ? errors.slice(0, 8).join('; ').slice(0, 1000) : null;
     db.prepare("UPDATE bot_setup_outbox SET status = ?, result_json = ?, error = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'")
-      .run(failed ? 'failed' : 'applied', JSON.stringify(result), errorSummary, item.id);
-    console.log('Website setup template finished:', item.id, 'created', result.created.length, 'updated', result.updated.length, 'deleted', result.deleted.length, 'errors', result.errors.length);
+      .run(failed ? 'failed' : 'applied', JSON.stringify(payload), errorSummary, item.id);
+    console.log('Website setup template ' + (previewOnly ? 'previewed:' : 'finished:'), item.id,
+      previewOnly
+        ? 'create roles ' + result.createRoles.length + ', create channels ' + result.createChannels.length
+        : 'created ' + result.created.length + ', updated ' + result.updated.length + ', deleted ' + result.deleted.length,
+      'errors', errors.length);
    } catch (error) {
     db.prepare("UPDATE bot_setup_outbox SET status = 'failed', error = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'").run(String(error?.message || 'Setup failed').slice(0, 1000), item.id);
     console.error('Website setup publish failed:', error?.message || error);
