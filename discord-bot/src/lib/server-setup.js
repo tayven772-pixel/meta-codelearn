@@ -193,7 +193,10 @@ export async function previewServerTemplate(guild, template) {
   const createChannels = [];
   const moveChannels = [];
   const desiredCategoryIds = new Set([...desiredCategories.values()].filter(Boolean).map(category => category.id));
+  const updateCategories = [];
   for (const [categoryName, category] of desiredCategories) {
+    if (category && category.name !== categoryName) updateCategories.push(categoryName);
+  }
     const definition = template.categories.find(item => item.name.trim() === categoryName);
     for (const [kind, rawName] of definition.channels) {
       const name = normalizeChannelName(rawName);
@@ -248,6 +251,8 @@ export async function previewServerTemplate(guild, template) {
     updateRoles: template.roles.filter(definition => guild.roles.cache.some(role => role.name.toLowerCase() === definition.name.trim().toLowerCase() &&
       ((definition.color !== undefined && role.color !== definition.color) || role.name !== definition.name.trim()))).map(role => role.name),
     createCategories: template.categories.filter(group => !desiredCategories.get(group.name.trim())).map(group => group.name),
+    updateCategories,
+    syncCategoryPermissions: template.categories.length,
     createChannels,
     moveChannels,
     deleteChannels: deleteChannels.map(channel => ({ id: channel.id, name: channel.name, type: channel.type })),
