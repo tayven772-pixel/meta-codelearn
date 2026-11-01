@@ -128,9 +128,10 @@ function validateServerTemplate(template) {
     }
   }
   const channelNames = new Set(template.categories.flatMap(group => group.channels.map(([, name]) => normalizeChannelName(name))));
+  const categoryNamesForSettings = new Set(template.categories.map(group => normalizeChannelName(group.name)));
   for (const [blockName, channelKey] of [['welcome','channel'],['autopartner','channel'],['applications','staffChannel'],['tickets','category']]) {
     const value = settings?.[blockName]?.[channelKey];
-    if (value && !channelNames.has(normalizeChannelName(value))) {
+    if (value && !(blockName === 'tickets' ? categoryNamesForSettings : channelNames).has(normalizeChannelName(value))) {
       throw new Error('settings.' + blockName + '.' + channelKey + ' must match a channel name in categories.');
     }
   }
