@@ -3706,7 +3706,7 @@ function BotControlPage() {
   const [guildId, setGuildId] = useState('');
   const [commands, setCommands] = useState<string[]>([]);
   const [settings, setSettings] = useState<Record<string, string>>({});
-  const [partners, setPartners] = useState<Array<{id:number;name:string;invite_url:string;description:string;created_at:string}>>([]);
+  const [partners, setPartners] = useState<Array<{id:number;name:string;invite_url:string;description:string;member_count?:number|null;created_at:string}>>([]);
   const [templateText, setTemplateText] = useState('');
   const [setupPreview, setSetupPreview] = useState<any>(null);
   const [partnerName, setPartnerName] = useState('');
@@ -3961,7 +3961,7 @@ function BotControlPage() {
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not add partner.'); }
     finally { setBusy(false); }
   };
-  const updatePartner = async (partner: {id:number;name:string;invite_url:string;description:string;created_at:string}) => {
+  const updatePartner = async (partner: {id:number;name:string;invite_url:string;description:string;member_count?:number|null;created_at:string}) => {
     setBusy(true);
     try {
       const response = await fetch('/api/auth/admin/bot-control/partners/' + partner.id, {
