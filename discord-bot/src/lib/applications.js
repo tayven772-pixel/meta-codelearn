@@ -95,6 +95,10 @@ export async function handleStaffApplicationCommand(interaction) {
   if (getSetting(interaction.guildId, 'staff_applications_enabled') === null) {
     setSetting('global', 'staff_applications_enabled', 'true');
   }
+  if (!interaction.channel?.isTextBased() || !interaction.channel.send) {
+    await interaction.reply({ content: 'Run this command in a text channel where Meta can post the application panel.', flags: MessageFlags.Ephemeral });
+    return true;
+  }
   const title = getSetting(interaction.guildId, 'staff_applications_title') || 'Meta Code | Staff Applications';
   const description = getSetting(interaction.guildId, 'staff_applications_description') ||
     'Help make Meta Code a welcoming place to learn and build. Apply privately using the button below. Applications are sent to the configured staff review channel.';
