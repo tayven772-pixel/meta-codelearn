@@ -4177,7 +4177,7 @@ function BotControlPage() {
               <h2>Automatic partnerships</h2>
               <label style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}>
                 <input type="checkbox" checked={settings.autopartner_enabled === 'true'} onChange={event => setValue('autopartner_enabled', event.target.checked ? 'true' : 'false')} />
-                Enable automatic approved-partner posts
+                Enable automatic partner posts
               </label>
               <label style={{ display: 'block', marginTop: 12 }}>Announcement channel ID<input value={settings.autopartner_channel_id || ''} onChange={event => setValue('autopartner_channel_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Discord channel ID" style={fieldStyle} /></label>
               <label style={{ display: 'block', marginTop: 12 }}>Interval (6–168 hours)<input type="number" min={6} max={168} value={settings.autopartner_interval_hours || '24'} onChange={event => setValue('autopartner_interval_hours', event.target.value)} style={fieldStyle} /></label>
@@ -4186,10 +4186,11 @@ function BotControlPage() {
               </label>
               <label style={{ display: 'block', marginTop: 12 }}>Partner message template<textarea value={settings.autopartner_template || ''} onChange={event => setValue('autopartner_template', event.target.value)} placeholder="Use {name}, {invite}, and {description}" rows={4} style={fieldStyle} /></label>
               <p>Anyone can use <code>/partner-submit</code>. Meta checks Discord's approximate member count and automatically puts qualifying communities into the posting rotation. Staff approval is not required. Under-threshold submissions are rechecked periodically.</p>
-              <h3>Approved partners</h3>
+              <h3>Manually managed backup partners</h3>
+              <p>Optional admin-managed rotation entries. Public submissions through <code>/partner-submit</code> are checked against the member-count threshold and do not need staff approval.</p>
               <div className="admin-content-list">
                 {partners.map(partner => <div className="admin-content-list-item" key={partner.id}>
-                  <strong>Approved partner</strong>
+                  <strong>Manual backup partner</strong>
                   <label style={{ display: 'block', marginTop: 8 }}>Name<input value={partner.name} maxLength={80} onChange={event => setPartners(current => current.map(item => item.id === partner.id ? { ...item, name: event.target.value } : item))} style={fieldStyle} /></label>
                   <label style={{ display: 'block', marginTop: 8 }}>Invite URL<input type="url" value={partner.invite_url} onChange={event => setPartners(current => current.map(item => item.id === partner.id ? { ...item, invite_url: event.target.value } : item))} style={fieldStyle} /></label>
                   <label style={{ display: 'block', marginTop: 8 }}>Description<input value={partner.description} maxLength={300} onChange={event => setPartners(current => current.map(item => item.id === partner.id ? { ...item, description: event.target.value } : item))} style={fieldStyle} /></label>
@@ -4201,10 +4202,10 @@ function BotControlPage() {
                 {!partners.length && <p>No approved partners yet.</p>}
               </div>
               <form onSubmit={addPartner} style={{ marginTop: 18 }}>
-                <label style={{ display: 'block' }}>Partner name<input required maxLength={80} value={partnerName} onChange={event => setPartnerName(event.target.value)} style={fieldStyle} /></label>
+                <label style={{ display: 'block' }}>Backup partner name<input required maxLength={80} value={partnerName} onChange={event => setPartnerName(event.target.value)} style={fieldStyle} /></label>
                 <label style={{ display: 'block', marginTop: 10 }}>Discord invite URL<input required type="url" value={partnerInvite} onChange={event => setPartnerInvite(event.target.value)} placeholder="https://discord.gg/..." style={fieldStyle} /></label>
                 <label style={{ display: 'block', marginTop: 10 }}>Description<input maxLength={300} value={partnerDescription} onChange={event => setPartnerDescription(event.target.value)} style={fieldStyle} /></label>
-                <button type="submit" className="button-primary" disabled={busy} style={{ marginTop: 12 }}>Add approved partner</button>
+                <button type="submit" className="button-primary" disabled={busy} style={{ marginTop: 12 }}>Add manual partner</button>
               </form>
             </section>}
           </>}
