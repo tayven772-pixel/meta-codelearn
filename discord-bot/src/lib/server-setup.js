@@ -230,7 +230,8 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
     if (!existing) createCategories.push({ name: group.name.trim(), private: Boolean(group.private) });
     else {
       usedCategoryIds.add(existing.id);
-      updateCategories.push({ id: existing.id, name: existing.name, private: Boolean(group.private) });
+      if (!existing.manageable) protectedChannels.push({ id: existing.id, name: existing.name, reason: 'category is not manageable by Meta bot' });
+      else updateCategories.push({ id: existing.id, name: existing.name, private: Boolean(group.private) });
     }
   }
 
@@ -320,6 +321,7 @@ export async function applyServerTemplate(guild, template, options = {}) {
     throw new Error('The Discord server changed after preview. Run Publish JSON again to review the updated deletion list.');
   }
   const created = [], updated = [], deleted = [], skipped = [];
+  const protectedIds = new Set(plan.protectedChannels.map(item => item.id));
   const botMember = guild.members.me ?? await guild.members.fetchMe();
   for (const role of plan.createRoles) {
     try { const item = await guild.roles.create({ name: role.name, color: role.color, reason: 'Meta Code JSON setup sync' }); created.push('role ' + item.name); }
@@ -340,7 +342,7 @@ export async function applyServerTemplate(guild, template, options = {}) {
     if (!category) {
       category = await guild.channels.create({ name: definition.name.trim(), type: ChannelType.GuildCategory, permissionOverwrites: overwrites, reason: 'Meta Code JSON setup sync' });
       created.push('category ' + category.name);
-    } else {
+    } else if (!protectedIds.has(category.id)) {
       await category.edit({ permissionOverwrites: overwrites, reason: 'Meta Code JSON setup sync' });
       updated.push('category permissions ' + category.name);
     }
@@ -349,6 +351,8 @@ export async function applyServerTemplate(guild, template, options = {}) {
   for (const definition of desiredChannelDefinitions(template)) {
     const category = guild.channels.cache.find(item => item.type === ChannelType.GuildCategory && item.name.toLowerCase() === definition.categoryName.toLowerCase());
     let channel = guild.channels.cache.find(item => item.type === definition.type && item.name.toLowerCase() === definition.name);
+    if (channel && protectedIds.has(channel.id)) { skipped.push('protected channel ' + channel.name); continue; }
+    if (category && protectedIds.has(category.id)) { skipped.push('channel ' + definition.name + ' in protected category ' + category.name); continue; }
     if (!channel) {
       channel = await guild.channels.create({ name: definition.name, type: definition.type, parent: category?.id, reason: 'Meta Code JSON setup sync' });
       if (category && typeof channel.lockPermissions === 'function') await channel.lockPermissions();
