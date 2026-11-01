@@ -458,6 +458,13 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
       }
       if (key === 'autopartner_enabled' && !['true','false'].includes(value)) throw new Error('Autopartner enabled must be true or false.');
       if (key === 'autopartner_interval_hours' && (!/^\d+$/.test(value) || Number(value) < 6 || Number(value) > 168)) throw new Error('Autopartner interval must be 6–168 hours.');
+      if (key === 'autopartner_min_members' && (!/^\d+$/.test(value) || Number(value) < 10 || Number(value) > 1000000)) throw new Error('Autopartner minimum members must be 10–1,000,000.');
+      if (key === 'staff_applications_role_id' && value && !/^\d{17,20}$/.test(value)) throw new Error('Staff reviewer role ID must be a Discord ID.');
+      if (key === 'staff_applications_channel_id' && value && !/^\d{17,20}$/.test(value)) throw new Error('Staff application channel ID must be a Discord ID.');
+      if (key === 'staff_applications_enabled' && !['true','false'].includes(value)) throw new Error('Staff applications enabled must be true or false.');
+      if (key === 'community_welcome_avatar' && !['true','false'].includes(value)) throw new Error('Welcome avatar must be true or false.');
+      if (key === 'staff_applications_title' && value.length > 45) throw new Error('Staff application title must be 45 characters or fewer.');
+      if (key === 'staff_applications_description' && value.length > 1000) throw new Error('Staff application description must be 1,000 characters or fewer.');
       if (key === 'autopartner_channel_id' && value && !/^\d{17,20}$/.test(value)) throw new Error('Autopartner channel ID must be a Discord ID.');
       if (key.startsWith('bot_command_enabled:') && !['true','false'].includes(value)) throw new Error('Command toggles must be true or false.');
       if (key === 'server_setup_template' && value) {
@@ -616,7 +623,7 @@ app.put('/api/auth/admin/bot-control/partners/:id', async (req, res) => {
   try {
     const result = getBotDb().prepare('UPDATE autopartner_partners SET name = ?, invite_url = ?, description = ? WHERE id = ? AND guild_id = ?').run(name, inviteUrl, description, id, guildId);
     if (!result.changes) return res.status(404).json({ error: 'Partner not found.' });
-    return res.json({ partner: getBotDb().prepare('SELECT id, name, invite_url, description, created_at FROM autopartner_partners WHERE id = ? AND guild_id = ?').get(id, guildId) });
+    return res.json({ partner: getBotDb().prepare('SELECT id, name, invite_url, description, member_count, created_at FROM autopartner_partners WHERE id = ? AND guild_id = ?').get(id, guildId) });
   } catch (error) {
     return res.status(409).json({ error: String(error.message).includes('UNIQUE') ? 'A partner with that name already exists.' : 'Could not update partner.' });
   }
