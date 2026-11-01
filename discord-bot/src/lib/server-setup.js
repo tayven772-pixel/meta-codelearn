@@ -142,7 +142,8 @@ export function validateServerTemplate(template) {
   const applications = settings?.applications;
   if (applications && ((applications.enabled !== undefined && typeof applications.enabled !== 'boolean') ||
       (applications.panelTitle !== undefined && (typeof applications.panelTitle !== 'string' || applications.panelTitle.length > 45)) ||
-      (applications.panelDescription !== undefined && (typeof applications.panelDescription !== 'string' || applications.panelDescription.length > 1000)))) {
+      (applications.panelDescription !== undefined && (typeof applications.panelDescription !== 'string' || applications.panelDescription.length > 1000)) ||
+      (applications.staffRole !== undefined && (typeof applications.staffRole !== 'string' || applications.staffRole.length > 100)))) {
     throw new Error('settings.applications has invalid enabled, panelTitle, or panelDescription values.');
   }
   const tickets = settings?.tickets;
@@ -155,6 +156,9 @@ export function validateServerTemplate(template) {
     channelDefinitions.set(normalizeChannelName(name), kind);
   }
   const categoryNamesForSettings = new Set(template.categories.map(group => normalizeChannelName(group.name)));
+  const roleNamesForSettings = new Set(template.roles.map(role => role.name.trim().toLowerCase()));
+  const staffRole = settings?.applications?.staffRole;
+  if (staffRole && !roleNamesForSettings.has(staffRole.trim().toLowerCase())) throw new Error('settings.applications.staffRole must reference a role name in roles.');
   for (const [blockName, channelKey] of [['welcome','channel'],['autopartner','channel'],['applications','staffChannel']]) {
     const value = settings?.[blockName]?.[channelKey];
     if (value && channelDefinitions.get(normalizeChannelName(value)) !== 'text') {
@@ -291,6 +295,8 @@ async function applyTemplateSettings(guild, template) {
   if (applications) {
     const channel = applications.staffChannel ? findChannel(applications.staffChannel) : null;
     if (channel) setSetting('global', 'staff_applications_channel_id', channel.id);
+    const staffRole = applications.staffRole ? guild.roles.cache.find(role => role.name.toLowerCase() === applications.staffRole.trim().toLowerCase()) : null;
+    if (staffRole) setSetting('global', 'staff_applications_role_id', staffRole.id);
     if (typeof applications.enabled === 'boolean') setSetting('global', 'staff_applications_enabled', applications.enabled ? 'true' : 'false');
     if (typeof applications.panelTitle === 'string') setSetting('global', 'staff_applications_title', applications.panelTitle.slice(0, 45));
     if (typeof applications.panelDescription === 'string') setSetting('global', 'staff_applications_description', applications.panelDescription.slice(0, 1000));
