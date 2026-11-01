@@ -2747,9 +2747,6 @@ function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isRegistering, setIsRegistering] = useState(window.location.pathname.startsWith('/sign-up'));
   const [busy, setBusy] = useState(false);
-  const [messageChannelId, setMessageChannelId] = useState('');
-  const [messageContent, setMessageContent] = useState('');
-  const [sendingMessage, setSendingMessage] = useState(false);
   const [showResend, setShowResend] = useState(false);
   const [message, setMessage] = useState(() =>
     new URLSearchParams(window.location.search).get('account') === 'deleted'
@@ -3697,6 +3694,9 @@ function AdminPublishingPage() {
 }
 
 function BotControlPage() {
+  const [messageChannelId, setMessageChannelId] = useState('');
+  const [messageContent, setMessageContent] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
   const [discordReady, setDiscordReady] = useState(false);
   const [discordChecked, setDiscordChecked] = useState(false);
   const [status, setStatus] = useState('Checking Discord connection…');
