@@ -4150,6 +4150,27 @@ function BotControlPage() {
                 Enable message activity XP and leveling
               </label>
               <p>Members can use <code>/level</code> and <code>/leaderboard</code>. XP is awarded at most once per minute per member.</p>
+              <label style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}>
+                <input type="checkbox" checked={settings.community_welcome_avatar !== 'false'} onChange={event => setValue('community_welcome_avatar', event.target.checked ? 'true' : 'false')} />
+                Show the new member's profile picture in the welcome embed
+              </label>
+            </section>}
+            {showDashboardSection('staffApplications') && <section className="admin-publishing-guide">
+              <h2>Staff applications</h2>
+              <p>Applications are collected privately in Discord. Review actions are limited to administrators and the configured reviewer role.</p>
+              <label style={{ display: 'block', marginTop: 12 }}>Private review channel ID
+                <input value={settings.staff_application_review_channel_id || ''} onChange={event => setValue('staff_application_review_channel_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Discord text channel ID" style={fieldStyle} inputMode="numeric" />
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>Reviewer role ID
+                <input value={settings.staff_application_review_role_id || ''} onChange={event => setValue('staff_application_review_role_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Discord role ID" style={fieldStyle} inputMode="numeric" />
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>Role to assign after approval (optional)
+                <input value={settings.staff_application_approved_role_id || ''} onChange={event => setValue('staff_application_approved_role_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Discord role ID" style={fieldStyle} inputMode="numeric" />
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>Application questions (JSON list, 1–5 questions; each max 45 characters)
+                <textarea value={settings.staff_application_questions || '["Name you would like staff to use","Which role are you applying for?","Why do you want to help Meta Code?","What experience or skills would you bring?","How would you handle a community conflict?"]'} onChange={event => setValue('staff_application_questions', event.target.value)} rows={6} spellCheck={false} style={{ ...fieldStyle, fontFamily: 'monospace' }} />
+              </label>
+              <p>Use <code>/setup-applications</code> in a public channel to post the apply button. Submissions go to the private review channel.</p>
             </section>}
             {showDashboardSection('autopartner') && <section className="admin-publishing-guide">
               <h2>Automatic partnerships</h2>
@@ -4159,8 +4180,11 @@ function BotControlPage() {
               </label>
               <label style={{ display: 'block', marginTop: 12 }}>Announcement channel ID<input value={settings.autopartner_channel_id || ''} onChange={event => setValue('autopartner_channel_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Discord channel ID" style={fieldStyle} /></label>
               <label style={{ display: 'block', marginTop: 12 }}>Interval (6–168 hours)<input type="number" min={6} max={168} value={settings.autopartner_interval_hours || '24'} onChange={event => setValue('autopartner_interval_hours', event.target.value)} style={fieldStyle} /></label>
+              <label style={{ display: 'block', marginTop: 12 }}>Minimum approximate member count
+                <input type="number" min={1} max={10000000} value={settings.autopartner_min_members || '100'} onChange={event => setValue('autopartner_min_members', event.target.value)} style={fieldStyle} />
+              </label>
               <label style={{ display: 'block', marginTop: 12 }}>Partner message template<textarea value={settings.autopartner_template || ''} onChange={event => setValue('autopartner_template', event.target.value)} placeholder="Use {name}, {invite}, and {description}" rows={4} style={fieldStyle} /></label>
-              <p>Automatic posting stays disabled until you enable it, choose a channel, and add at least one partner.</p>
+              <p>Anyone can use <code>/partner-submit</code>. Meta checks Discord's approximate member count and automatically puts qualifying communities into the posting rotation. Staff approval is not required. Under-threshold submissions are rechecked periodically.</p>
               <h3>Approved partners</h3>
               <div className="admin-content-list">
                 {partners.map(partner => <div className="admin-content-list-item" key={partner.id}>
