@@ -276,6 +276,12 @@ function getBotDb() {
       PRIMARY KEY (guild_id, setting_key)
     );
     CREATE TABLE IF NOT EXISTS bot_guild_presence (guild_id TEXT PRIMARY KEY, name TEXT NOT NULL, icon TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+    CREATE TABLE IF NOT EXISTS bot_message_outbox (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT NOT NULL, channel_id TEXT NOT NULL,
+      content TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','sent','failed')),
+      error TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, sent_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS bot_message_outbox_pending ON bot_message_outbox(status, id);
     CREATE TABLE IF NOT EXISTS autopartner_partners (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       guild_id TEXT NOT NULL,
@@ -462,6 +468,23 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
     return res.json({ saved: Object.keys(values).length, settings: botSettingsForGuild('global') });
   } catch (error) {
     return res.status(400).json({ error: error.message || 'Could not save bot settings.' });
+  }
+});
+app.post('/api/auth/admin/bot-control/messages', async (req, res) => {
+  if (!requireBotOwner(req, res)) return;
+  const guildId = String(req.body?.guildId || getHomeGuildId()).trim();
+  const channelId = String(req.body?.channelId || '').trim();
+  const content = typeof req.body?.content === 'string' ? req.body.content.trim() : '';
+  if (!validGuildId(guildId)) return res.status(400).json({ error: 'Select a valid Discord server.' });
+  if (!(await requireOwnedGuild(req, res, guildId))) return;
+  if (!validGuildId(channelId)) return res.status(400).json({ error: 'Enter a valid Discord text channel ID.' });
+  if (!content || content.length > 2000) return res.status(400).json({ error: 'Message must contain 1–2000 characters.' });
+  try {
+    const result = getBotDb().prepare("INSERT INTO bot_message_outbox (guild_id, channel_id, content) VALUES (?, ?, ?)").run(guildId, channelId, content);
+    return res.status(202).json({ queued: true, messageId: Number(result.lastInsertRowid) });
+  } catch (error) {
+    console.error('Bot message queue failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not queue the Discord message.' });
   }
 });
 app.post('/api/auth/admin/bot-control/partners', async (req, res) => {
