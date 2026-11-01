@@ -59,3 +59,22 @@ Website OAuth verifies a Discord identity and creates a signed, HttpOnly session
 ## Private owner dashboard
 
 The website has a private bot-owner page at `/bot-control`. It is protected by the server-side `META_BOT_OWNER_EMAIL` environment variable and a signed-in Meta email/password session; knowing the URL alone does not grant access. Set `META_BOT_OWNER_EMAIL` to the exact verified email address for the owner's Meta account on the auth service, then restart that service. The page is an owner-only command/reference dashboard; it does not itself restart or remotely control the VPS process.
+
+
+## Expanded non-AI community features
+
+The bot also includes:
+- Welcome messages with `{user}`, `{server}`, and `{membercount}` placeholders (`/welcome-config`).
+- Automatic join roles (`/autorole`).
+- Server event logging for joins, departures, message deletions, and channel creation/deletion (`/logging`).
+- Message activity XP, member profiles, and a leaderboard (`/level`, `/leaderboard`).
+- Scheduled giveaways with multiple winners (`/giveaway`, `/giveaway-end`).
+- Self-service role menus (`/role-menu`).
+- Server statistics (`/serverstats`).
+- Redacted settings export (`/config-export`).
+
+### Required Discord intent
+
+The bot requests the **Server Members Intent** to support welcome messages and autoroles. Enable **Server Members Intent** under Discord Developer Portal → Application → Bot → Privileged Gateway Intents. The bot also requests the non-privileged Guild Messages intent for activity XP and message deletion logs. Message Content Intent is not required for these features.
+
+Give the bot only the permissions it needs: View Channels, Send Messages, Embed Links, Read Message History, Add Reactions, Manage Roles (for autoroles and self-service roles), and Manage Channels only if you use channel-management tools. Keep its role below roles it must not assign.
