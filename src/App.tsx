@@ -4085,14 +4085,14 @@ function BotControlPage() {
             <p>Settings can be edited while the bot is offline and will take effect when it reconnects.</p>
           </section>
           {editorOpen && <>
-            {showDashboardSection('serverSetup') && <section id="bot-settings-editor" className="admin-publishing-guide">
+            <section id="bot-settings-editor" className="admin-publishing-guide">
               <h2>Publish server setup JSON</h2>
-              <p>This JSON configures the Discord layout and the sections/settings shown in this control panel. Publishing replaces the server layout: unlisted channels, categories, and removable roles are deleted after the desired layout has been created.</p>
+              <p>This JSON configures the Discord layout and the sections/settings shown in this control panel. Publishing replaces the server layout: unlisted channels, categories, and removable roles are deleted after the desired layout has been created.</p>              <p>The JSON editor always stays visible so you can restore dashboard sections if your template hides them.</p>
               <p><strong>Warning:</strong> deleting a channel permanently removes its message history and threads. Meta cannot delete @everyone, managed bot/integration roles, or roles at/above its highest role.</p>
               <textarea value={templateText} onChange={event => setTemplateText(event.target.value)} rows={18} spellCheck={false} style={{ ...fieldStyle, fontFamily: 'monospace' }} aria-label="Discord setup JSON" />
               <button type="button" className="button-primary" onClick={() => { void publishSetupTemplate(); }} disabled={busy}>{busy ? 'Publishing…' : 'Publish JSON to Discord'}</button>
               <button type="button" className="button-secondary" onClick={() => setTemplateText(defaultTemplate)} disabled={busy}>Reset template</button>
-            </section>}
+            </section>
             {showDashboardSection('commands') && <section className="admin-publishing-guide">
               <h2>Bot settings editor</h2>
               <p>The editor is open. Change any fields below, then choose Save all settings.</p>
