@@ -453,7 +453,7 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
     'server_setup_template','bot_welcome_message','bot_rules_text','bot_status_text',
     'community_welcome_channel_id','community_welcome_message','community_welcome_avatar','community_autorole_id','community_log_channel_id','community_xp_enabled',
     'staff_applications_enabled','staff_applications_channel_id','staff_applications_title','staff_applications_description','staff_applications_role_id',
-    'ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id',
+    'ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','ticket_close_delay_seconds',
     ...botCommandNames.map(name => `bot_command_enabled:${name}`),
     ...['meta','lessons','ping','help'].map(name => `bot_response:${name}`)
   ]);
@@ -473,6 +473,7 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
       if (['community_welcome_channel_id','community_autorole_id','community_log_channel_id'].includes(key) && value && !/^\d{17,20}$/.test(value)) throw new Error(key + ' must be a valid Discord ID (17–20 digits).');
       if (key === 'community_xp_enabled' && !['true','false'].includes(value)) throw new Error('Community XP enabled must be true or false.');
       if (key === 'ticket_panel_style' && !['dropdown','buttons'].includes(value)) throw new Error('Ticket panel style must be dropdown or buttons.');
+      if (key === 'ticket_close_delay_seconds' && (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > 300)) throw new Error('Ticket close delay must be between 1 and 300 seconds.');
       if (key === 'ticket_categories' && value) {
         const categories = JSON.parse(value);
         if (!Array.isArray(categories) || categories.length < 1 || categories.length > 25 ||

@@ -3913,7 +3913,7 @@ function BotControlPage() {
         throw new Error('Use roles and categories arrays. Each channel must be ["text" or "voice", "channel-name"]. Limits: 40 roles, 30 categories, 50 channels each.');
       }
     } catch (error) { setStatus('Setup template JSON is invalid: ' + (error instanceof Error ? error.message : 'check the JSON')); return; }
-    const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_min_members','autopartner_template','staff_applications_enabled','staff_applications_channel_id','staff_applications_title','staff_applications_description','staff_applications_role_id','community_welcome_avatar','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help','ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','community_welcome_channel_id','community_welcome_message','community_autorole_id','community_log_channel_id','community_xp_enabled']);
+    const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_min_members','autopartner_template','staff_applications_enabled','staff_applications_channel_id','staff_applications_title','staff_applications_description','staff_applications_role_id','community_welcome_avatar','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help','ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','ticket_close_delay_seconds','community_welcome_channel_id','community_welcome_message','community_autorole_id','community_log_channel_id','community_xp_enabled']);
     const payload = Object.fromEntries(Object.entries(settings).filter(([key]) => editableKeys.has(key) || key.startsWith('bot_command_enabled:')));
     payload.server_setup_template = template;
     setBusy(true);
@@ -4094,6 +4094,11 @@ function BotControlPage() {
               <label style={{ display: 'block', marginTop: 12 }}>
                 <strong>Ticket log channel ID</strong>
                 <input value={settings.ticket_log_channel_id || ''} onChange={event => setValue('ticket_log_channel_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Discord text channel ID" style={fieldStyle} inputMode="numeric" />
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Delete ticket channel after confirmation (seconds)</strong>
+                <input type="number" min={1} max={300} step={1} value={settings.ticket_close_delay_seconds || '5'} onChange={event => setValue('ticket_close_delay_seconds', event.target.value)} style={fieldStyle} />
+                <small>Default: 5 seconds. Meta archives the conversation to the ticket log before deleting the channel. Choose 1–300 seconds.</small>
               </label>
               <p>These IDs can be copied in Discord with Developer Mode enabled. The bot needs permission to view and manage the selected channels.</p>
               <label style={{ display: 'block', marginTop: 12 }}>
