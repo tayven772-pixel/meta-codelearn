@@ -177,7 +177,7 @@ export function validateServerTemplate(input) {
         !Array.isArray(group.channels) || group.channels.length > 50 ||
         group.channels.some(channel => !Array.isArray(channel) || !['text', 'voice'].includes(channel[0]) ||
           typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100 ||
-          (channel[2] !== undefined && (!channel[2] || typeof channel[2] !== 'object' || Array.isArray(channel[2]))))) {
+          (channel[2] !== undefined && (!channel[2] || typeof channel[2] !== 'object' || Array.isArray(channel[2])))))) {
     throw new Error('Invalid template structure or values.');
   }
   const roleNames = template.roles.map(role => role.name.trim().toLowerCase());
