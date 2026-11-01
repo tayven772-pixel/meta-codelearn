@@ -204,7 +204,7 @@ export async function runAutoPartnerScheduler(client) {
   // approved partner records remain scoped to the configured Meta home server.
   // Resolve the global setting to that server before looking up its partners.
   const guildId = String(process.env.META_HOME_GUILD_ID || process.env.DISCORD_GUILD_ID || '').trim();
-  if (!/^\\d{17,20}$/.test(guildId)) return;
+  if (!/^\d{17,20}$/.test(guildId)) return;
   if (getSetting(guildId, 'autopartner_enabled') !== 'true') return;
 
   const channelId = getSetting(guildId, 'autopartner_channel_id');
