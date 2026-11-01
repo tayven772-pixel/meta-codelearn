@@ -1,4 +1,2537 @@
- for Android</strong>
+
+import { createContext, useContext, useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import JSZip from 'jszip';
+import { Link, Redirect, Route, Router as WouterRouter, Switch, useLocation, useParams } from 'wouter';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Bell,
+  BookOpen,
+  Check,
+  ClipboardCheck,
+  CheckCircle2,
+  CircleHelp,
+  Clock3,
+  Code2,
+  Compass,
+  Lightbulb,
+  LockKeyhole,
+  LogOut,
+  Mail,
+  EyeOff,
+  Moon,
+  FolderKanban,
+  Settings,
+  CreditCard,
+  Download,
+  Eye,
+  FileCode2,
+  MessageSquare,
+  Pause,
+  Plus,
+  Send,
+  Play,
+  Search,
+  Sparkles,
+  Crown,
+  Menu,
+  Palette,
+  Shield,
+  Star,
+  Sun,
+  Tag,
+  Trash2,
+  TrendingUp,
+  User,
+  Wallet,
+  X,
+  Zap,
+} from 'lucide-react';
+import { languageFor, languages, lessonFor, lessons, type LearnerSkillLevel, type Lesson, type Progress } from './data/academy';
+import { getProgressionStats, learnerSkillLevels } from './data/progression';
+import CodePlaygroundPage from './CodePlayground';
+import GlobalSearch from './GlobalSearch';
+import MetaAIPage from './MetaAIPage';
+import './code-playground.css';
+import './global-search.css';
+
+const PROGRESS_KEY = 'meta-progress-v1';
+const LEGACY_PROGRESS_KEY = 'code-atlas-progress-v1';
+const PROGRESS_EVENT = 'meta-progress-sync';
+const LANGUAGE_KEY = 'meta-language-v1';
+const THEME_KEY = 'meta-theme-v1';
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+type PlayTrack = {
+  id: string;
+  title: string;
+  shortTitle: string;
+  codeLabel: string;
+  usedFor: string;
+  mainFunctions: string[];
+  description: string;
+  outcome: string;
+  skills: string[];
+  projects: string[];
+};
+
+const playTracks: PlayTrack[] = [
+  {
+    id: 'games',
+    title: 'Game Development',
+    shortTitle: 'Games',
+    codeLabel: 'JavaScript / HTML / CSS',
+    usedFor: 'Browser games and interactive web projects.',
+    mainFunctions: ['Input and controls', 'Game state and scoring', 'Collision checks', 'Loops and timers'],
+    description: 'Learn loops, input, state, collisions, scoring, and game logic by building small playable projects.',
+    outcome: 'Build a playable browser game from a blank project.',
+    skills: ['Game loops', 'Input', 'State', 'Collision logic'],
+    projects: ['Clicker challenge', 'Dodge game', 'Top-down arena'],
+  },
+  {
+    id: 'websites',
+    title: 'Website Development',
+    shortTitle: 'Websites',
+    codeLabel: 'HTML / CSS / JavaScript',
+    usedFor: 'Web pages, layouts, forms, and interactive interfaces.',
+    mainFunctions: ['Page structure', 'Responsive styling', 'Events and buttons', 'Form validation'],
+    description: 'Build responsive pages while learning HTML, CSS, JavaScript, layout, components, and accessibility.',
+    outcome: 'Publish a responsive multi-section website.',
+    skills: ['HTML', 'CSS', 'Responsive design', 'JavaScript'],
+    projects: ['Profile page', 'Landing page', 'Interactive dashboard'],
+  },
+  {
+    id: 'apps',
+    title: 'App Development',
+    shortTitle: 'Apps',
+    codeLabel: 'JavaScript / TypeScript (plus HTML and CSS)',
+    usedFor: 'App-style interfaces, navigation, and saved user data.',
+    mainFunctions: ['UI state', 'Navigation', 'Input validation', 'Local persistence'],
+    description: 'Turn ideas into useful apps with interfaces, navigation, saved data, validation, and mobile-first design.',
+    outcome: 'Build an installable app-style project with persistent data.',
+    skills: ['UI state', 'Navigation', 'Forms', 'Persistence'],
+    projects: ['To-do app', 'Study tracker', 'Habit dashboard'],
+  },
+  {
+    id: 'roblox',
+    title: 'Roblox Studio',
+    shortTitle: 'Roblox',
+    codeLabel: 'Luau (Roblox Studio)',
+    usedFor: 'Roblox game scripts, parts, player actions, and gameplay systems.',
+    mainFunctions: ['Variables and functions', 'Events such as Touched', 'Players and characters', 'Parts, UI, and ModuleScripts'],
+    description: 'Learn Luau through Roblox-style gameplay systems, interactions, UI, events, and reusable modules.',
+    outcome: 'Build a small Roblox gameplay system you understand line by line.',
+    skills: ['Luau', 'Events', 'Parts', 'ModuleScripts'],
+    projects: ['Coin pickup', 'Checkpoint system', 'Round manager'],
+  },
+  {
+    id: 'mcbe',
+    title: 'Minecraft Bedrock Add-ons',
+    shortTitle: 'MCBE',
+    codeLabel: 'JSON + JavaScript (Bedrock Script API)',
+    usedFor: 'Bedrock add-ons: behavior/resource packs, item and entity definitions, and supported scripting.',
+    mainFunctions: ['Pack manifests', 'JSON definitions', 'Events and commands through supported APIs', 'Custom items and entities'],
+    description: 'Learn Bedrock behavior/resource pack structure, JSON, Script API basics, custom items, entities, and gameplay systems.',
+    outcome: 'Build a working .mcaddon-ready project structure.',
+    skills: ['Manifests', 'JSON', 'Script API', 'Behavior packs'],
+    projects: ['Custom item', 'Queue command', 'Practice utility'],
+  },
+  {
+    id: 'mcje',
+    title: 'Minecraft Java Edition',
+    shortTitle: 'MCJE',
+    codeLabel: 'Minecraft Java commands + JSON',
+    usedFor: 'Java Edition datapacks, functions, predicates, loot tables, and resource packs.',
+    mainFunctions: ['Functions and commands', 'Predicates', 'Loot tables', 'Advancements and resource-pack JSON'],
+    description: 'Learn Java Edition commands, datapacks, resource packs, and the concepts behind server-side gameplay systems.',
+    outcome: 'Build a reusable Java Edition datapack project.',
+    skills: ['Datapacks', 'Functions', 'Predicates', 'Resource packs'],
+    projects: ['Custom advancement', 'Arena functions', 'Utility datapack'],
+  },
+  {
+    id: 'mcje-mods',
+    title: 'Minecraft Java Mods',
+    shortTitle: 'MCJE Mods',
+    codeLabel: 'Java (mod loader APIs)',
+    usedFor: 'Minecraft Java mods with a compatible loader and game version.',
+    mainFunctions: ['Registries', 'Events', 'Custom items and blocks', 'Mod configuration'],
+    description: 'Learn Java mod structure, registries, events, items, blocks, and gameplay features with a guided modding path.',
+    outcome: 'Build a small Java mod with a custom gameplay feature.',
+    skills: ['Java', 'Registries', 'Events', 'Items & blocks'],
+    projects: ['Custom item', 'Custom block', 'Simple combat mechanic'],
+  },
+];
+
+type MetaProjectMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
+type MetaProject = {
+  id: string;
+  name: string;
+  type: string;
+  files?: Record<string, string>;
+  messages?: MetaProjectMessage[];
+  createdAt?: number;
+  updatedAt?: number;
+};
+
+const PROJECTS_KEY = 'meta-projects-v2';
+const ACTIVE_ACCOUNT_KEY = 'meta-active-account-v1';
+const ACCOUNT_SCOPE_EVENT = 'meta-account-scope-change';
+
+function currentAccountScope(): string {
+  try {
+    return localStorage.getItem(ACTIVE_ACCOUNT_KEY) || 'guest';
+  } catch {
+    return 'guest';
+  }
+}
+
+function projectsStorageKey(): string {
+  const scope = currentAccountScope();
+  return scope === 'guest' ? PROJECTS_KEY : `${PROJECTS_KEY}:${scope}`;
+}
+
+function readProjects(): MetaProject[] {
+  const storageKey = projectsStorageKey();
+  try {
+    const next = localStorage.getItem(storageKey);
+    if (next) return JSON.parse(next) as MetaProject[];
+    // Only migrate the old v1 project format for guest data. Signed-in accounts
+    // never silently inherit another account's or the browser's existing projects.
+    if (currentAccountScope() !== 'guest') return [];
+    const legacy = localStorage.getItem('meta-projects-v1');
+    if (!legacy) return [];
+    const migrated = (JSON.parse(legacy) as Array<{ id: string; name: string; type: string }>).map((project) => ({
+      ...project,
+      files: {},
+      messages: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }));
+    localStorage.setItem(storageKey, JSON.stringify(migrated));
+    return migrated;
+  } catch {
+    return [];
+  }
+}
+
+function writeProjects(projects: MetaProject[]) {
+  try {
+    localStorage.setItem(projectsStorageKey(), JSON.stringify(projects));
+  } catch {
+    // Keep projects in memory when storage is unavailable.
+  }
+}
+
+const META_STRIPE_TEST_LINKS: Record<string, string> = {
+  builder: 'https://buy.stripe.com/test_bJedR1cBEfOo2Yx3fzeEo00',
+  pro: 'https://buy.stripe.com/test_00w14f4580Tu8iRg2leEo01',
+};
+
+type Plan = {
+  id: 'free' | 'builder' | 'pro';
+  name: string;
+  price: string;
+  cadence: string;
+  monthly: number;
+  annual: number | null;
+  aiCredits: number;
+  projects: number;
+  description: string;
+  bestFor: string;
+  features: string[];
+  cta: string;
+  featured?: boolean;
+};
+
+const aiPlans: Plan[] = [
+  {
+    id: 'free',
+    name: 'Free',
+    price: '$0',
+    cadence: 'forever',
+    monthly: 0,
+    annual: 0,
+    aiCredits: 40,
+    projects: 3,
+    description: 'Learn, try the agent, and keep a few active projects.',
+    bestFor: 'Trying Meta out and learning the foundations.',
+    features: [
+      `All ${lessons.length} foundation lessons with quizzes`,
+      'All 7 Lesson Play build tracks',
+      '40 AI credits every month',
+      'Up to 3 active projects',
+      'Levels, XP, and milestone rewards',
+      'Progress saved to your account',
+    ],
+    cta: 'Start free',
+  },
+  {
+    id: 'builder',
+    name: 'Builder',
+    price: '$4.99',
+    cadence: 'per month',
+    monthly: 4.99,
+    annual: 49,
+    aiCredits: 500,
+    projects: 25,
+    description: 'For learners building websites, games, apps, and Minecraft projects regularly.',
+    bestFor: 'Weekly project work with room to experiment.',
+    features: [
+      'Everything in Free',
+      '500 AI credits every month',
+      'Up to 25 active projects',
+      'Project-aware AI context',
+      'Faster AI responses',
+      'Email support',
+    ],
+    cta: 'Choose Builder',
+    featured: true,
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    price: '$9.99',
+    cadence: 'per month',
+    monthly: 9.99,
+    annual: 99,
+    aiCredits: 2000,
+    projects: -1,
+    description: 'For heavier project work with a much larger AI allowance.',
+    bestFor: 'Shipping real projects and long AI sessions.',
+    features: [
+      'Everything in Builder',
+      '2,000 AI credits every month',
+      'Unlimited active projects',
+      'Largest AI context window',
+      'Priority AI queue',
+      'Priority support',
+    ],
+    cta: 'Choose Pro',
+  },
+];
+
+
+
+type ThemeMode = 'light' | 'dark';
+type ThemeContextValue = { theme: ThemeMode; toggleTheme: () => void };
+
+const ThemeContext = createContext<ThemeContextValue>({
+  theme: 'light',
+  toggleTheme: () => undefined,
+});
+
+function ThemeProvider({ children }: { children: ReactNode }) {
+  const [theme, setTheme] = useState<ThemeMode>(() => {
+    try {
+      return localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light';
+    } catch {
+      return 'light';
+    }
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      // Keep the selected theme for this session when storage is unavailable.
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    let active = true;
+    async function resolveAccountScope() {
+      const [emailScope, discordScope] = await Promise.all([
+        fetch('/api/auth/me', { credentials: 'same-origin' })
+          .then(async response => {
+            if (!response.ok) return null;
+            const data = await response.json().catch(() => ({}));
+            return data?.user?.id != null ? `email-${String(data.user.id)}` : null;
+          }).catch(() => null),
+        fetch('/api/auth/discord/me', { credentials: 'same-origin' })
+          .then(async response => {
+            if (!response.ok) return null;
+            const data = await response.json().catch(() => ({}));
+            return data?.authenticated && data?.user?.id != null ? `discord-${String(data.user.id)}` : null;
+          }).catch(() => null),
+      ]);
+      if (!active) return;
+      const nextScope = emailScope || discordScope || 'guest';
+      const previousScope = currentAccountScope();
+      try {
+        if (nextScope === 'guest') localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
+        else localStorage.setItem(ACTIVE_ACCOUNT_KEY, nextScope);
+      } catch { /* The site can still be browsed if local storage is unavailable. */ }
+      if (previousScope !== nextScope) window.dispatchEvent(new CustomEvent(ACCOUNT_SCOPE_EVENT));
+    }
+    resolveAccountScope();
+    return () => { active = false; };
+  }, []);
+
+  const value = useMemo(
+    () => ({ theme, toggleTheme: () => setTheme((current) => current === 'dark' ? 'light' : 'dark') }),
+    [theme],
+  );
+
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+}
+
+function useTheme() {
+  return useContext(ThemeContext);
+}
+
+function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme();
+  const nextTheme = theme === 'dark' ? 'light' : 'dark';
+
+  return (
+    <button
+      type="button"
+      className="theme-toggle"
+      onClick={toggleTheme}
+      aria-label={`Use ${nextTheme} theme`}
+      aria-pressed={theme === 'dark'}
+      title={`Use ${nextTheme} theme`}
+      data-testid="button-theme-toggle"
+    >
+      {theme === 'dark' ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
+      <span className="theme-toggle-label">{theme === 'dark' ? 'Dark' : 'Light'}</span>
+    </button>
+  );
+}
+
+function readProgress(storageKey: string): Progress {
+  try {
+    const legacyProgress = storageKey === `${PROGRESS_KEY}:guest`
+      ? localStorage.getItem(LEGACY_PROGRESS_KEY)
+      : null;
+    const stored = localStorage.getItem(storageKey) ?? legacyProgress;
+    const parsed = stored ? JSON.parse(stored) as Progress : null;
+    if (parsed && Array.isArray(parsed.completedLessonIds)) {
+      if (legacyProgress && !localStorage.getItem(storageKey)) {
+        localStorage.setItem(storageKey, JSON.stringify(parsed));
+      }
+      return parsed;
+    }
+    return { completedLessonIds: [] };
+  } catch {
+    return { completedLessonIds: [] };
+  }
+}
+
+function useProgress() {
+  const isLoaded = true;
+  const [storageKey, setStorageKey] = useState(() => `${PROGRESS_KEY}:${currentAccountScope()}`);
+  useEffect(() => {
+    const refreshScope = () => setStorageKey(`${PROGRESS_KEY}:${currentAccountScope()}`);
+    const onStorage = (event: StorageEvent) => { if (event.key === ACTIVE_ACCOUNT_KEY) refreshScope(); };
+    window.addEventListener(ACCOUNT_SCOPE_EVENT, refreshScope);
+    window.addEventListener('storage', onStorage);
+    return () => { window.removeEventListener(ACCOUNT_SCOPE_EVENT, refreshScope); window.removeEventListener('storage', onStorage); };
+  }, []);
+  const [snapshot, setSnapshot] = useState(() => ({
+    storageKey,
+    progress: readProgress(storageKey),
+  }));
+  const progress = snapshot.storageKey === storageKey
+    ? snapshot.progress
+    : readProgress(storageKey);
+
+  useEffect(() => {
+    if (snapshot.storageKey !== storageKey) {
+      setSnapshot({ storageKey, progress: readProgress(storageKey) });
+    }
+  }, [snapshot.storageKey, storageKey]);
+
+  useEffect(() => {
+    if (!isLoaded || snapshot.storageKey !== storageKey) return;
+    localStorage.setItem(storageKey, JSON.stringify(snapshot.progress));
+    window.dispatchEvent(new CustomEvent(PROGRESS_EVENT, { detail: { storageKey } }));
+  }, [isLoaded, snapshot, storageKey]);
+
+  useEffect(() => {
+    const syncProgress = (event: Event) => {
+      if (event.type === 'storage' && (event as StorageEvent).key !== storageKey) return;
+      const eventKey = (event as CustomEvent<{ storageKey?: string }>).detail?.storageKey;
+      if (event.type === PROGRESS_EVENT && eventKey !== storageKey) return;
+      const next = readProgress(storageKey);
+      setSnapshot((current) => (
+        current.storageKey === storageKey &&
+        current.progress.completedLessonIds.join('|') === next.completedLessonIds.join('|') &&
+        (current.progress.completedQuizLessonIds ?? []).join('|') === (next.completedQuizLessonIds ?? []).join('|') &&
+        current.progress.skillLevel === next.skillLevel
+          ? current
+          : { storageKey, progress: next }
+      ));
+    };
+    window.addEventListener(PROGRESS_EVENT, syncProgress);
+    window.addEventListener('storage', syncProgress);
+    return () => {
+      window.removeEventListener(PROGRESS_EVENT, syncProgress);
+      window.removeEventListener('storage', syncProgress);
+    };
+  }, [storageKey]);
+
+  const complete = (lessonId: string) => setSnapshot((current) => {
+    const currentProgress = current.storageKey === storageKey
+      ? current.progress
+      : readProgress(storageKey);
+    return currentProgress.completedLessonIds.includes(lessonId)
+      ? current
+      : {
+          storageKey,
+          progress: {
+            ...currentProgress,
+            completedLessonIds: [...currentProgress.completedLessonIds, lessonId],
+          },
+        };
+  });
+
+  const completeQuiz = (lessonId: string) => setSnapshot((current) => {
+    const currentProgress = current.storageKey === storageKey
+      ? current.progress
+      : readProgress(storageKey);
+    const completedQuizLessonIds = currentProgress.completedQuizLessonIds ?? [];
+    return completedQuizLessonIds.includes(lessonId)
+      ? current
+      : {
+          storageKey,
+          progress: {
+            ...currentProgress,
+            completedQuizLessonIds: [...completedQuizLessonIds, lessonId],
+          },
+        };
+  });
+
+  const setSkillLevel = (skillLevel: LearnerSkillLevel) => setSnapshot((current) => {
+    const currentProgress = current.storageKey === storageKey
+      ? current.progress
+      : readProgress(storageKey);
+    return currentProgress.skillLevel === skillLevel
+      ? current
+      : { storageKey, progress: { ...currentProgress, skillLevel } };
+  });
+
+  return { progress, complete, completeQuiz, setSkillLevel };
+}
+
+const NAV_LINKS = [
+  { href: '/', label: 'Explore', icon: Compass },
+  { href: '/play', label: 'Lessons', icon: BookOpen },
+  { href: '/playground', label: 'Playground', icon: Code2 },
+  { href: '/projects', label: 'Projects', icon: FolderKanban },
+  { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/pricing', label: 'Pricing', icon: Tag },
+];
+
+function Header({ progressCount }: { progressCount: number }) {
+  const [location, setLocation] = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState('');
+  const completion = Math.round((progressCount / lessons.length) * 100);
+
+  useEffect(() => { setMenuOpen(false); }, [location]);
+
+  useEffect(() => {
+    let active = true;
+    async function checkHeaderSession() {
+      const [emailResult, discordResult] = await Promise.allSettled([
+        fetch('/api/auth/me', { credentials: 'same-origin' }),
+        fetch('/api/auth/discord/me', { credentials: 'same-origin' }),
+      ]);
+      let emailSignedIn = false;
+      let discordSignedIn = false;
+      if (emailResult.status === 'fulfilled' && emailResult.value.ok) {
+        const data = await emailResult.value.json().catch(() => ({}));
+        emailSignedIn = Boolean(data?.user);
+      }
+      if (discordResult.status === 'fulfilled' && discordResult.value.ok) {
+        const data = await discordResult.value.json().catch(() => ({}));
+        discordSignedIn = Boolean(data?.authenticated && data?.user);
+      }
+      if (active) {
+        setSignedIn(emailSignedIn || discordSignedIn);
+        setAuthChecked(true);
+      }
+    }
+    checkHeaderSession().catch(() => { if (active) setAuthChecked(true); });
+    return () => { active = false; };
+  }, [location]);
+
+  async function handleSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    setSignOutError('');
+    try {
+      const responses = await Promise.all([
+        fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }),
+        fetch('/api/auth/discord/logout', { method: 'POST', credentials: 'same-origin' }),
+      ]);
+      if (responses.some((response) => !response.ok)) {
+        throw new Error('One or more sign-out requests failed.');
+      }
+      setSignedIn(false);
+      setMenuOpen(false);
+      try { localStorage.removeItem(ACTIVE_ACCOUNT_KEY); } catch { /* storage may be unavailable */ }
+      window.dispatchEvent(new CustomEvent(ACCOUNT_SCOPE_EVENT));
+      setLocation('/sign-in');
+    } catch {
+      setSignOutError('Could not sign out. Please try again.');
+    } finally {
+      setSigningOut(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setMenuOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
+
+  const isActive = (href: string) => (href === '/' ? location === '/' : location.startsWith(href));
+
+  return (
+    <header className="topbar">
+      <Link href="/" className="brand" data-testid="link-academy-home" aria-label="Meta home">
+        <img className="brand-image" src="/meta-logo.svg" alt="Meta" />
+      </Link>
+
+      <nav className="top-nav" aria-label="Primary">
+        {NAV_LINKS.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={`top-nav-link${isActive(item.href) ? ' is-active' : ''}`}
+            aria-current={isActive(item.href) ? 'page' : undefined}
+            data-testid={`nav-${item.label.toLowerCase()}`}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+
+      <div className="top-actions">
+        <span className="top-progress" data-testid="status-lessons-completed" title={`${progressCount} of ${lessons.length} lessons complete`}>
+          <span className="progress-dot" />
+          <span className="top-progress-text">{progressCount} / {lessons.length} lessons</span>
+          <span className="top-progress-track" aria-hidden="true"><span className="top-progress-fill" style={{ width: `${completion}%` }} /></span>
+        </span>
+        <GlobalSearch />
+        <ThemeToggle />
+        {authChecked && signedIn && (
+          <button type="button" className="header-signout-button" onClick={() => void handleSignOut()} disabled={signingOut} data-testid="button-header-sign-out">
+            <LogOut aria-hidden="true" />
+            <span>{signingOut ? 'Signing out…' : 'Sign out'}</span>
+          </button>
+        )}
+        <Link href="/pricing" className="nav-cta" data-testid="link-nav-upgrade">Get Meta Pro</Link>
+        <button
+          type="button"
+          className="mobile-menu-button"
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
+          data-testid="button-mobile-menu"
+        >
+          {menuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
+        </button>
+      </div>
+
+      {menuOpen && (
+        <div className="mobile-nav-panel">
+          <div className="mobile-nav-tools" aria-label="Mobile quick controls">
+            <GlobalSearch />
+            <ThemeToggle />
+          </div>
+          <nav className="mobile-nav-links" aria-label="Mobile navigation">
+            {NAV_LINKS.map((item) => (
+              <Link key={item.href} href={item.href} className="mobile-nav-link" onClick={() => setMenuOpen(false)}>
+                <item.icon aria-hidden="true" />
+                <span>{item.label}</span>
+                <ArrowRight aria-hidden="true" />
+              </Link>
+            ))}
+            {authChecked && (signedIn ? (
+              <button type="button" className="mobile-nav-link mobile-nav-action" onClick={() => void handleSignOut()} disabled={signingOut} data-testid="button-menu-sign-out">
+                <LogOut aria-hidden="true" />
+                <span>{signingOut ? 'Signing out…' : 'Sign out'}</span>
+                <ArrowRight aria-hidden="true" />
+              </button>
+            ) : (
+              <Link href="/sign-in" className="mobile-nav-link" onClick={() => setMenuOpen(false)}>
+                <LockKeyhole aria-hidden="true" />
+                <span>Sign in</span>
+                <ArrowRight aria-hidden="true" />
+              </Link>
+            ))}
+            {signOutError && <p className="header-signout-error" role="alert">{signOutError}</p>}
+          </nav>
+        </div>
+      )}
+    </header>
+  );
+}
+
+function AppShell({ children, showBottomNav = true, showHeader = true }: { children: ReactNode; showBottomNav?: boolean; showHeader?: boolean }) {
+  const { progress } = useProgress();
+  const [location] = useLocation();
+  const isActiveDestination = (href: string) => {
+    if (href === '/') return location === '/';
+    if (href === '/play') return location.startsWith('/play') || location.startsWith('/learn');
+    return location === href || location.startsWith(`${href}/`);
+  };
+  return (
+    <div className="app-shell">
+      {showHeader && <Header progressCount={progress.completedLessonIds.length} />}
+      {children}
+      {showBottomNav && (
+        <nav className="bottom-workspace-nav" aria-label="Main navigation">
+          <Link href="/" className={`bottom-workspace-button${isActiveDestination('/') ? ' active' : ''}`} aria-current={isActiveDestination('/') ? 'page' : undefined} aria-label="Explore" data-testid="button-home">
+            <Compass aria-hidden="true" />
+            <span>Explore</span>
+          </Link>
+          <Link href="/play" className={`bottom-workspace-button${isActiveDestination('/play') ? ' active' : ''}`} aria-current={isActiveDestination('/play') ? 'page' : undefined} aria-label="Lessons" data-testid="button-lessons">
+            <BookOpen aria-hidden="true" />
+            <span>Lessons</span>
+          </Link>
+          <Link href="/projects" className={`bottom-workspace-button${isActiveDestination('/projects') ? ' active' : ''}`} aria-current={isActiveDestination('/projects') ? 'page' : undefined} aria-label="Projects" data-testid="button-projects">
+            <FolderKanban aria-hidden="true" />
+            <span>Projects</span>
+          </Link>
+          <Link href="/pricing" className={`bottom-workspace-button${isActiveDestination('/pricing') ? ' active' : ''}`} aria-current={isActiveDestination('/pricing') ? 'page' : undefined} aria-label="Plans and pricing" data-testid="button-pricing">
+            <Tag aria-hidden="true" />
+            <span>Plans</span>
+          </Link>
+          <Link href="/settings" className={`bottom-workspace-button${isActiveDestination('/settings') ? ' active' : ''}`} aria-current={isActiveDestination('/settings') ? 'page' : undefined} aria-label="Settings" data-testid="button-settings">
+            <Settings aria-hidden="true" />
+            <span>Settings</span>
+          </Link>
+        </nav>
+      )}
+    </div>
+  );
+}
+
+function HomePage() {
+  const { progress, setSkillLevel } = useProgress();
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('All paths');
+  const [level, setLevel] = useState('All levels');
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return languages.filter((language) => {
+      const matchesSearch = !query || `${language.name} ${language.category} ${language.description}`.toLowerCase().includes(query);
+      const matchesCategory = category === 'All paths' || language.category === category;
+      const matchesLevel = level === 'All levels' || language.level === level;
+      return matchesSearch && matchesCategory && matchesLevel;
+    });
+  }, [search, category, level]);
+  const completedLessonIds = new Set(progress.completedLessonIds);
+  const completedCount = lessons.filter((lesson) => completedLessonIds.has(lesson.id)).length;
+  const nextLesson = lessons.find((lesson) => !completedLessonIds.has(lesson.id));
+  const nextLessonIndex = nextLesson ? lessons.findIndex((lesson) => lesson.id === nextLesson.id) : -1;
+  const completion = Math.min(100, (completedCount / lessons.length) * 100);
+  const resetLanguageFilters = () => {
+    setSearch('');
+    setCategory('All paths');
+    setLevel('All levels');
+  };
+
+  return (
+    <AppShell>
+      <main className="home-main">
+        <section className="hero" aria-labelledby="home-heading">
+          <div className="hero-copy-block">
+            <div className="eyebrow"><span className="eyebrow-line" /> A hands-on academy for curious minds</div>
+            <h1 id="home-heading">Learn the idea.<br /><em>Then the code.</em></h1>
+            <p className="hero-typewriter">
+              <span className="hero-typewriter-sr-only">Make games, websites, apps, AI tools, Roblox games, and Minecraft mods.</span>
+              <span className="hero-typewriter-visual" aria-hidden="true">
+                <span>Make </span>
+                <span className="hero-typewriter-rotator">
+                  <span className="hero-typewriter-word typewriter-games">games</span>
+                  <span className="hero-typewriter-word typewriter-websites">websites</span>
+                  <span className="hero-typewriter-word typewriter-apps">apps</span>
+                  <span className="hero-typewriter-word typewriter-ai-tools">AI tools</span>
+                  <span className="hero-typewriter-word typewriter-roblox">Roblox games</span>
+                  <span className="hero-typewriter-word typewriter-minecraft">Minecraft mods</span>
+                </span>
+              </span>
+            </p>
+            <p className="hero-copy">Programming makes more sense when you can see the same idea in different languages. Start with the shared foundations, then follow the syntax wherever your curiosity goes.</p>
+            <div className="hero-actions">
+              <Link
+                href={nextLesson ? `/learn/${nextLesson.id}` : '/play'}
+                className="button-primary"
+                data-testid="button-start-learning"
+              >
+                {nextLesson ? (completedCount > 0 ? 'Continue learning' : 'Start learning') : 'Explore build tracks'}
+                <ArrowRight aria-hidden="true" />
+              </Link>
+              <Link href="/pricing" className="button-ghost" data-testid="link-hero-pricing">See plans &amp; pricing <Tag aria-hidden="true" /></Link>
+              <a href="#language-library" className="text-link" data-testid="link-browse-languages">Browse languages <ArrowRight aria-hidden="true" /></a>
+            </div>
+            <p className="hero-progress-note" role="status">
+              {nextLesson ? (
+                <>
+                  <span className="progress-dot" aria-hidden="true" />
+                  <span>{completedCount > 0 ? 'Up next' : 'Your first step'} · <strong>Lesson {String(nextLessonIndex + 1).padStart(2, '0')}: {nextLesson.title}</strong> · {completedCount} of {lessons.length} complete
+                </span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 aria-hidden="true" />
+                  <span><strong>Foundation complete.</strong> You finished all {lessons.length} lessons. Ready to build something?</span>
+                </>
+              )}
+            </p>
+            <ul className="hero-trust">
+              <li><Check aria-hidden="true" /> Free lessons, no card required</li>
+              <li><Check aria-hidden="true" /> 12 language paths &amp; 7 build tracks</li>
+              <li><Check aria-hidden="true" /> AI plans from $4.99/month</li>
+            </ul>
+          </div>
+          <div className="hero-visual" aria-label="A sample code card showing a greeting in Python">
+            <span className="hero-note">FIG. 01 / THE FIRST OUTPUT</span>
+            <div className="atlas-card">
+              <div className="code-window-head">
+                <span className="window-dots"><i /><i /><i /></span>
+                <span>hello_world.py</span>
+                <span>PY</span>
+              </div>
+              <div className="code-row"><span className="line-no">01</span><span><span className="code-comment"># A tiny program, a big first step</span></span></div>
+              <div className="code-row"><span className="line-no">02</span><span><span className="code-key">print</span>(<span className="code-string">"Hello, world!"</span>)</span></div>
+              <div className="code-row"><span className="line-no">03</span><span>&nbsp;</span></div>
+              <div className="code-row"><span className="line-no">04</span><span><span className="code-comment"># One idea. Many ways to write it.</span></span></div>
+            </div>
+            <div className="visual-stamp"><span><b>12</b><br />ways to begin</span></div>
+          </div>
+        </section>
+
+        <section className="momentum-panel" aria-labelledby="momentum-heading">
+          <div className="momentum-intro">
+            <p className="section-kicker">Your learning dashboard</p>
+            <h2 id="momentum-heading">Small steps. <em>Real progress.</em></h2>
+            <p>Keep your momentum going. Every completed foundation lesson adds 25 XP and unlocks milestones.</p>
+            <div className="momentum-progress-copy"><span>{completedCount} of {lessons.length} lessons</span><strong>{Math.round(completion)}%</strong></div>
+            <div className="momentum-progress-track" role="progressbar" aria-label="Lesson completion" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(completion)}><span style={{ width: `${completion}%` }} /></div>
+          </div>
+          <div className="momentum-stats">
+            <article className="momentum-xp-card"><span className="momentum-stat-icon"><Zap aria-hidden="true" /></span><span className="momentum-stat-label">Total XP</span><strong>{completedCount * 25}</strong><small>Earned from lessons</small></article>
+            <article className={completedCount >= 1 ? 'momentum-badge unlocked' : 'momentum-badge'}><span className="momentum-badge-icon"><Star aria-hidden="true" /></span><strong>First step</strong><small>{completedCount >= 1 ? 'Unlocked · First lesson complete' : 'Complete one lesson to unlock'}</small></article>
+            <article className={completedCount >= 5 ? 'momentum-badge unlocked' : 'momentum-badge'}><span className="momentum-badge-icon"><Zap aria-hidden="true" /></span><strong>Momentum</strong><small>{completedCount >= 5 ? 'Unlocked · Five lessons complete' : `${Math.max(0, 5 - completedCount)} more lesson${5 - completedCount === 1 ? '' : 's'} to unlock`}</small></article>
+            <article className={completedCount >= lessons.length ? 'momentum-badge unlocked' : 'momentum-badge'}><span className="momentum-badge-icon"><CheckCircle2 aria-hidden="true" /></span><strong>Foundation graduate</strong><small>{completedCount >= lessons.length ? 'Unlocked · Foundation complete' : 'Finish every foundation lesson'}</small></article>
+          </div>
+          <Link href="/playground" className="momentum-playground-link"><Code2 aria-hidden="true" /><span><strong>Ready to build something?</strong><small>Try your ideas in the interactive code playground.</small></span><ArrowRight aria-hidden="true" /></Link>
+        </section>
+
+        <PublishedContentSection />
+
+        <section className="section" id="language-library" aria-labelledby="library-heading">
+          <div className="section-heading">
+            <div>
+              <p className="section-kicker">The language library / 01—12</p>
+              <h2 id="library-heading">Pick a path to explore.</h2>
+              <p className="section-sub">One shared foundation, expressed in the language you want to learn.</p>
+            </div>
+            <div className="catalog-tools">
+              <label className="search-wrap">
+                <Search aria-hidden="true" />
+                <input
+                  className="search-input"
+                  type="search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Find a language..."
+                  aria-label="Search languages"
+                  data-testid="input-search-languages"
+                />
+              </label>
+              <select aria-label="Filter by category" className="filter-select" value={category} onChange={(event) => setCategory(event.target.value)} data-testid="select-language-category">
+                <option>All paths</option><option>Web</option><option>General</option><option>Systems</option><option>Data</option>
+              </select>
+              <select aria-label="Filter by level" className="filter-select" value={level} onChange={(event) => setLevel(event.target.value)} data-testid="select-language-level">
+                <option>All levels</option><option>Beginner friendly</option><option>Beginner</option><option>Foundational</option>
+              </select>
+            </div>
+          </div>
+          <div className="catalog-result-summary" role="status" aria-live="polite">
+            <span>Showing <strong>{filtered.length}</strong> of {languages.length} language paths</span>
+            {(search || category !== 'All paths' || level !== 'All levels') && (
+              <button type="button" className="catalog-reset-button" onClick={resetLanguageFilters}>Clear filters <X aria-hidden="true" /></button>
+            )}
+          </div>
+          <div className="language-grid" data-testid="list-language-catalog" aria-live="polite">
+            {filtered.map((language, index) => (
+              <Link
+                href="/learn/output"
+                key={language.id}
+                className="language-card"
+                style={{ animationDelay: `${Math.min(index, 8) * 35}ms`, '--tile-color': tileHue(language.id) } as CSSProperties}
+                onClick={() => localStorage.setItem(LANGUAGE_KEY, language.id)}
+                data-testid={`card-language-${language.id}`}
+                aria-label={`Start learning in ${language.name}`}
+              >
+                <span className="language-card-top">
+                  <span className="language-name">{language.name}</span>
+                  <span className="language-initial">{language.name.slice(0, 2).toUpperCase()}</span>
+                </span>
+                <span className="language-description">{language.description}</span>
+                <span className="language-meta">
+                  <span className="level-label">{language.level}</span>
+                  <code className="mini-code">{language.sampleCode}</code>
+                </span>
+              </Link>
+            ))}
+            {filtered.length === 0 && (
+              <div className="empty-results" data-testid="empty-language-results">
+                <strong>No paths found just yet.</strong>
+                Try another search, or reset the filters to see the full library.
+              </div>
+            )}
+          </div>
+          <div className="library-note" data-testid="text-growing-library">
+            <Compass aria-hidden="true" />
+            <span><strong>These are twelve good places to begin, not the whole map.</strong> Meta teaches the foundations shared across programming and keeps adding new language paths as the library grows.</span>
+          </div>
+        </section>
+
+        <PricingTeaser />
+
+        <LessonPlaySection />
+
+        <section className="pathway" id="learning-path" aria-labelledby="path-heading">
+          <div className="pathway-intro">
+            <p className="section-kicker">Your learning path · {lessons.length} lessons</p>
+            <h2 id="path-heading">A little progress<br />adds up.</h2>
+            <p>Short, guided lessons make the big ideas feel small enough to try. No setup, no pressure — just one useful concept at a time.</p>
+            <div className="path-progress" data-testid="status-path-progress">
+              <span>{completedCount} of {lessons.length} complete</span>
+              <span className="progress-track" aria-hidden="true"><span className="progress-fill" style={{ width: `${completion}%` }} /></span>
+            </div>
+          </div>
+          <div className="lesson-list">
+            {lessons.map((lesson, index) => {
+              const done = completedLessonIds.has(lesson.id);
+              const isNext = nextLesson?.id === lesson.id;
+              return (
+                <Link href={`/learn/${lesson.id}`} className={`lesson-link${done ? ' done' : ''}${isNext ? ' next-up' : ''}`} key={lesson.id} data-testid={`link-lesson-${lesson.id}`}>
+                  <span className="lesson-index">{done ? <Check aria-label="Complete" /> : String(index + 1).padStart(2, '0')}</span>
+                  <span className="lesson-link-text"><strong>{lesson.title}</strong><small>{lesson.concept} · {lesson.duration}{isNext ? ' · UP NEXT' : ''}</small></span>
+                  <ArrowRight aria-hidden="true" />
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+        <ProgressionSection progress={progress} onSkillLevelChange={setSkillLevel} />
+        <footer className="footer">
+          <div className="footer-grid">
+            <div className="footer-brand">
+              <Link href="/" className="brand" aria-label="Meta home">
+                <img className="brand-image" src="/meta-logo.svg" alt="Meta" />
+              </Link>
+              <p>Learn the idea, then the code. Free, hands-on programming lessons for games, websites, apps, Roblox, and Minecraft.</p>
+              <Link href="/pricing" className="footer-cta" data-testid="link-footer-pricing">Compare plans <ArrowRight aria-hidden="true" /></Link>
+            </div>
+            <nav className="footer-col" aria-label="Learn">
+              <h3>Learn</h3>
+              <Link href="/play">Lesson Play</Link>
+              <a href="/#language-library">Language library</a>
+              <a href="/#learning-path">Foundation lessons</a>
+              <Link href="/projects">Projects</Link>
+            </nav>
+            <nav className="footer-col" aria-label="Account">
+              <h3>Account</h3>
+              <Link href="/pricing">Plans &amp; pricing</Link>
+              <Link href="/settings">Settings</Link>
+              <Link href="/account">Account &amp; privacy</Link>
+              <Link href="/sign-in">Sign in</Link>
+            </nav>
+            <nav className="footer-col" aria-label="Company">
+              <h3>Company</h3>
+              <Link href="/privacy">Privacy policy</Link>
+              <Link href="/delete-account">Delete account</Link>
+              <a href="/downloads/Meta-latest.apk" download="Meta.apk">Android app (APK)</a>
+              <a href="mailto:metasupport43@gmail.com">Support</a>
+            </nav>
+          </div>
+          <div className="footer-base">
+            <span>© {new Date().getFullYear()} Meta — Learn the idea, then the code.</span>
+            <span>Built for curious minds.</span>
+          </div>
+        </footer>
+      </main>
+    </AppShell>
+  );
+}
+
+
+
+function PublishedContentSection() {
+  const [items, setItems] = useState<Array<{ id: number; title: string; content_type: string; summary: string; body: string; published_at: string | null }>>([]);
+  useEffect(() => {
+    let active = true;
+    fetch('/api/auth/content', { credentials: 'same-origin' })
+      .then(response => response.ok ? response.json() : { items: [] })
+      .then(data => { if (active && Array.isArray(data.items)) setItems(data.items); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+  if (!items.length) return null;
+  return (
+    <section className="published-content-section" aria-labelledby="published-content-heading">
+      <div className="section-heading">
+        <div>
+          <p className="section-kicker">From the Meta team</p>
+          <h2 id="published-content-heading">Updates & new learning</h2>
+          <p className="section-sub">New notes, announcements, and learning resources published by Meta.</p>
+        </div>
+      </div>
+      <div className="published-content-grid">
+        {items.map(item => (
+          <article className="published-content-card" key={item.id}>
+            <span className="published-content-type">{item.content_type === 'lesson' ? 'Learning resource' : 'Announcement'}</span>
+            <h3>{item.title}</h3>
+            {item.summary && <p className="published-content-summary">{item.summary}</p>}
+            <p className="published-content-body">{item.body}</p>
+            {item.published_at && <time dateTime={item.published_at}>{new Date(item.published_at).toLocaleDateString()}</time>}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function LessonPlaySection() {
+  return (
+    <section className="play-section" id="lesson-play" aria-labelledby="lesson-play-heading">
+      <div className="section-heading">
+        <div>
+          <p className="section-kicker">Lesson Play / build to learn</p>
+          <h2 id="lesson-play-heading">Choose what you want to make.</h2>
+          <p className="section-sub">Each track teaches the coding idea, then turns it into a real project instead of stopping at a quiz.</p>
+        </div>
+        <Link href="/play" className="text-link" data-testid="link-open-lesson-play">
+          Open Lesson Play <ArrowRight aria-hidden="true" />
+        </Link>
+      </div>
+      <div className="play-grid">
+        {playTracks.map((track) => (
+          <Link href={`/play/${track.id}`} className="play-card" key={track.id} data-testid={`card-play-${track.id}`}>
+            <span className="play-card-icon" aria-hidden="true">{track.shortTitle.slice(0, 2).toUpperCase()}</span>
+            <div>
+              <strong>{track.title}</strong>
+              <p>{track.description}</p>
+            </div>
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PlayPage() {
+  const params = useParams<{ track?: string }>();
+  const selected = playTracks.find((track) => track.id === params.track);
+
+  return (
+    <AppShell>
+      <main className="home-main play-page-main">
+        <section className="hero" aria-labelledby="play-heading">
+          <div className="hero-copy-block">
+            <div className="eyebrow"><span className="eyebrow-line" /> {selected ? `Your build path / ${selected.shortTitle}` : 'Lesson Play / build to learn'}</div>
+            <h1 id="play-heading">
+              {selected ? <>Build with <em>{selected.shortTitle}.</em></> : <>Choose a path.<br /><em>Build something real.</em></>}
+            </h1>
+            <p className="hero-copy">
+              {selected
+                ? selected.description
+                : 'Learn programming by making games, websites, apps, and more. Start with a small idea, practice the concept, then build something you can call your own.'}
+            </p>
+            <div className="hero-actions">
+              {selected ? (
+                <>
+                  <a href="#your-mission" className="button-primary">See your mission <ArrowRight aria-hidden="true" /></a>
+                  <Link href="/play" className="text-link"><ArrowLeft aria-hidden="true" /> All learning paths</Link>
+                </>
+              ) : (
+                <>
+                  <a href="#play-tracks" className="button-primary">Explore learning paths <ArrowRight aria-hidden="true" /></a>
+                  <Link href="/#learning-path" className="text-link">Foundation lessons <ArrowRight aria-hidden="true" /></Link>
+                </>
+              )}
+              <Link href="/playground" className="button-ghost"><Code2 aria-hidden="true" /> Open code playground</Link>
+            </div>
+          </div>
+          <div className="hero-visual" aria-label="A sample code card showing a small programming project">
+            <span className="hero-note">FIG. 02 / LEARN BY MAKING</span>
+            <div className="atlas-card">
+              <div className="code-window-head">
+                <span className="window-dots"><i /><i /><i /></span>
+                <span>{selected ? `${selected.shortTitle.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_project.js` : 'first_project.js'}</span>
+                <span>JS</span>
+              </div>
+              <div className="code-row"><span className="line-no">01</span><span><span className="code-comment">// Start with one small idea</span></span></div>
+              <div className="code-row"><span className="line-no">02</span><span><span className="code-key">const</span> project = <span className="code-string">"your idea"</span>;</span></div>
+              <div className="code-row"><span className="line-no">03</span><span><span className="code-key">learn</span>(project);</span></div>
+              <div className="code-row"><span className="line-no">04</span><span><span className="code-comment">// Then make it your own</span></span></div>
+            </div>
+            <div className="visual-stamp"><span><b>{selected ? selected.projects.length : playTracks.length}</b><br />{selected ? 'build steps' : 'paths to build'}</span></div>
+          </div>
+        </section>
+
+        {!selected ? (
+          <section className="section play-track-library" id="play-tracks" aria-labelledby="play-tracks-heading">
+            <div className="section-heading">
+              <div>
+                <p className="section-kicker">The project library / build your skills</p>
+                <h2 id="play-tracks-heading">What do you want to make?</h2>
+                <p className="section-sub">Choose a track and turn the ideas into a real project, one checkpoint at a time.</p>
+              </div>
+            </div>
+            <div className="play-hub-grid" aria-label="Lesson Play tracks">
+              {playTracks.map((track) => (
+                <Link href={`/play/${track.id}`} className="play-hub-card" key={track.id}>
+                  <span className="play-hub-kicker">{track.shortTitle}</span>
+                  <h2>{track.title}</h2>
+                  <p className="play-code-label">[{track.codeLabel}]</p>
+                  <p>{track.description}</p>
+                  <p className="play-track-purpose"><strong>For:</strong> {track.usedFor}</p>
+                  <span className="play-outcome">{track.outcome}</span>
+                  <span className="play-open">Start track <ArrowRight aria-hidden="true" /></span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ) : (
+          <section className="play-track-layout" id="your-mission">
+            <article className="play-track-main">
+              <p className="section-kicker">Your mission</p>
+              <h2>{selected.outcome}</h2>
+              <p className="concept-intro">
+                You will move through short explain → try → build steps. Every project is broken into small checkpoints so you learn why the code works instead of only copying it.
+              </p>
+              <div className="mission-steps">
+                {selected.projects.map((project, index) => (
+                  <div className="mission-step" key={project}>
+                    <span>{String(index + 1).padStart(2, '0')}</span>
+                    <div>
+                      <strong>{project}</strong>
+                      <p>{index === 0 ? 'Starter mission — learn the core idea.' : index === 1 ? 'Practice mission — change and extend the idea.' : 'Build mission — combine the skills into your own version.'}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <Link href="/learn/output" className="button-primary">Start with the coding foundation <ArrowRight aria-hidden="true" /></Link>
+            </article>
+            <aside className="play-track-sidebar">
+              <p className="sidebar-title"><span>Code and purpose</span></p>
+              <p className="play-code-label">[{selected.codeLabel}]</p>
+              <p><strong>What it is for:</strong> {selected.usedFor}</p>
+              <p className="sidebar-title"><span>Main functions</span></p>
+              {selected.mainFunctions.map((item) => <span className="skill-chip" key={item}>{item}</span>)}
+              <p className="sidebar-title"><span>Skills in this track</span></p>
+              {selected.skills.map((skill) => <span className="skill-chip" key={skill}>{skill}</span>)}
+              <div className="play-note">
+                <strong>Build-first rule</strong>
+                <span>Hints explain the next move, but Meta does not hand you the full final project before you try it.</span>
+              </div>
+            </aside>
+          </section>
+        )}
+      </main>
+    </AppShell>
+  );
+}
+
+function ProjectsPage() {
+  const templates = [
+    ['Website', 'HTML, CSS, and JavaScript starter'],
+    ['Game', 'Browser game starter'],
+    ['App', 'App-style starter'],
+    ['Roblox', 'Luau / Roblox Studio starter'],
+    ['MCBE', 'Minecraft Bedrock add-on starter'],
+    ['MCJE', 'Java Edition datapack starter'],
+    ['MCJE Mod', 'Java mod starter'],
+  ];
+
+  const [, setLocation] = useLocation();
+  const [projects, setProjects] = useState<MetaProject[]>(() => readProjects());
+  const [showCreator, setShowCreator] = useState(false);
+  const [projectName, setProjectName] = useState('');
+  const [projectType, setProjectType] = useState('Blank');
+  const [projectSearch, setProjectSearch] = useState('');
+  const [projectTypeFilter, setProjectTypeFilter] = useState('All');
+  const visibleProjects = projects.filter((project) => {
+    const matchesSearch = project.name.toLowerCase().includes(projectSearch.trim().toLowerCase());
+    const matchesType = projectTypeFilter === 'All' || project.type === projectTypeFilter;
+    return matchesSearch && matchesType;
+  });
+  const projectTypes = Array.from(new Set(projects.map((project) => project.type))).sort((a, b) => a.localeCompare(b));
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+  const [aiError, setAiError] = useState('');
+
+  useEffect(() => writeProjects(projects), [projects]);
+
+  const createProject = (name = projectName, type = projectType) => {
+    const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const cleanName = name.trim() || `Untitled ${type} project`;
+    const project: MetaProject = {
+      id,
+      name: cleanName,
+      type,
+      files: {},
+      messages: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    const nextProjects = [...projects, project];
+    // Persist before navigating: ProjectPage initializes from localStorage on mount.
+    writeProjects(nextProjects);
+    setProjects(nextProjects);
+    setProjectName('');
+    setProjectType('Blank');
+    setShowCreator(false);
+    setLocation(`/projects/${id}`);
+  };
+
+  const startWithAi = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const prompt = message.trim();
+    if (!prompt || sending) return;
+    setSending(true);
+    setAiError('');
+
+    try {
+      const response = await fetch('/api/coach', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          message: prompt,
+          track: 'Project Builder',
+          project: null,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error || 'Meta AI could not start the project.');
+
+      const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const project: MetaProject = {
+        id,
+        name: payload.project?.name || 'AI Project',
+        type: payload.project?.type || 'Blank',
+        files: payload.project?.files || {},
+        messages: [
+          { role: 'user', content: prompt },
+          { role: 'assistant', content: payload.reply || 'Project created.' },
+        ],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      const next = [...projects, project];
+      setProjects(next);
+      writeProjects(next);
+      setMessage('');
+      setLocation(`/projects/${id}`);
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : 'Meta AI could not respond.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <AppShell>
+      <main className="projects-page">
+        <section className="projects-intro">
+          <p className="section-kicker">Projects</p>
+          <h1>What are you building?</h1>
+          <p>Ask Meta to create the starting project for you, or scroll down and create one yourself.</p>
+          {aiError && <p className="project-ai-error" role="alert">{aiError}</p>}
+        </section>
+
+        <section className="project-list-section">
+          <div className="project-list-head">
+            <div>
+              <p className="section-kicker">Your projects</p>
+              <h2>Pick up where you left off.</h2>
+            </div>
+            <button type="button" className="project-plus-button" onClick={() => setShowCreator(true)} aria-label="Create project" title="Create project">
+              <Plus aria-hidden="true" />
+            </button>
+          </div>
+
+          {projects.length ? (
+            <>
+              <div className="project-list-filters">
+                <label>
+                  <span className="sr-only">Search your projects</span>
+                  <input
+                    type="search"
+                    value={projectSearch}
+                    onChange={(event) => setProjectSearch(event.target.value)}
+                    placeholder="Search projects…"
+                    aria-label="Search your projects"
+                  />
+                </label>
+                <label>
+                  <span className="sr-only">Filter by project type</span>
+                  <select
+                    value={projectTypeFilter}
+                    onChange={(event) => setProjectTypeFilter(event.target.value)}
+                    aria-label="Filter by project type"
+                  >
+                    <option value="All">All types</option>
+                    {projectTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+                  </select>
+                </label>
+              </div>
+              {visibleProjects.length ? (
+                <div className="simple-project-grid">
+                  {visibleProjects.map((project) => (
+                    <button
+                      type="button"
+                      className="simple-project-card"
+                      key={project.id}
+                      onClick={() => setLocation(`/projects/${project.id}`)}
+                      aria-label={`Open ${project.name}`}
+                    >
+                      <span className="simple-project-icon"><FolderKanban aria-hidden="true" /></span>
+                      <strong>{project.name}</strong>
+                      <small>{project.type}</small>
+                      {project.updatedAt && <small>Updated {new Date(project.updatedAt).toLocaleDateString()}</small>}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="projects-empty-minimal">
+                  <Search aria-hidden="true" />
+                  <span>No projects match those filters. Try another search or choose All types.</span>
+                  <button type="button" className="button-secondary" onClick={() => { setProjectSearch(''); setProjectTypeFilter('All'); }}>Clear filters</button>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="projects-empty-minimal">
+              <FolderKanban aria-hidden="true" />
+              <span>No projects yet. Ask Meta below or tap + to make one without AI.</span>
+            </div>
+          )}
+        </section>
+
+        <details className="template-drawer">
+          <summary>
+            <span>Templates</span>
+            <small>Start from one of the guided project types</small>
+          </summary>
+          <div className="template-grid">
+            {templates.map(([name, detail]) => (
+              <button type="button" className="template-card" key={name} onClick={() => createProject(`Untitled ${name}`, name)}>
+                <span className="new-project-icon"><Code2 aria-hidden="true" /></span>
+                <strong>{name}</strong>
+                <small>{detail}</small>
+              </button>
+            ))}
+          </div>
+        </details>
+
+        {showCreator && (
+          <div className="project-create-sheet" role="dialog" aria-modal="true" aria-label="Create project">
+            <div className="project-create-card">
+              <div className="project-create-title">
+                <div>
+                  <p className="section-kicker">New project</p>
+                  <h2>Create without AI</h2>
+                </div>
+                <button type="button" className="sheet-close" onClick={() => setShowCreator(false)} aria-label="Close">×</button>
+              </div>
+              <label>
+                <span>Name</span>
+                <input value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="My project" autoFocus />
+              </label>
+              <label>
+                <span>Type</span>
+                <select value={projectType} onChange={(event) => setProjectType(event.target.value)}>
+                  <option>Blank</option>
+                  {templates.map(([name]) => <option key={name}>{name}</option>)}
+                </select>
+              </label>
+              <button type="button" className="button-primary" onClick={() => createProject()}>Create project</button>
+            </div>
+          </div>
+        )}
+
+        <form className="project-ai-composer" onSubmit={startWithAi}>
+          <input
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            placeholder={sending ? 'Meta is creating your project…' : 'Ask Meta to create a project…'}
+            aria-label="Message Meta AI"
+            disabled={sending}
+          />
+          <button type="submit" aria-label="Send message" disabled={!message.trim() || sending}>
+            <Send aria-hidden="true" />
+          </button>
+        </form>
+      </main>
+    </AppShell>
+  );
+}
+
+function ProjectPage() {
+  const params = useParams<{ projectId: string }>();
+  const [, setLocation] = useLocation();
+  const [projects, setProjects] = useState<MetaProject[]>(() => readProjects());
+  const project = projects.find((item) => item.id === params.projectId);
+  const [activeTab, setActiveTab] = useState<'files' | 'preview' | 'chat'>(() => {
+    try {
+      const saved = localStorage.getItem('meta-default-project-tab');
+      return saved === 'files' || saved === 'preview' || saved === 'chat' ? saved : 'chat';
+    } catch {
+      return 'chat';
+    }
+  });
+  const [activeFile, setActiveFile] = useState('');
+  const [newFileName, setNewFileName] = useState('');
+  const [showNewFile, setShowNewFile] = useState(false);
+  const [fileCreateError, setFileCreateError] = useState('');
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+  const [autoCorrecting, setAutoCorrecting] = useState(false);
+  const [error, setError] = useState('');
+  const [showProjectHints] = useState(() => {
+    try {
+      return localStorage.getItem('meta-project-hints') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+  const [wordWrap] = useState(() => readFlag('meta-editor-word-wrap', true));
+
+  useEffect(() => writeProjects(projects), [projects]);
+
+  const currentFiles = project?.files || {};
+  const fileEntries = Object.entries(currentFiles);
+
+  useEffect(() => {
+    if (!activeFile && fileEntries.length) setActiveFile(fileEntries[0][0]);
+    if (activeFile && !Object.prototype.hasOwnProperty.call(currentFiles, activeFile) && fileEntries.length) {
+      setActiveFile(fileEntries[0][0]);
+    }
+  }, [activeFile, fileEntries.length, project?.id]);
+
+  if (!project) {
+    return (
+      <AppShell>
+        <main className="project-detail-page">
+          <Link href="/projects" className="back-link"><ArrowLeft aria-hidden="true" /> Back to projects</Link>
+          <div className="projects-empty-minimal">
+            <FolderKanban aria-hidden="true" />
+            <span>This project could not be found.</span>
+          </div>
+        </main>
+      </AppShell>
+    );
+  }
+
+  const updateFiles = (files: Record<string, string>) => {
+    setProjects((current) => current.map((item) =>
+      item.id === project.id ? { ...item, files, updatedAt: Date.now() } : item
+    ));
+  };
+
+  const updateActiveFile = (content: string) => {
+    if (!activeFile) return;
+    updateFiles({ ...currentFiles, [activeFile]: content });
+  };
+
+  const createFile = (requestedPath = newFileName) => {
+    const path = requestedPath.trim().replace(/^\/+/, '').replace(/\\/g, '/');
+    setFileCreateError('');
+
+    if (!path) {
+      setFileCreateError('Enter a file name first.');
+      return;
+    }
+    if (path.endsWith('/')) {
+      setFileCreateError('Use a file name such as index.html or src/main.js.');
+      return;
+    }
+    if (Object.prototype.hasOwnProperty.call(currentFiles, path)) {
+      setFileCreateError('That file already exists.');
+      setActiveFile(path);
+      return;
+    }
+
+    const nextFiles = { ...currentFiles, [path]: '' };
+    const nextProjects = projects.map((item) =>
+      item.id === project.id ? { ...item, files: nextFiles, updatedAt: Date.now() } : item
+    );
+
+    setProjects(nextProjects);
+    writeProjects(nextProjects);
+    setActiveFile(path);
+    setNewFileName('');
+    setShowNewFile(false);
+    setActiveTab('files');
+  };
+
+  const deleteActiveFile = () => {
+    if (!activeFile) return;
+    const next = { ...currentFiles };
+    delete next[activeFile];
+    updateFiles(next);
+    setActiveFile(Object.keys(next)[0] || '');
+  };
+
+  const downloadFile = (path: string, content: string) => {
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = path.split('/').pop() || 'file.txt';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadProject = async () => {
+    const zip = new JSZip();
+    Object.entries(currentFiles).forEach(([path, content]) => zip.file(path, content));
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${project.name.replace(/[^a-z0-9-_]+/gi, '-') || 'meta-project'}.zip`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const sendToAi = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const prompt = message.trim();
+    if (!prompt || sending) return;
+    setSending(true);
+    setError('');
+
+    setProjects((current) => current.map((item) =>
+      item.id === project.id
+        ? { ...item, messages: [...(item.messages || []), { role: 'user' as const, content: prompt }], updatedAt: Date.now() }
+        : item
+    ));
+    setMessage('');
+
+    try {
+      const response = await fetch('/api/coach', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          message: prompt,
+          track: 'Project Builder',
+          project: { ...project, files: currentFiles },
+          history: project.messages || [],
+          activeFile,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error || 'Meta AI could not respond.');
+
+      setProjects((current) => current.map((item) =>
+        item.id === project.id
+          ? {
+              ...item,
+              name: payload.project?.name || item.name,
+              type: payload.project?.type || item.type,
+              files: payload.project?.files || item.files || {},
+              messages: [...(item.messages || []), { role: 'assistant' as const, content: payload.reply || 'Done.' }],
+              updatedAt: Date.now(),
+            }
+          : item
+      ));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Meta AI could not respond.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const autoCorrectActiveFile = async () => {
+    if (!activeFile || autoCorrecting || sending) return;
+    const originalCode = currentFiles[activeFile] || '';
+    setAutoCorrecting(true);
+    setError('');
+    try {
+      const response = await fetch('/api/coach', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          message: [
+            'AUTO-CORRECT REQUEST. Inspect only the active file listed below and automatically correct errors you can confidently identify.',
+            'Preserve the intended behavior, style, and existing features.',
+            'Return the full corrected active file in project.files. Keep every other file byte-for-byte unchanged.',
+            'Do not make speculative rewrites. If you cannot confidently fix an issue, leave that part unchanged and explain it in reply.',
+            'In reply, briefly list what you corrected. Do not wrap file contents in markdown fences.',
+            'Active file: ' + activeFile,
+            'Project type: ' + project.type,
+          ].join('\n'),
+          track: 'Project Builder',
+          project: { ...project, files: currentFiles },
+          history: [],
+          activeFile,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error || 'Auto-correct could not complete.');
+      const correctedCode = payload?.project?.files?.[activeFile];
+      if (typeof correctedCode !== 'string') {
+        throw new Error('Meta could not return a corrected version of this file. Your original code was kept.');
+      }
+      if (correctedCode === originalCode) {
+        setError(payload.reply || 'No confident corrections were found. Your file was not changed.');
+        return;
+      }
+      updateFiles({ ...currentFiles, [activeFile]: correctedCode });
+      const note = typeof payload.reply === 'string' && payload.reply.trim()
+        ? payload.reply.trim()
+        : 'Auto-correct applied. Review the changes before continuing.';
+      setProjects((current) => current.map((item) =>
+        item.id === project.id
+          ? { ...item, messages: [...(item.messages || []), { role: 'assistant' as const, content: note }], updatedAt: Date.now() }
+          : item
+      ));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Auto-correct could not complete. Your original file was kept.');
+    } finally {
+      setAutoCorrecting(false);
+    }
+  };
+
+  const htmlEntries = fileEntries.filter(([path]) => /\.html?$/i.test(path));
+  const preferredHtmlPath = /\.html?$/i.test(activeFile) && currentFiles[activeFile] !== undefined
+    ? activeFile
+    : currentFiles['index.html'] !== undefined
+      ? 'index.html'
+      : currentFiles['src/index.html'] !== undefined
+        ? 'src/index.html'
+        : htmlEntries[0]?.[0] || '';
+  const htmlFile = preferredHtmlPath ? currentFiles[preferredHtmlPath] || '' : '';
+  const previewDocument = htmlFile
+    ? (() => {
+        const resolveAssetPath = (htmlPath: string, assetUrl: string) => {
+          const cleanUrl = assetUrl.split(/[?#]/, 1)[0].replace(/^\.\//, '');
+          if (!cleanUrl || /^(?:[a-z]+:|\/|#)/i.test(cleanUrl)) return '';
+          const directory = htmlPath.includes('/') ? htmlPath.slice(0, htmlPath.lastIndexOf('/') + 1) : '';
+          const candidates = [
+            directory + cleanUrl,
+            cleanUrl,
+            cleanUrl.split('/').pop() || '',
+          ];
+          return candidates.find((candidate) => Object.prototype.hasOwnProperty.call(currentFiles, candidate)) || '';
+        };
+        let documentHtml = htmlFile;
+        let linkedCssCount = 0;
+        let linkedJsCount = 0;
+        documentHtml = documentHtml.replace(
+          /<link\b([^>]*?)href=(["'])([^"']+\.css(?:\?[^"']*)?(?:#[^"']*)?)\2([^>]*)>/gi,
+          (tag, _before: string, _quote: string, href: string, _after: string) => {
+            const assetPath = resolveAssetPath(preferredHtmlPath, href);
+            const css = assetPath ? currentFiles[assetPath] : undefined;
+            if (css === undefined) return tag;
+            linkedCssCount += 1;
+            return '<style data-preview-source="' + assetPath + '">' + css.replace(/<\/style/gi, '<\\/style') + '</style>';
+          },
+        );
+        documentHtml = documentHtml.replace(
+          /<script\b([^>]*?)src=(["'])([^"']+\.(?:m?js)(?:\?[^"']*)?(?:#[^"']*)?)\2([^>]*)>\s*<\/script>/gi,
+          (tag, _before: string, _quote: string, src: string, _after: string) => {
+            const assetPath = resolveAssetPath(preferredHtmlPath, src);
+            const js = assetPath ? currentFiles[assetPath] : undefined;
+            if (js === undefined) return tag;
+            linkedJsCount += 1;
+            return '<script>' + js.replace(/<\/script/gi, '<\\/script') + '</script>';
+          },
+        );
+        const cssFallbackPath = [
+          preferredHtmlPath.replace(/\.html?$/i, '.css'),
+          'style.css',
+          'styles.css',
+          'src/index.css',
+        ].find((path) => Object.prototype.hasOwnProperty.call(currentFiles, path));
+        const jsFallbackPath = [
+          preferredHtmlPath.replace(/\.html?$/i, '.js'),
+          'script.js',
+          'src/main.js',
+        ].find((path) => Object.prototype.hasOwnProperty.call(currentFiles, path));
+        const cssFallback = linkedCssCount === 0 && cssFallbackPath
+          ? '<style>' + (currentFiles[cssFallbackPath] || '').replace(/<\/style/gi, '<\\/style') + '</style>'
+          : '';
+        const jsFallback = linkedJsCount === 0 && jsFallbackPath
+          ? '<script>' + (currentFiles[jsFallbackPath] || '').replace(/<\/script/gi, '<\\/script') + '</script>'
+          : '';
+        if (cssFallback) {
+          documentHtml = documentHtml.includes('</head>')
+            ? documentHtml.replace('</head>', cssFallback + '</head>')
+            : cssFallback + documentHtml;
+        }
+        if (jsFallback) {
+          documentHtml = documentHtml.includes('</body>')
+            ? documentHtml.replace('</body>', jsFallback + '</body>')
+            : documentHtml + jsFallback;
+        }
+        return documentHtml;
+      })()
+    : '';
+
+  return (
+    <AppShell showBottomNav={false} showHeader={false}>
+      <main className="project-editor-page">
+        <header className="project-editor-head">
+          <button type="button" className="project-back-button icon-only-button" onClick={() => setLocation('/projects')} aria-label="Back to projects">
+            <ArrowLeft aria-hidden="true" />
+          </button>
+          <div className="project-editor-title">
+            <strong>{project.name}</strong>
+            <span>{project.type}</span>
+          </div>
+          <button type="button" className="project-download-button" onClick={() => void downloadProject()} disabled={!fileEntries.length} aria-label="Download project as ZIP">
+            <Download aria-hidden="true" />
+            <span>Download</span>
+          </button>
+        </header>
+
+        <section className="project-editor-body">
+          {error && <p className="project-auto-correct-status" role="status">{error}</p>}
+          {activeTab === 'files' && (
+            <div className="code-workspace">
+              <aside className="file-sidebar">
+                <div className="file-sidebar-head">
+                  <span>Files</span>
+                  <button type="button" className="icon-only-button" onClick={() => { setFileCreateError(''); setNewFileName(''); setShowNewFile(true); }} aria-label="New file">
+                    <Plus aria-hidden="true" />
+                  </button>
+                </div>
+                <div className="file-list">
+                  {fileEntries.map(([path]) => (
+                    <button type="button" key={path} className={`file-list-item${activeFile === path ? ' active' : ''}`} onClick={() => setActiveFile(path)}>
+                      <FileCode2 aria-hidden="true" />
+                      <span>{path}</span>
+                    </button>
+                  ))}
+                  {!fileEntries.length && <p className="file-list-empty">No files yet. Tap + to create one.</p>}
+                </div>
+              </aside>
+
+              <section className="code-editor-panel">
+                {activeFile ? (
+                  <>
+                    <div className="code-editor-toolbar">
+                      <span>{activeFile}</span>
+                      <div>
+                        <button type="button" className="editor-text-button" onClick={() => downloadFile(activeFile, currentFiles[activeFile] || '')}>Download file</button>
+                        <button type="button" className="editor-text-button" onClick={() => { setMessage(`Review ${activeFile} in my ${project.type} project. First explain what this code does. Check for bugs, errors, missing pieces, and improvements. If something is wrong, show a corrected code example and explain exactly what to change and why, step by step. Do not modify or replace any project files yet; wait for me to approve a fix.`); setError(''); setActiveTab('chat'); }} title="Get a code review and step-by-step fix instructions"><Lightbulb aria-hidden="true" /> Explain / fix</button>
+                        <button type="button" className="editor-text-button" onClick={() => void autoCorrectActiveFile()} disabled={autoCorrecting || sending} title="Automatically fix confidently identified errors in this file"><Sparkles aria-hidden="true" /> {autoCorrecting ? 'Correcting…' : 'Auto-correct'}</button>
+                        <button type="button" className="editor-text-button danger-text" onClick={deleteActiveFile}>Delete</button>
+                      </div>
+                    </div>
+                    <textarea
+                      className="manual-code-editor"
+                      value={currentFiles[activeFile] || ''}
+                      onChange={(event) => updateActiveFile(event.target.value)}
+                      spellCheck={false}
+                      wrap={wordWrap ? 'soft' : 'off'}
+                      aria-label={`Edit ${activeFile}`}
+                    />
+                  </>
+                ) : (
+                  <div className="editor-empty">
+                    <FileCode2 aria-hidden="true" />
+                    <h2>Code it yourself.</h2>
+                    {showProjectHints && <p>Create a file with the + button, then type directly in the editor.</p>}
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
+
+          {activeTab === 'preview' && (
+            <section className="project-preview-panel">
+              {previewDocument ? (
+                <iframe title="Project preview" sandbox="allow-scripts" srcDoc={previewDocument} />
+              ) : (
+                <div className="editor-empty">
+                  <Eye aria-hidden="true" />
+                  <h2>Preview</h2>
+                  {showProjectHints && <p>Browser preview works with any .html file in this project. Open Files and select an HTML file, then tap Preview. Local CSS and JavaScript files are included when they are linked from the page.</p>}
+                </div>
+              )}
+            </section>
+          )}
+
+          {activeTab === 'chat' && (
+            <section className="project-chat-tab">
+              <div className="project-conversation" aria-live="polite">
+                {(project.messages || []).length ? (
+                  (project.messages || []).map((entry, index) => (
+                    <div className={`project-message ${entry.role}`} key={`${entry.role}-${index}`}>
+                      <span>{entry.role === 'user' ? 'You' : 'Meta'}</span>
+                      <p>{entry.content}</p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="project-chat-empty">
+                    <Sparkles aria-hidden="true" />
+                    <h2>Chat with Meta.</h2>
+                    {showProjectHints && <p>Ask for help when you want it. You can still code everything yourself in Files.</p>}
+                  </div>
+                )}
+                {sending && <div className="project-message assistant"><span>Meta</span><p>Working on your project…</p></div>}
+                {error && <p className="project-ai-error" role="alert">{error}</p>}
+              </div>
+              <form className="project-tab-chat-composer" onSubmit={sendToAi}>
+                <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={sending ? 'Meta is working…' : 'Message Meta about this project…'} disabled={sending} />
+                <button type="submit" aria-label="Send" disabled={!message.trim() || sending}><Send aria-hidden="true" /></button>
+              </form>
+            </section>
+          )}
+        </section>
+
+        {showNewFile && (
+          <div className="file-create-overlay" role="dialog" aria-modal="true" aria-label="Create a new file" onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setShowNewFile(false);
+          }}>
+            <form className="file-create-dialog" onSubmit={(event) => { event.preventDefault(); createFile(); }}>
+              <div className="file-create-dialog-head">
+                <div>
+                  <span className="section-kicker">New file</span>
+                  <h2>Create a file</h2>
+                </div>
+                <button type="button" className="icon-only-button" onClick={() => setShowNewFile(false)} aria-label="Close">×</button>
+              </div>
+
+              <label className="file-create-label">
+                <span>File path</span>
+                <input
+                  value={newFileName}
+                  onChange={(event) => { setNewFileName(event.target.value); setFileCreateError(''); }}
+                  placeholder="index.html"
+                  autoFocus
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+              </label>
+
+              <div className="file-quick-options" aria-label="Quick file choices">
+                <button type="button" onClick={() => createFile('index.html')}>index.html</button>
+                <button type="button" onClick={() => createFile('style.css')}>style.css</button>
+                <button type="button" onClick={() => createFile('script.js')}>script.js</button>
+              </div>
+
+              {fileCreateError && <p className="file-create-error" role="alert">{fileCreateError}</p>}
+
+              <button type="submit" className="button-primary file-create-submit" disabled={!newFileName.trim()}>
+                <Plus aria-hidden="true" /> Create file
+              </button>
+            </form>
+          </div>
+        )}
+
+        <nav className="project-bottom-tabs" aria-label="Project tools">
+          <button type="button" className={activeTab === 'files' ? 'active' : ''} onClick={() => setActiveTab('files')}>
+            <FileCode2 aria-hidden="true" /><span>Files</span>
+          </button>
+          <button type="button" className={activeTab === 'preview' ? 'active' : ''} onClick={() => setActiveTab('preview')}>
+            <Eye aria-hidden="true" /><span>Preview</span>
+          </button>
+          <button type="button" className={activeTab === 'chat' ? 'active' : ''} onClick={() => setActiveTab('chat')}>
+            <MessageSquare aria-hidden="true" /><span>Chat</span>
+          </button>
+        </nav>
+      </main>
+    </AppShell>
+  );
+}
+
+function readFlag(key: string, fallback: boolean) {
+  try {
+    const value = localStorage.getItem(key);
+    return value === null ? fallback : value === 'true';
+  } catch {
+    return fallback;
+  }
+}
+
+const SETTINGS_SECTIONS = [
+  { id: 'profile', label: 'Profile', icon: User, keywords: 'account display name username email picture avatar photo' },
+  { id: 'plan', label: 'Plan & billing', icon: CreditCard, keywords: 'subscription ai credits allowance usage invoices receipts payment card upgrade pricing free paid' },
+  { id: 'notifications', label: 'Notifications', icon: Bell, keywords: 'reminders updates new lessons features product community discord billing email' },
+  { id: 'learning', label: 'Learning', icon: BookOpen, keywords: 'language coding python javascript typescript html css java c c++ c# go rust sql ruby hints exercises lessons beginner' },
+  { id: 'appearance', label: 'Appearance', icon: Palette, keywords: 'theme dark light mode reduced motion animation accessibility' },
+  { id: 'editor', label: 'Editor & projects', icon: Settings, keywords: 'code editor project tab files preview chat text size font word wrap wrapping workspace helper hints' },
+  { id: 'privacy', label: 'Privacy & data', icon: Shield, keywords: 'export download backup reset progress completed quizzes xp delete account policy storage' },
+  { id: 'support', label: 'Support', icon: CircleHelp, keywords: 'help contact support bug android app apk version email' },
+];
+
+function SettingsPage() {
+  const { theme, toggleTheme } = useTheme();
+  const [defaultTab, setDefaultTab] = useState<'files' | 'preview' | 'chat'>(() => {
+    try {
+      const saved = localStorage.getItem('meta-default-project-tab');
+      return saved === 'files' || saved === 'preview' || saved === 'chat' ? saved : 'chat';
+    } catch {
+      return 'chat';
+    }
+  });
+  const [editorSize, setEditorSize] = useState(() => {
+    try {
+      const saved = localStorage.getItem('meta-editor-font-size');
+      return saved === 'small' || saved === 'large' ? saved : 'medium';
+    } catch {
+      return 'medium';
+    }
+  });
+  const [defaultLanguage, setDefaultLanguage] = useState(() => {
+    try {
+      const saved = localStorage.getItem(LANGUAGE_KEY);
+      return languages.some((language) => language.id === saved) ? saved as string : 'python';
+    } catch {
+      return 'python';
+    }
+  });
+  const [autoShowLessonHints, setAutoShowLessonHints] = useState(() => readFlag('meta-auto-show-lesson-hints', false));
+  const [wordWrap, setWordWrap] = useState(() => readFlag('meta-editor-word-wrap', true));
+  const [settingsSearch, setSettingsSearch] = useState('');
+  const visibleSettingsSections = useMemo(() => {
+    const terms = settingsSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!terms.length) return SETTINGS_SECTIONS;
+    return SETTINGS_SECTIONS.filter((section) => {
+      const searchableText = `${section.label} ${section.keywords}`.toLowerCase();
+      return terms.every((term) => searchableText.includes(term));
+    });
+  }, [settingsSearch]);
+  const visibleSettingsSectionIds = useMemo(() => new Set(visibleSettingsSections.map((section) => section.id)), [visibleSettingsSections]);
+  const [reducedMotion, setReducedMotion] = useState(() => readFlag('meta-reduced-motion', false));
+  const [showProjectHints, setShowProjectHints] = useState(() => readFlag('meta-project-hints', true));
+  const [notifyLessons, setNotifyLessons] = useState(() => readFlag('meta-notify-lessons', true));
+  const [notifyProduct, setNotifyProduct] = useState(() => readFlag('meta-notify-product', true));
+  const [notifyCommunity, setNotifyCommunity] = useState(() => readFlag('meta-notify-community', false));
+  const [notifyBilling, setNotifyBilling] = useState(() => readFlag('meta-notify-billing', true));
+  const [activeSection, setActiveSection] = useState('profile');
+  const [toast, setToast] = useState('');
+  const [planName, setPlanName] = useState('Free');
+  const [creditLimit, setCreditLimit] = useState(40);
+  const [creditsUsed, setCreditsUsed] = useState<number | null>(null);
+
+  const [profile, setProfile] = useState<{
+    email: string;
+    displayName: string;
+    username: string;
+    avatarPng: string | null;
+    googlePicture: string | null;
+  } | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMessage, setProfileMessage] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/auth/profile', { credentials: 'same-origin' })
+      .then(async response => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not load your profile.');
+        return data.profile;
+      })
+      .then(data => {
+        if (active) setProfile(data);
+      })
+      .catch(error => {
+        if (active) setProfileMessage(error.message || 'Could not load your profile.');
+      })
+      .finally(() => {
+        if (active) setProfileLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/auth/me', { credentials: 'same-origin' })
+      .then(response => (response.ok ? response.json() : null))
+      .then(data => {
+        if (!active || !data?.user) return;
+        const rawPlan = typeof data.user.plan === 'string' && data.user.plan ? data.user.plan : 'Free';
+        setPlanName(rawPlan.charAt(0).toUpperCase() + rawPlan.slice(1));
+        if (typeof data.user.aiCredits === 'number' && data.user.aiCredits > 0) setCreditLimit(data.user.aiCredits);
+        if (typeof data.user.aiCreditsUsed === 'number') setCreditsUsed(data.user.aiCreditsUsed);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(''), 2600);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  const flash = (message: string) => setToast(message);
+
+  useEffect(() => {
+    const onScroll = () => {
+      let current = visibleSettingsSections[0]?.id ?? SETTINGS_SECTIONS[0].id;
+      for (const section of visibleSettingsSections) {
+        const element = document.getElementById(section.id);
+        if (element && element.getBoundingClientRect().top <= 160) current = section.id;
+      }
+      setActiveSection(current);
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [visibleSettingsSections]);
+
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!profile) return;
+
+    setProfileSaving(true);
+    setProfileMessage('');
+    const payload: {
+      displayName: string;
+      username?: string;
+      avatarPng: string | null;
+    } = {
+      displayName: profile.displayName.trim(),
+      avatarPng: profile.avatarPng,
+    };
+    if (profile.username.trim()) payload.username = profile.username.trim();
+
+    try {
+      const response = await fetch('/api/auth/profile', {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Could not save your profile.');
+      setProfile(data.profile);
+      setProfileMessage('Profile saved successfully.');
+      flash('Profile saved.');
+    } catch (error) {
+      setProfileMessage(error instanceof Error ? error.message : 'Could not save your profile.');
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  function chooseProfilePicture(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (file.type !== 'image/png') {
+      setProfileMessage('Please choose a PNG image.');
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      setProfileMessage('The PNG must be no larger than 1 MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string' && reader.result.startsWith('data:image/png;base64,')) {
+        setProfile(current => current ? { ...current, avatarPng: reader.result as string } : current);
+        setProfileMessage('Picture ready. Save your profile to keep the change.');
+      } else {
+        setProfileMessage('Could not read that PNG. Please try another image.');
+      }
+    };
+    reader.onerror = () => setProfileMessage('Could not read that image. Please try again.');
+    reader.readAsDataURL(file);
+  }
+
+  useEffect(() => {
+    const sizes: Record<string, string> = { small: '11px', medium: '12px', large: '14px' };
+    document.documentElement.style.setProperty('--meta-editor-font-size', sizes[editorSize] || sizes.medium);
+    try { localStorage.setItem('meta-editor-font-size', editorSize); } catch { /* storage may be unavailable */ }
+  }, [editorSize]);
+
+  useEffect(() => {
+    document.documentElement.dataset.reducedMotion = reducedMotion ? 'true' : 'false';
+    try { localStorage.setItem('meta-reduced-motion', String(reducedMotion)); } catch { /* storage may be unavailable */ }
+  }, [reducedMotion]);
+
+  useEffect(() => { try { localStorage.setItem('meta-default-project-tab', defaultTab); } catch { /* storage may be unavailable */ } }, [defaultTab]);
+  useEffect(() => { try { localStorage.setItem(LANGUAGE_KEY, defaultLanguage); } catch { /* storage may be unavailable */ } }, [defaultLanguage]);
+  useEffect(() => { try { localStorage.setItem('meta-auto-show-lesson-hints', String(autoShowLessonHints)); } catch { /* storage may be unavailable */ } }, [autoShowLessonHints]);
+  useEffect(() => { try { localStorage.setItem('meta-editor-word-wrap', String(wordWrap)); } catch { /* storage may be unavailable */ } }, [wordWrap]);
+  useEffect(() => { try { localStorage.setItem('meta-project-hints', String(showProjectHints)); } catch { /* storage may be unavailable */ } }, [showProjectHints]);
+  useEffect(() => { try { localStorage.setItem('meta-notify-lessons', String(notifyLessons)); } catch { /* storage may be unavailable */ } }, [notifyLessons]);
+  useEffect(() => { try { localStorage.setItem('meta-notify-product', String(notifyProduct)); } catch { /* storage may be unavailable */ } }, [notifyProduct]);
+  useEffect(() => { try { localStorage.setItem('meta-notify-community', String(notifyCommunity)); } catch { /* storage may be unavailable */ } }, [notifyCommunity]);
+  useEffect(() => { try { localStorage.setItem('meta-notify-billing', String(notifyBilling)); } catch { /* storage may be unavailable */ } }, [notifyBilling]);
+
+  function exportData() {
+    const scope = currentAccountScope();
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      account: scope,
+      progress: readProgress(`${PROGRESS_KEY}:${scope}`),
+      projects: readProjects(),
+      preferences: {
+        theme,
+        defaultTab,
+        editorSize,
+        reducedMotion,
+        showProjectHints,
+        defaultLanguage,
+        autoShowLessonHints,
+        wordWrap,
+        notifications: { notifyLessons, notifyProduct, notifyCommunity, notifyBilling },
+      },
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `meta-data-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    flash('Your data export has been downloaded.');
+  }
+
+  function resetLocalProgress() {
+    if (!window.confirm('Reset all lesson progress stored on this device? This cannot be undone.')) return;
+    const storageKey = `${PROGRESS_KEY}:${currentAccountScope()}`;
+    try {
+      localStorage.removeItem(storageKey);
+      window.dispatchEvent(new CustomEvent(PROGRESS_EVENT, { detail: { storageKey } }));
+    } catch { /* storage may be unavailable */ }
+    flash('Local progress cleared.');
+  }
+
+  const usagePercent = creditsUsed === null ? 0 : Math.min(100, Math.round((creditsUsed / Math.max(creditLimit, 1)) * 100));
+
+  return (
+    <AppShell>
+      <main className="workspace-page settings-page">
+        <section className="workspace-head">
+          <div>
+            <p className="section-kicker">Settings</p>
+            <h1>Make Meta yours</h1>
+            <p>Profile, plan, notifications, appearance, editor behavior, and privacy — everything in one place, grouped so you can find it fast.</p>
+          </div>
+          <Link href="/account" className="button-secondary" data-testid="link-account-security">Account &amp; security</Link>
+        </section>
+
+        <div className="settings-search-panel">
+          <label className="settings-search-field">
+            <Search aria-hidden="true" />
+            <input
+              type="search"
+              value={settingsSearch}
+              onChange={(event) => setSettingsSearch(event.target.value)}
+              placeholder="Search settings… (e.g. language, dark mode, billing)"
+              aria-label="Search settings"
+              aria-describedby="settings-search-status"
+              data-testid="input-search-settings"
+            />
+            {settingsSearch && (
+              <button type="button" onClick={() => setSettingsSearch('')} aria-label="Clear settings search" className="settings-search-clear">
+                <X aria-hidden="true" />
+              </button>
+            )}
+          </label>
+          <div className="settings-search-meta">
+            <span id="settings-search-status" role="status" aria-live="polite">
+              {settingsSearch.trim()
+                ? `${visibleSettingsSections.length} section${visibleSettingsSections.length === 1 ? '' : 's'} matching “${settingsSearch.trim()}”`
+                : `Search across ${SETTINGS_SECTIONS.length} settings sections`}
+            </span>
+            {settingsSearch.trim() && <button type="button" className="settings-search-reset" onClick={() => setSettingsSearch('')}>Clear search</button>}
+          </div>
+        </div>
+
+        <div className="settings-layout">
+          <nav className="settings-nav" aria-label="Settings sections">
+            {visibleSettingsSections.map((section) => (
+              <a
+                key={section.id}
+                href={`#${section.id}`}
+                className={`settings-nav-link${activeSection === section.id ? ' is-active' : ''}`}
+                aria-current={activeSection === section.id ? 'true' : undefined}
+                data-testid={`settings-nav-${section.id}`}
+              >
+                <section.icon aria-hidden="true" />
+                <span>{section.label}</span>
+              </a>
+            ))}
+          </nav>
+
+          <div className="settings-panels">
+            {visibleSettingsSections.length === 0 && (
+              <div className="settings-empty-search" role="status">
+                <Search aria-hidden="true" />
+                <h2>No matching settings</h2>
+                <p>Try another word such as “theme”, “language”, “font”, “privacy”, or “billing”.</p>
+                <button type="button" className="button-secondary" onClick={() => setSettingsSearch('')}>Show all settings</button>
+              </div>
+            )}
+            <section className="settings-card" hidden={!visibleSettingsSectionIds.has('profile')} id="profile" aria-labelledby="settings-profile-heading">
+              <div className="settings-card-head">
+                <div>
+                  <h2 id="settings-profile-heading"><User aria-hidden="true" /> Your profile</h2>
+                  <p>Update the details shown on your Meta account.</p>
+                </div>
+              </div>
+              {profileLoading ? (
+                <div className="settings-body"><p className="profile-status">Loading your profile…</p></div>
+              ) : profile ? (
+                <form className="profile-editor-body" onSubmit={saveProfile}>
+                  <div className="profile-picture-row">
+                    <div className="profile-avatar-preview">
+                      {(profile.avatarPng || profile.googlePicture)
+                        ? <img src={profile.avatarPng || profile.googlePicture || ''} alt="Your profile picture" referrerPolicy="no-referrer" />
+                        : <span>{(profile.displayName || profile.username || profile.email || 'M').slice(0, 1).toUpperCase()}</span>}
+                    </div>
+                    <div className="profile-picture-controls">
+                      <strong>Profile picture</strong>
+                      <span>Google picture shown by default when available. Upload a PNG to override it (max 1 MB).</span>
+                      <input className="profile-file-input" type="file" accept="image/png,.png" onChange={chooseProfilePicture} aria-label="Upload PNG profile picture" />
+                      {profile.avatarPng && (
+                        <button type="button" className="button-secondary" onClick={() => {
+                          setProfile(current => current ? { ...current, avatarPng: null } : current);
+                          setProfileMessage('Custom picture removed. Save your profile to use your Google picture or initials.');
+                        }}>Remove picture</button>
+                      )}
+                    </div>
+                  </div>
+                  <label className="profile-field">
+                    <span>Display name</span>
+                    <input className="profile-input" type="text" required minLength={1} maxLength={40}
+                      autoComplete="nickname" value={profile.displayName}
+                      onChange={event => setProfile(current => current ? { ...current, displayName: event.target.value } : current)}
+                      placeholder="Your display name" />
+                  </label>
+                  <label className="profile-field">
+                    <span>Username <small>(optional)</small></span>
+                    <input className="profile-input" type="text" minLength={3} maxLength={20}
+                      pattern="[A-Za-z0-9_]{3,20}" title="Use 3–20 letters, numbers, or underscores."
+                      autoComplete="username" value={profile.username}
+                      onChange={event => setProfile(current => current ? { ...current, username: event.target.value } : current)}
+                      placeholder="e.g. MetaBuilder_1" />
+                    <small>3–20 characters: letters, numbers, and underscores.</small>
+                  </label>
+                  <label className="profile-field">
+                    <span>Account email</span>
+                    <input className="profile-input" type="email" value={profile.email} readOnly />
+                  </label>
+                  {profileMessage && <p className="profile-status" role="status">{profileMessage}</p>}
+                  <div className="profile-save-row">
+                    <button className="button-primary" type="submit" disabled={profileSaving}>
+                      {profileSaving ? 'Saving…' : 'Save profile'}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="settings-body">
+                  <p className="profile-status" role="status">{profileMessage || 'Please sign in with your Meta email account to edit this profile.'}</p>
+                  <div className="settings-inline-actions">
+                    <Link href="/sign-in" className="button-secondary">Go to sign in</Link>
+                  </div>
+                  <p className="settings-note">If you signed in with Discord, profile editing through Discord is not connected yet.</p>
+                </div>
+              )}
+            </section>
+
+            <section className="settings-card" hidden={!visibleSettingsSectionIds.has('plan')} id="plan" aria-labelledby="settings-plan-heading">
+              <div className="settings-card-head">
+                <div>
+                  <h2 id="settings-plan-heading"><CreditCard aria-hidden="true" /> Plan &amp; billing</h2>
+                  <p>See what you are on, how much AI allowance is left, and where to change it.</p>
+                </div>
+              </div>
+              <div className="settings-body">
+                <div className="plan-summary">
+                  <div className="plan-summary-main">
+                    <span className="plan-summary-name"><Crown aria-hidden="true" /> {planName} plan</span>
+                    {creditsUsed === null ? (
+                      <p className="settings-note">{creditLimit.toLocaleString()} AI credits refresh every month. Usage tracking appears here once you start using the project agent.</p>
+                    ) : (
+                      <>
+                        <div className="usage-bar" role="progressbar" aria-valuenow={usagePercent} aria-valuemin={0} aria-valuemax={100} aria-label="AI credits used this month">
+                          <span className="usage-fill" style={{ width: `${usagePercent}%` }} />
+                        </div>
+                        <div className="usage-meta">
+                          <span>{creditsUsed.toLocaleString()} used</span>
+                          <span>{Math.max(creditLimit - creditsUsed, 0).toLocaleString()} left of {creditLimit.toLocaleString()}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <div className="settings-inline-actions">
+                    <Link href="/pricing" className="button-primary" data-testid="link-settings-upgrade">Compare plans</Link>
+                  </div>
+                </div>
+              </div>
+              <div className="settings-rows">
+                <div className="settings-row">
+                  <div>
+                    <strong>Lessons and build tracks</strong>
+                    <span>Always included on every plan, including Free.</span>
+                  </div>
+                  <span className="reward-state">Included</span>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Billing &amp; invoices</strong>
+                    <span>Open Stripe to update a card, change plan, or download receipts.</span>
+                  </div>
+                  <a className="button-secondary" href="mailto:metasupport43@gmail.com?subject=Meta%20billing%20request">Request billing help</a>
+                </div>
+              </div>
+            </section>
+
+            <section className="settings-card" hidden={!visibleSettingsSectionIds.has('notifications')} id="notifications" aria-labelledby="settings-notify-heading">
+              <div className="settings-card-head">
+                <div>
+                  <h2 id="settings-notify-heading"><Bell aria-hidden="true" /> Notifications</h2>
+                  <p>Choose which updates you want to hear about. Everything is off until you opt in.</p>
+                </div>
+              </div>
+              <div className="settings-rows">
+                <div className="settings-row">
+                  <div>
+                    <strong>Learning reminders</strong>
+                    <span>A nudge when you have not finished a lesson in a while.</span>
+                  </div>
+                  <label className="settings-switch">
+                    <input type="checkbox" checked={notifyLessons} onChange={(event) => { setNotifyLessons(event.target.checked); flash('Preference saved.'); }} aria-label="Learning reminders" />
+                    <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
+                  </label>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>New lessons &amp; features</strong>
+                    <span>Hear when a new language path or build track lands.</span>
+                  </div>
+                  <label className="settings-switch">
+                    <input type="checkbox" checked={notifyProduct} onChange={(event) => { setNotifyProduct(event.target.checked); flash('Preference saved.'); }} aria-label="New lessons and features" />
+                    <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
+                  </label>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Community &amp; Discord</strong>
+                    <span>Invites to community builds and shared project challenges.</span>
+                  </div>
+                  <label className="settings-switch">
+                    <input type="checkbox" checked={notifyCommunity} onChange={(event) => { setNotifyCommunity(event.target.checked); flash('Preference saved.'); }} aria-label="Community and Discord" />
+                    <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
+                  </label>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Billing &amp; plan changes</strong>
+                    <span>Receipts, renewals, and anything that affects your credits.</span>
+                  </div>
+                  <label className="settings-switch">
+                    <input type="checkbox" checked={notifyBilling} onChange={(event) => { setNotifyBilling(event.target.checked); flash('Preference saved.'); }} aria-label="Billing and plan changes" />
+                    <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <section className="settings-card" hidden={!visibleSettingsSectionIds.has('learning')} id="learning" aria-labelledby="settings-learning-heading">
+              <div className="settings-card-head">
+                <div>
+                  <h2 id="settings-learning-heading"><BookOpen aria-hidden="true" /> Learning preferences</h2>
+                  <p>Choose your default coding language and how much guidance you want when a lesson opens.</p>
+                </div>
+              </div>
+              <div className="settings-rows">
+                <div className="settings-row">
+                  <div>
+                    <strong>Default coding language</strong>
+                    <span>Preselect this language when you open a foundation lesson. You can still switch languages any time.</span>
+                  </div>
+                  <select className="settings-select" value={defaultLanguage} onChange={(event) => { setDefaultLanguage(event.target.value); flash('Default learning language saved.'); }} aria-label="Default coding language" data-testid="select-default-learning-language">
+                    {languages.map((language) => <option key={language.id} value={language.id}>{language.name}</option>)}
+                  </select>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Show lesson hints automatically</strong>
+                    <span>Open the small exercise hint by default in each lesson. You can hide it whenever you prefer.</span>
+                  </div>
+                  <label className="settings-switch">
+                    <input type="checkbox" checked={autoShowLessonHints} onChange={(event) => { setAutoShowLessonHints(event.target.checked); flash('Preference saved.'); }} aria-label="Show lesson hints automatically" data-testid="toggle-auto-lesson-hints" />
+                    <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <section className="settings-card" hidden={!visibleSettingsSectionIds.has('appearance')} id="appearance" aria-labelledby="settings-appearance-heading">
+              <div className="settings-card-head">
+                <div>
+                  <h2 id="settings-appearance-heading"><Palette aria-hidden="true" /> Appearance</h2>
+                  <p>Change how Meta looks and reads while you work.</p>
+                </div>
+              </div>
+              <div className="settings-rows">
+                <div className="settings-row">
+                  <div>
+                    <strong>Dark mode</strong>
+                    <span>Use the darker Meta theme. Your choice is remembered on this device.</span>
+                  </div>
+                  <label className="settings-switch">
+                    <input type="checkbox" checked={theme === 'dark'} onChange={() => { toggleTheme(); flash('Theme updated.'); }} aria-label="Dark mode" />
+                    <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
+                  </label>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Reduced motion</strong>
+                    <span>Reduce animations and movement across the site.</span>
+                  </div>
+                  <label className="settings-switch">
+                    <input type="checkbox" checked={reducedMotion} onChange={(event) => { setReducedMotion(event.target.checked); flash('Preference saved.'); }} aria-label="Reduced motion" />
+                    <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <section className="settings-card" hidden={!visibleSettingsSectionIds.has('editor')} id="editor" aria-labelledby="settings-editor-heading">
+              <div className="settings-card-head">
+                <div>
+                  <h2 id="settings-editor-heading"><Settings aria-hidden="true" /> Editor &amp; projects</h2>
+                  <p>Choose how your coding workspace opens and behaves.</p>
+                </div>
+              </div>
+              <div className="settings-rows">
+                <div className="settings-row">
+                  <div>
+                    <strong>Open projects on</strong>
+                    <span>The first tab you see when opening a project.</span>
+                  </div>
+                  <select className="settings-select" value={defaultTab} onChange={(event) => { setDefaultTab(event.target.value as 'files' | 'preview' | 'chat'); flash('Preference saved.'); }} aria-label="Default project tab">
+                    <option value="chat">Chat</option>
+                    <option value="files">Files</option>
+                    <option value="preview">Preview</option>
+                  </select>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Editor text size</strong>
+                    <span>Change the font size used while coding.</span>
+                  </div>
+                  <select className="settings-select" value={editorSize} onChange={(event) => { setEditorSize(event.target.value); flash('Preference saved.'); }} aria-label="Editor text size">
+                    <option value="small">Small</option>
+                    <option value="medium">Medium</option>
+                    <option value="large">Large</option>
+                  </select>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Project helper hints</strong>
+                    <span>Show small hints in empty project screens and editor areas.</span>
+                  </div>
+                  <label className="settings-switch">
+                    <input type="checkbox" checked={showProjectHints} onChange={(event) => { setShowProjectHints(event.target.checked); flash('Preference saved.'); }} aria-label="Project helper hints" />
+                    <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
+                  </label>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Wrap long code lines</strong>
+                    <span>Keep long lines inside the editor width instead of requiring horizontal scrolling.</span>
+                  </div>
+                  <label className="settings-switch">
+                    <input type="checkbox" checked={wordWrap} onChange={(event) => { setWordWrap(event.target.checked); flash('Preference saved.'); }} aria-label="Wrap long code lines" data-testid="toggle-editor-word-wrap" />
+                    <span className="settings-switch-track"><span className="settings-switch-thumb" /></span>
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <section className="settings-card" hidden={!visibleSettingsSectionIds.has('privacy')} id="privacy" aria-labelledby="settings-privacy-heading">
+              <div className="settings-card-head">
+                <div>
+                  <h2 id="settings-privacy-heading"><Shield aria-hidden="true" /> Privacy &amp; data</h2>
+                  <p>You own your work. Take a copy of it, clear it, or close your account.</p>
+                </div>
+              </div>
+              <div className="settings-rows">
+                <div className="settings-row">
+                  <div>
+                    <strong>Export my data</strong>
+                    <span>Download your progress, projects, and preferences as a JSON file.</span>
+                  </div>
+                  <button type="button" className="button-secondary" onClick={exportData} data-testid="button-export-data">Export data</button>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Reset progress on this device</strong>
+                    <span>Clears completed lessons, quizzes, and XP stored in this browser only.</span>
+                  </div>
+                  <button type="button" className="button-secondary settings-danger" onClick={resetLocalProgress} data-testid="button-reset-progress">Reset progress</button>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Privacy policy</strong>
+                    <span>What Meta collects, why, and how to have it removed.</span>
+                  </div>
+                  <Link href="/privacy" className="button-secondary">Read policy</Link>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Delete my account</strong>
+                    <span>Permanently removes your account and everything stored with it.</span>
+                  </div>
+                  <Link href="/delete-account" className="button-secondary settings-danger" data-testid="link-delete-account">Delete account</Link>
+                </div>
+              </div>
+            </section>
+
+            <section className="settings-card" hidden={!visibleSettingsSectionIds.has('support')} id="support" aria-labelledby="settings-support-heading">
+              <div className="settings-card-head">
+                <div>
+                  <h2 id="settings-support-heading"><CircleHelp aria-hidden="true" /> Support &amp; app</h2>
+                  <p>Get help, or take Meta with you on Android.</p>
+                </div>
+              </div>
+              <div className="settings-rows">
+                <div className="settings-row">
+                  <div>
+                    <strong>Email support</strong>
+                    <span>Questions, bugs, or billing — we usually reply within a couple of days.</span>
+                  </div>
+                  <a className="button-secondary" href="mailto:metasupport43@gmail.com">Contact support</a>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>Download Meta for Android</strong>
                     <span>Get the latest APK build. Android may ask you to allow installs from your browser.</span>
                   </div>
                   <a className="button-primary" href="/downloads/Meta-latest.apk" download="Meta.apk">
