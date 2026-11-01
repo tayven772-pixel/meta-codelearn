@@ -388,17 +388,19 @@ export async function handleTicketButton(interaction, db) {
   return true;
 }
 
-export async function handleTicketPanelCommand(interaction) {
-  if (!interaction.inGuild() || !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-    await replyPrivate(interaction, 'Only administrators can post the ticket panel.');
-    return true;
+export async function publishTicketPanel(guild, channelId) {
+  if (!guild || getSetting(guild.id, 'ticket_enabled') === 'false') return null;
+  const channel = channelId ? await guild.channels.fetch(channelId).catch(() => null) : null;
+  if (!channel?.isTextBased() || typeof channel.send !== 'function') {
+    throw new Error('Ticket panel channel is missing or is not a text channel.');
   }
-  const guildId = interaction.guildId;
+  const guildId = guild.id;
   const categories = ticketCategories(guildId);
   const style = getSetting(guildId, 'ticket_panel_style') === 'buttons' ? 'buttons' : 'dropdown';
   const title = (configured(guildId, 'ticket_panel_title') || 'Meta Code Support').slice(0, 256);
-  const description = (configured(guildId, 'ticket_panel_description') || 'Choose a category to open a ticket. You will complete a short form before your private channel is created. Never share passwords or verification codes.').slice(0, 4000);
-  const embed = new EmbedBuilder().setColor(0x5865F2).setTitle(title).setDescription(description);
+  const description = (configured(guildId, 'ticket_panel_description') || 'Choose a category to open a ticket. You will complete a short form before a private channel is created.').slice(0, 4000);
+  const rawColor = Number(getSetting(guildId, 'bot_embed_color') || 0x5865F2);
+  const embed = new EmbedBuilder().setColor(Number.isInteger(rawColor) && rawColor >= 0 && rawColor <= 0xFFFFFF ? rawColor : 0x5865F2).setTitle(title).setDescription(description);
   const components = [];
   if (style === 'buttons') {
     for (let i = 0; i < categories.length; i += 5) {
@@ -423,7 +425,16 @@ export async function handleTicketPanelCommand(interaction) {
       })));
     components.push(new ActionRowBuilder().addComponents(menu));
   }
-  await interaction.channel.send({ embeds: [embed], components });
-  await replyPrivate(interaction, 'Ticket panel posted using the ' + style + ' layout. The form appears before a ticket channel is created.');
+  return channel.send({ embeds: [embed], components, allowedMentions: { parse: [] } });
+}
+
+export async function handleTicketPanelCommand(interaction) {
+  if (!interaction.inGuild() || !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+    await replyPrivate(interaction, 'Only administrators can post the ticket panel.');
+    return true;
+  }
+  const channel = interaction.channel;
+  await publishTicketPanel(interaction.guild, channel.id);
+  await replyPrivate(interaction, 'Ticket panel posted in ' + channel + '. The form appears before a ticket channel is created.');
   return true;
 }
