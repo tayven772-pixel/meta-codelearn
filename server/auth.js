@@ -509,6 +509,7 @@ function validateBotSetupTemplate(template) {
       template.roles.some(role => !role || typeof role.name !== 'string' || !role.name.trim() || role.name.length > 100 ||
         (role.color !== undefined && (!Number.isInteger(role.color) || role.color < 0 || role.color > 0xFFFFFF))) ||
       template.categories.some(group => !group || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 100 ||
+        (group.private !== undefined && typeof group.private !== 'boolean') ||
         !Array.isArray(group.channels) || group.channels.length > 50 ||
         group.channels.some(channel => !Array.isArray(channel) || !['text','voice'].includes(channel[0]) ||
           typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
@@ -520,7 +521,7 @@ function validateBotSetupTemplate(template) {
   if (new Set(roleNames).size !== roleNames.length) return 'Role names must be unique (case-insensitive).';
   if (new Set(categoryNames).size !== categoryNames.length) return 'Category names must be unique (case-insensitive).';
   for (const group of template.categories) {
-    const keys = group.channels.map(([kind, name]) => kind + ':' + name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, ''));
+    const keys = group.channels.map(([kind, name]) => kind + ':' + (name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'new-channel'));
     if (new Set(keys).size !== keys.length) return 'Category "' + group.name + '" contains duplicate channel names of the same type.';
   }
 
