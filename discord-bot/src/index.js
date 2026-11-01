@@ -75,29 +75,43 @@ const commands = [
 ].map(command => command.toJSON());
 client.once(Events.ClientReady, async readyClient => {
  console.log(`Meta bot ready as ${readyClient.user.tag}`);
+ const homeGuildId = String(process.env.META_HOME_GUILD_ID || process.env.DISCORD_GUILD_ID || '').trim();
+ const hasConfiguredHomeGuild = /^\\d{17,20}$/.test(homeGuildId);
+ const upsertGuildPresence = db.prepare(`INSERT INTO bot_guild_presence (guild_id, name, icon, updated_at)
+  VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+  ON CONFLICT(guild_id) DO UPDATE SET name=excluded.name, icon=excluded.icon, updated_at=CURRENT_TIMESTAMP`);
  const syncBotGuilds = () => {
-  const upsert = db.prepare(`INSERT INTO bot_guild_presence (guild_id, name, icon, updated_at)
-   VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-   ON CONFLICT(guild_id) DO UPDATE SET name=excluded.name, icon=excluded.icon, updated_at=CURRENT_TIMESTAMP`);
+  if (!hasConfiguredHomeGuild) {
+   console.warn('Meta home server is not configured; set DISCORD_GUILD_ID in the bot environment.');
+   return;
+  }
   const sync = db.transaction(() => {
-   const liveIds = new Set(readyClient.guilds.cache.map(guild => guild.id));
-   for (const guild of readyClient.guilds.cache.values()) upsert.run(guild.id, guild.name, guild.icon);
+   const homeGuild = readyClient.guilds.cache.get(homeGuildId);
+   if (homeGuild) upsertGuildPresence.run(homeGuild.id, homeGuild.name, homeGuild.icon);
    const existing = db.prepare('SELECT guild_id FROM bot_guild_presence').all();
    const remove = db.prepare('DELETE FROM bot_guild_presence WHERE guild_id=?');
-   for (const row of existing) if (!liveIds.has(row.guild_id)) remove.run(row.guild_id);
+   for (const row of existing) if (row.guild_id !== homeGuildId) remove.run(row.guild_id);
   });
   sync();
  };
+ if (hasConfiguredHomeGuild) {
+  for (const guild of readyClient.guilds.cache.values()) {
+   if (guild.id !== homeGuildId) {
+    console.log(`Leaving unconfigured server ${guild.name} (${guild.id}); Meta bot is restricted to its home server.`);
+    await guild.leave().catch(error => console.error(`Could not leave server ${guild.id}:`, error.message));
+   }
+  }
+ }
  syncBotGuilds();
- // Keep the bot in every server it is invited to. Do not automatically leave guilds:
- // the website and bot are intended to support multiple servers.
- const recordGuildPresence = guild => db.prepare(`INSERT INTO bot_guild_presence (guild_id, name, icon, updated_at)
-  VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-  ON CONFLICT(guild_id) DO UPDATE SET name=excluded.name, icon=excluded.icon, updated_at=CURRENT_TIMESTAMP`)
-  .run(guild.id, guild.name, guild.icon);
+ const recordGuildPresence = guild => upsertGuildPresence.run(guild.id, guild.name, guild.icon);
  readyClient.on(Events.GuildCreate, guild => {
+  if (hasConfiguredHomeGuild && guild.id !== homeGuildId) {
+   console.log(`Leaving server ${guild.name} (${guild.id}); only the Meta home server is supported.`);
+   void guild.leave().catch(error => console.error(`Could not leave server ${guild.id}:`, error.message));
+   return;
+  }
   recordGuildPresence(guild);
-  console.log(`Joined server ${guild.name} (${guild.id}); staying in the server.`);
+  console.log(`Meta home server connected: ${guild.name} (${guild.id}).`);
  });
  readyClient.on(Events.GuildDelete, guild => {
   db.prepare('DELETE FROM bot_guild_presence WHERE guild_id=?').run(guild.id);
