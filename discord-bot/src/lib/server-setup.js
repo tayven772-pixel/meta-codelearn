@@ -185,30 +185,36 @@ export async function previewServerTemplate(guild, template) {
   const desiredCategories = new Map();
   for (const group of template.categories) {
     const categoryName = group.name.trim();
-    const category = guild.channels.cache.find(item => item.type === ChannelType.GuildCategory && item.name === categoryName);
+    const category = guild.channels.cache.find(item => item.type === ChannelType.GuildCategory && item.name.toLowerCase() === categoryName.toLowerCase());
     desiredCategories.set(categoryName, category ?? null);
   }
 
   const plannedChannelIds = new Set();
   const createChannels = [];
-  for (const [categoryName, group] of desiredCategories) {
-    const category = group;
+  const moveChannels = [];
+  const desiredCategoryIds = new Set([...desiredCategories.values()].filter(Boolean).map(category => category.id));
+  for (const [categoryName, category] of desiredCategories) {
     const definition = template.categories.find(item => item.name.trim() === categoryName);
     for (const [kind, rawName] of definition.channels) {
       const name = normalizeChannelName(rawName);
       const allowedTypes = supportedTypesForKind(kind);
       const existing = guild.channels.cache.find(channel => !plannedChannelIds.has(channel.id) && allowedTypes.includes(channel.type) && channel.name === name);
-      if (existing) plannedChannelIds.add(existing.id);
-      else createChannels.push({ category: categoryName, name, kind });
+      if (existing) {
+        plannedChannelIds.add(existing.id);
+        if (!category || existing.parentId !== category.id) {
+          moveChannels.push({ id: existing.id, name, fromCategoryId: existing.parentId, toCategory: categoryName });
+        }
+      } else {
+        createChannels.push({ category: categoryName, name, kind });
+      }
     }
   }
 
-  const desiredCategoryNames = new Set(template.categories.map(group => group.name.trim()));
   const deleteChannels = guild.channels.cache.filter(channel =>
     channel.type !== ChannelType.GuildCategory && !plannedChannelIds.has(channel.id)
   );
   const deleteCategories = guild.channels.cache.filter(channel =>
-    channel.type === ChannelType.GuildCategory && !desiredCategoryNames.has(channel.name)
+    channel.type === ChannelType.GuildCategory && !desiredCategoryIds.has(channel.id)
   );
 
   const botMember = guild.members.me ?? await guild.members.fetchMe();
@@ -227,9 +233,11 @@ export async function previewServerTemplate(guild, template) {
 
   return {
     createRoles: template.roles.filter(definition => !guild.roles.cache.some(role => role.name.toLowerCase() === definition.name.trim().toLowerCase())).map(role => role.name),
-    updateRoles: template.roles.filter(definition => guild.roles.cache.some(role => role.name.toLowerCase() === definition.name.trim().toLowerCase() && definition.color !== undefined && role.color !== definition.color)).map(role => role.name),
+    updateRoles: template.roles.filter(definition => guild.roles.cache.some(role => role.name.toLowerCase() === definition.name.trim().toLowerCase() &&
+      ((definition.color !== undefined && role.color !== definition.color) || role.name !== definition.name.trim()))).map(role => role.name),
     createCategories: template.categories.filter(group => !desiredCategories.get(group.name.trim())).map(group => group.name),
     createChannels,
+    moveChannels,
     deleteChannels: deleteChannels.map(channel => ({ id: channel.id, name: channel.name, type: channel.type })),
     deleteCategories: deleteCategories.map(channel => ({ id: channel.id, name: channel.name })),
     deleteRoles: deleteRoles.map(role => ({ id: role.id, name: role.name })),
@@ -257,9 +265,13 @@ export async function applyServerTemplate(guild, template) {
       if (!role) {
         role = await guild.roles.create({ name: definition.name.trim(), color: definition.color ?? 0xD7DCE4, reason: 'Published Meta Code server template' });
         created.push('role ' + role.name);
-      } else if (definition.color !== undefined && role.color !== definition.color) {
-        await role.edit({ color: definition.color, reason: 'Published Meta Code server template' });
-        updated.push('role ' + role.name);
+      } else if (role.name !== definition.name.trim() || (definition.color !== undefined && role.color !== definition.color)) {
+        await role.edit({
+          name: definition.name.trim(),
+          ...(definition.color !== undefined ? { color: definition.color } : {}),
+          reason: 'Published Meta Code server template'
+        });
+        updated.push('role ' + definition.name.trim());
       } else {
         skipped.push('role ' + role.name);
       }
@@ -273,10 +285,13 @@ export async function applyServerTemplate(guild, template) {
   const desiredCategoryIds = new Set();
   for (const group of template.categories) {
     try {
-      let category = guild.channels.cache.find(item => item.type === ChannelType.GuildCategory && item.name === group.name.trim());
+      let category = guild.channels.cache.find(item => item.type === ChannelType.GuildCategory && item.name.toLowerCase() === group.name.trim().toLowerCase());
       if (!category) {
         category = await guild.channels.create({ name: group.name.trim(), type: ChannelType.GuildCategory, reason: 'Published Meta Code server template' });
         created.push('category ' + category.name);
+      } else if (category.name !== group.name.trim()) {
+        await category.setName(group.name.trim(), 'Published Meta Code server template');
+        updated.push('renamed category ' + group.name.trim());
       }
 
       desiredCategoryIds.add(category.id);
