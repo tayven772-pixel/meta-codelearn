@@ -171,7 +171,8 @@ export function validateServerTemplate(input) {
   }
   if (template.roles.length > 40 || template.categories.length > 30 ||
       template.roles.some(role => !role || typeof role.name !== 'string' || !role.name.trim() || role.name.length > 100 ||
-        (role.color !== undefined && (!Number.isInteger(role.color) || role.color < 0 || role.color > 0xFFFFFF))) ||
+        (role.color !== undefined && (!Number.isInteger(role.color) || role.color < 0 || role.color > 0xFFFFFF)) ||
+        (role.hoist !== undefined && typeof role.hoist !== 'boolean')) ||
       template.categories.some(group => !group || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 100 ||
         !Array.isArray(group.channels) || group.channels.length > 50 ||
         group.channels.some(channel => !Array.isArray(channel) || !['text', 'voice'].includes(channel[0]) ||
@@ -318,13 +319,53 @@ export function validateServerTemplate(input) {
   if (control.autopartner?.channel && !hasTextChannel(control.autopartner.channel)) {
     throw new Error('botControl.autopartner.channel must point to a text channel listed in the JSON categories.');
   }
+  const botSettings = meta.botSettings ?? {};
+  if (botSettings.welcome?.channel && !hasTextChannel(botSettings.welcome.channel)) throw new Error('bot_settings.welcome.channel must reference a text channel in categories.');
+  if (botSettings.logging?.channel && !hasTextChannel(botSettings.logging.channel)) throw new Error('bot_settings.logging.channel must reference a text channel in categories.');
+  if (botSettings.tickets?.panel_channel && !hasTextChannel(botSettings.tickets.panel_channel)) throw new Error('bot_settings.tickets.panel_channel must reference a text channel in categories.');
+  if (botSettings.tickets?.transcript_channel && !hasTextChannel(botSettings.tickets.transcript_channel)) throw new Error('bot_settings.tickets.transcript_channel must reference a text channel in categories.');
+  if (botSettings.tickets?.category && !template.categories.some(group => normalizeChannelName(group.name) === normalizeChannelName(String(botSettings.tickets.category)))) throw new Error('bot_settings.tickets.category must reference a category in categories.');
   const roleNameSet = new Set(template.roles.map(role => role.name.trim().toLowerCase()));
+  for (const roleName of structuredPermissions.staff_category?.allowed_roles ?? []) {
+    if (!roleNameSet.has(String(roleName).trim().toLowerCase())) throw new Error('permissions.staff_category references unknown role: ' + roleName);
+  }
+  if (meta.botSettings?.autorole?.role && !roleNameSet.has(String(meta.botSettings.autorole.role).trim().toLowerCase())) {
+    throw new Error('bot_settings.autorole.role must reference a role in the roles array.');
+  }
   for (const group of template.categories) for (const roleName of group.allowed_roles ?? []) {
     if (!roleNameSet.has(roleName.trim().toLowerCase())) throw new Error('Category "' + group.name + '" references an unknown allowed role: ' + roleName);
   }
-  if (meta.botSettings?.welcome?.enabled !== undefined && typeof meta.botSettings.welcome.enabled !== 'boolean') throw new Error('bot_settings.welcome.enabled must be true or false.');
-  if (meta.botSettings?.autorole?.enabled !== undefined && typeof meta.botSettings.autorole.enabled !== 'boolean') throw new Error('bot_settings.autorole.enabled must be true or false.');
-  if (meta.botSettings?.logging?.enabled !== undefined && typeof meta.botSettings.logging.enabled !== 'boolean') throw new Error('bot_settings.logging.enabled must be true or false.');
+  const booleanSettings = [
+    ['welcome.enabled', meta.botSettings?.welcome?.enabled],
+    ['autorole.enabled', meta.botSettings?.autorole?.enabled],
+    ['logging.enabled', meta.botSettings?.logging?.enabled],
+    ['leveling.enabled', meta.botSettings?.leveling?.enabled],
+    ['leveling.level_up_messages', meta.botSettings?.leveling?.level_up_messages],
+    ['leveling.leaderboard', meta.botSettings?.leveling?.leaderboard],
+    ['giveaways.enabled', meta.botSettings?.giveaways?.enabled],
+    ['giveaways.allow_early_end', meta.botSettings?.giveaways?.allow_early_end],
+    ['self_roles.enabled', meta.botSettings?.selfRoles?.enabled],
+    ['self_roles.allow_multiple', meta.botSettings?.selfRoles?.allow_multiple],
+    ['partnerships.enabled', meta.botSettings?.partnership?.enabled],
+    ['partnerships.approval_required', meta.botSettings?.partnership?.approval_required],
+    ['automod.enabled', meta.botSettings?.automod?.enabled],
+    ['automod.anti_spam', meta.botSettings?.automod?.anti_spam],
+    ['automod.duplicate_message_filter', meta.botSettings?.automod?.duplicate_message_filter],
+    ['automod.invite_filter', meta.botSettings?.automod?.invite_filter]
+  ];
+  for (const [label, value] of booleanSettings) if (value !== undefined && typeof value !== 'boolean') {
+    throw new Error('bot_settings.' + label + ' must be true or false.');
+  }
+  if (meta.botSettings?.autorole?.role !== undefined &&
+      (typeof meta.botSettings.autorole.role !== 'string' || meta.botSettings.autorole.role.length > 100)) {
+    throw new Error('bot_settings.autorole.role must be a role name.');
+  }
+  if (meta.botSettings?.selfRoles?.selection_type !== undefined && meta.botSettings.selfRoles.selection_type !== 'dropdown') {
+    throw new Error('bot_settings.self_roles.selection_type currently supports "dropdown".');
+  }
+  if (meta.botSettings?.giveaways?.default_winners !== undefined && (!Number.isInteger(meta.botSettings.giveaways.default_winners) || meta.botSettings.giveaways.default_winners < 1 || meta.botSettings.giveaways.default_winners > 10)) {
+    throw new Error('bot_settings.giveaways.default_winners must be 1–10.');
+  }
   if (meta.botSettings?.leveling?.xp_per_message !== undefined && (!Number.isInteger(meta.botSettings.leveling.xp_per_message) || meta.botSettings.leveling.xp_per_message < 1 || meta.botSettings.leveling.xp_per_message > 1000)) throw new Error('bot_settings.leveling.xp_per_message must be 1–1000.');
   if (meta.botSettings?.leveling?.cooldown_seconds !== undefined && (!Number.isInteger(meta.botSettings.leveling.cooldown_seconds) || meta.botSettings.leveling.cooldown_seconds < 1 || meta.botSettings.leveling.cooldown_seconds > 3600)) throw new Error('bot_settings.leveling.cooldown_seconds must be 1–3600.');
   if (meta.botSettings?.partnership?.cooldown_hours !== undefined && (!Number.isInteger(meta.botSettings.partnership.cooldown_hours) || meta.botSettings.partnership.cooldown_hours < 6 || meta.botSettings.partnership.cooldown_hours > 168)) throw new Error('bot_settings.partnerships.cooldown_hours must be 6–168.');
