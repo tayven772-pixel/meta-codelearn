@@ -101,6 +101,8 @@ export function validateServerTemplate(template) {
           typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
     throw new Error('Invalid template structure or values.');
   }
+  const totalChannels = template.categories.reduce((total, group) => total + group.channels.length, 0);
+  if (totalChannels + template.categories.length > 450) throw new Error('The template exceeds the conservative 450-channel/category safety limit.');
   const roleNames = template.roles.map(role => role.name.trim().toLowerCase());
   if (roleNames.includes('@everyone')) throw new Error('The @everyone role is managed by Discord and cannot be included in roles.');
   if (new Set(roleNames).size !== roleNames.length) throw new Error('Role names must be unique.');
@@ -334,9 +336,11 @@ export async function applyServerTemplate(guild, template, options = {}) {
   await guild.roles.fetch();
   for (const definition of template.categories) {
     let category = guild.channels.cache.find(item => item.type === ChannelType.GuildCategory && item.name.toLowerCase() === definition.name.trim().toLowerCase());
+    const staffRoleNames = new Set(['Founder','Administrator','Moderator','Support Team']);
+    if (template.settings?.applications?.staffRole) staffRoleNames.add(template.settings.applications.staffRole);
     const overwrites = definition.private ? [
       { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
-      ...['Founder','Administrator','Moderator','Support Team'].map(name => guild.roles.cache.find(role => role.name === name)).filter(Boolean)
+      ...[...staffRoleNames].map(name => guild.roles.cache.find(role => role.name.toLowerCase() === name.toLowerCase())).filter(Boolean)
         .map(role => ({ id: role.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }))
     ] : [];
     if (!category) {
