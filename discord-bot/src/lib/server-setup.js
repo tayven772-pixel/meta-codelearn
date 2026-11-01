@@ -218,7 +218,19 @@ export async function previewServerTemplate(guild, template) {
   );
 
   const botMember = guild.members.me ?? await guild.members.fetchMe();
+  if (!botMember.permissions.has(PermissionFlagsBits.ManageChannels) ||
+      !botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
+    throw new Error('Meta needs Manage Channels and Manage Roles permissions before this template can be published.');
+  }
   const botHighest = botMember.roles.highest.position;
+  const blockedDesiredRoles = template.roles.filter(definition => {
+    const role = guild.roles.cache.find(item => item.name.toLowerCase() === definition.name.trim().toLowerCase());
+    return role && (role.managed || role.position >= botHighest) &&
+      (role.name !== definition.name.trim() || (definition.color !== undefined && role.color !== definition.color));
+  });
+  if (blockedDesiredRoles.length) {
+    throw new Error('Meta cannot update these template roles because they are managed or above its highest role: ' + blockedDesiredRoles.map(role => role.name).join(', '));
+  }
   const deleteRoles = guild.roles.cache.filter(role =>
     role.id !== guild.id &&
     !role.managed &&
