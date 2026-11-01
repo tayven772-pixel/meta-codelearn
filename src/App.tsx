@@ -3806,7 +3806,7 @@ function BotControlPage() {
         throw new Error('Use roles and categories arrays. Each channel must be ["text" or "voice", "channel-name"]. Limits: 40 roles, 30 categories, 50 channels each.');
       }
     } catch (error) { setStatus('Setup template JSON is invalid: ' + (error instanceof Error ? error.message : 'check the JSON')); return; }
-    const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_template','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help','ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id']);
+    const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_template','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help','ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','community_welcome_channel_id','community_welcome_message','community_autorole_id','community_log_channel_id','community_xp_enabled']);
     const payload = Object.fromEntries(Object.entries(settings).filter(([key]) => editableKeys.has(key) || key.startsWith('bot_command_enabled:')));
     payload.server_setup_template = template;
     setBusy(true);
@@ -3998,6 +3998,33 @@ function BotControlPage() {
                 <small>Use 1–5 questions. Each question becomes a required field shown before the bot creates the ticket channel. Each question must be 45 characters or fewer.</small>
               </label>
               <p>Important: the ticket category and staff role used for channel permissions still need to be configured with <code>/ticket setup</code>. This editor controls the categories members choose on the panel. The channel category, staff role, and log channel can be set here or with `/ticket setup`.</p>
+            </section>
+            <section className="admin-publishing-guide">
+              <h2>Community features</h2>
+              <p>Configure welcome messages, automatic roles, event logging, and activity XP for the Meta home server. Use Discord Developer Mode to copy channel and role IDs. The bot's role must be above any role it assigns.</p>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Welcome channel ID</strong>
+                <input value={settings.community_welcome_channel_id || ''} onChange={event => setValue('community_welcome_channel_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Discord text channel ID" style={fieldStyle} inputMode="numeric" />
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Welcome message</strong>
+                <textarea value={settings.community_welcome_message || ''} onChange={event => setValue('community_welcome_message', event.target.value)} maxLength={1500} rows={4} placeholder="Welcome {user} to {server}! You are member #{membercount}." style={fieldStyle} />
+                <small>Placeholders: {'{user}'}, {'{server}'}, {'{membercount}'}. Leave blank to use the built-in welcome message.</small>
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Automatic join role ID</strong>
+                <input value={settings.community_autorole_id || ''} onChange={event => setValue('community_autorole_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Discord role ID (optional)" style={fieldStyle} inputMode="numeric" />
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Event log channel ID</strong>
+                <input value={settings.community_log_channel_id || ''} onChange={event => setValue('community_log_channel_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Discord text channel ID" style={fieldStyle} inputMode="numeric" />
+                <small>Logs member joins/leaves, deleted messages, and channel creation/deletion.</small>
+              </label>
+              <label style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 16 }}>
+                <input type="checkbox" checked={settings.community_xp_enabled !== 'false'} onChange={event => setValue('community_xp_enabled', event.target.checked ? 'true' : 'false')} />
+                Enable message activity XP and leveling
+              </label>
+              <p>Members can use <code>/level</code> and <code>/leaderboard</code>. XP is awarded at most once per minute per member.</p>
             </section>
             <section className="admin-publishing-guide">
               <h2>Automatic partnerships</h2>

@@ -319,6 +319,7 @@ export async function handleCommunityEvents(client) {
   });
   client.on('messageCreate', message => {
     if (!message.guild || message.author.bot) return;
+    if (getSetting(message.guild.id, 'community_xp_enabled') === 'false') return;
     const now = Date.now();
     const row = db.prepare('SELECT xp, last_message_at FROM community_xp WHERE guild_id = ? AND user_id = ?').get(message.guild.id, message.author.id);
     if (row && now - row.last_message_at < 60_000) return;

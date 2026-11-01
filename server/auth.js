@@ -296,6 +296,7 @@ const botCommandNames = [
   'serverinfo','userinfo','poll','suggest','coinflip','roll','choose','8ball','announce',
   'setup-applications','ticket','ticket-panel','setup-server','warn','warnings','timeout','untimeout','purge',
   'autopartner-setup','partner-add','partner-remove','partner-list','partner-settings','partner-template','partner-post',
+  'welcome-config','autorole','logging','level','leaderboard','giveaway','giveaway-end','role-menu','serverstats','config-export',
   'thread','topic','randomcolor','remindme'
 ];
 function requireBotOwner(req, res) {
@@ -402,6 +403,7 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
   const allowed = new Set([
     'autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_template',
     'server_setup_template','bot_welcome_message','bot_rules_text','bot_status_text',
+    'community_welcome_channel_id','community_welcome_message','community_autorole_id','community_log_channel_id','community_xp_enabled',
     'ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id',
     ...botCommandNames.map(name => `bot_command_enabled:${name}`),
     ...['meta','lessons','ping','help'].map(name => `bot_response:${name}`)
@@ -415,10 +417,12 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
     for (const [key, rawValue] of Object.entries(values)) {
       if (!allowed.has(key)) throw new Error(`Unsupported setting: ${key}`);
       const value = String(rawValue ?? '');
-      if (value.length > (key === 'server_setup_template' ? 30000 : key.endsWith('template') ? 1800 : ['bot_welcome_message','bot_rules_text'].includes(key) ? 4096 : 5000)) {
+      if (value.length > (key === 'server_setup_template' ? 30000 : key.endsWith('template') ? 1800 : ['bot_welcome_message','bot_rules_text','community_welcome_message'].includes(key) ? 4096 : 5000)) {
         throw new Error(`Setting ${key} is too long.`);
       }
       if (['ticket_category_id','ticket_staff_role_id','ticket_log_channel_id'].includes(key) && value && !/^\d{17,20}$/.test(value)) throw new Error(key + ' must be a valid Discord ID (17–20 digits).');
+      if (['community_welcome_channel_id','community_autorole_id','community_log_channel_id'].includes(key) && value && !/^\d{17,20}$/.test(value)) throw new Error(key + ' must be a valid Discord ID (17–20 digits).');
+      if (key === 'community_xp_enabled' && !['true','false'].includes(value)) throw new Error('Community XP enabled must be true or false.');
       if (key === 'ticket_panel_style' && !['dropdown','buttons'].includes(value)) throw new Error('Ticket panel style must be dropdown or buttons.');
       if (key === 'ticket_categories' && value) {
         const categories = JSON.parse(value);
