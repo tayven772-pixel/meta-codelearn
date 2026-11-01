@@ -21,7 +21,7 @@ const validTemplate = () => ({
   settings: {
     welcome: { enabled: true, channel: 'welcome', message: 'Welcome {user}', showAvatar: true },
     autopartner: { enabled: false, channel: 'partner-announcements', intervalHours: 24, minimumMembers: 100 },
-    applications: { enabled: true, staffChannel: 'staff-applications', panelTitle: 'Meta Code | Staff Applications' },
+    applications: { enabled: true, staffChannel: 'staff-applications', staffRole: 'Moderator', panelTitle: 'Meta Code | Staff Applications' },
     tickets: { category: 'STAFF HQ', panelTitle: 'Support' }
   }
 });
@@ -69,6 +69,18 @@ test('rejects a malformed role color', () => {
   const template = validTemplate();
   template.roles[0].color = -1;
   assert.throws(() => validateServerTemplate(template), /Invalid template structure/);
+});
+
+test('rejects an application reviewer role that is not defined in roles', () => {
+  const template = validTemplate();
+  template.settings.applications.staffRole = 'Unknown Role';
+  assert.throws(() => validateServerTemplate(template), /staffRole/);
+});
+
+test('rejects the Discord-managed everyone role', () => {
+  const template = validTemplate();
+  template.roles.push({ name: '@everyone', color: 0xFFFFFF });
+  assert.throws(() => validateServerTemplate(template), /@everyone/);
 });
 
 test('rejects an unsafe autopartner threshold', () => {
