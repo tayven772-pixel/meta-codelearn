@@ -260,6 +260,10 @@ export async function handleTicketButton(interaction, db) {
   }
 
   const guildId = guild.id;
+  if (getSetting(guildId, 'ticket_enabled') === 'false') {
+    await replyPrivate(interaction, 'Tickets are disabled in this server.');
+    return true;
+  }
   const categories = ticketCategories(guildId);
   let selectedCategory = 'General Support';
   let categoryIndex = 0;
