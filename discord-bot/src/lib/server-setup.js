@@ -165,3 +165,7 @@ export async function handleServerSetup(interaction) {
 }
 
 
+
+export async function handleServerSetupButton(interaction) {
+  return interaction.reply({ content: 'This setup confirmation is no longer used. Publish a template from the owner dashboard or run /setup-server.', ephemeral: true });
+}
