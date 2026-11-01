@@ -194,6 +194,8 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
   const desiredRoles = new Set(template.roles.map(role => role.name.trim().toLowerCase()));
   const desiredCategories = new Set(template.categories.map(group => group.name.trim().toLowerCase()));
   const desiredChannels = desiredChannelDefinitions(template);
+  const usedRoleIds = new Set();
+  const usedCategoryIds = new Set();
   const usedChannelIds = new Set();
   const createRoles = [], updateRoles = [], deleteRoles = [], protectedRoles = [];
   const createCategories = [], updateCategories = [], deleteCategories = [];
@@ -202,12 +204,15 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
   for (const definition of template.roles) {
     const existing = guild.roles.cache.find(role => role.name.toLowerCase() === definition.name.trim().toLowerCase());
     if (!existing) createRoles.push({ name: definition.name.trim(), color: definition.color ?? 0xD7DCE4 });
-    else if (definition.color !== undefined && existing.color !== definition.color) updateRoles.push({ id: existing.id, name: existing.name, color: definition.color });
+    else {
+      usedRoleIds.add(existing.id);
+      if (definition.color !== undefined && existing.color !== definition.color) updateRoles.push({ id: existing.id, name: existing.name, color: definition.color });
+    }
   }
 
   const botHighest = botMember.roles.highest.position;
   for (const role of guild.roles.cache.values()) {
-    if (role.id === guild.id || desiredRoles.has(role.name.toLowerCase())) continue;
+    if (role.id === guild.id || usedRoleIds.has(role.id)) continue;
     const protectedRole = role.managed || role.permissions.has(PermissionFlagsBits.Administrator) ||
       role.position >= botHighest || botMember.roles.cache.has(role.id);
     if (protectedRole) protectedRoles.push({ id: role.id, name: role.name, reason: role.managed ? 'managed by Discord/integration' : role.permissions.has(PermissionFlagsBits.Administrator) ? 'administrator permission' : 'above or equal to Meta bot role' });
@@ -215,9 +220,12 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
   }
 
   for (const group of template.categories) {
-    const existing = guild.channels.cache.find(channel => channel.type === ChannelType.GuildCategory && channel.name.toLowerCase() === group.name.trim().toLowerCase());
+    const existing = guild.channels.cache.find(channel => channel.type === ChannelType.GuildCategory && channel.name.toLowerCase() === group.name.trim().toLowerCase() && !usedCategoryIds.has(channel.id));
     if (!existing) createCategories.push({ name: group.name.trim(), private: Boolean(group.private) });
-    else if (group.private) updateCategories.push({ id: existing.id, name: existing.name, private: true });
+    else {
+      usedCategoryIds.add(existing.id);
+      if (group.private) updateCategories.push({ id: existing.id, name: existing.name, private: true });
+    }
   }
 
   for (const definition of desiredChannels) {
@@ -245,7 +253,7 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
   }
 
   for (const category of guild.channels.cache.values()) {
-    if (category.type !== ChannelType.GuildCategory || desiredCategories.has(category.name.toLowerCase())) continue;
+    if (category.type !== ChannelType.GuildCategory || usedCategoryIds.has(category.id)) continue;
     if (!category.deletable) protectedChannels.push({ id: category.id, name: category.name, reason: 'category not deletable by Meta bot' });
     else if (deleteUnlisted) deleteCategories.push({ id: category.id, name: category.name });
   }
