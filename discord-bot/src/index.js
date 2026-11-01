@@ -179,6 +179,7 @@ client.on(Events.InteractionCreate, async interaction => {
       { name: 'Moderation', value: '`/warn` and `/warnings` — record and review warnings\n`/timeout` and `/untimeout` — manage member timeouts\n`/purge` — delete up to 100 recent messages (staff permissions required)', inline: false },
       { name: 'Administrator', value: '`/announce` — post an official announcement (administrators only)\n`/embed` — post a formatted announcement\n`/lock`, `/unlock`, `/slowmode` — manage a text channel', inline: false },
       { name: 'Partnerships', value: '/autopartner-setup, /partner-add, /partner-remove, /partner-list, /partner-settings, /partner-template, /partner-post', inline: false },
+      { name: 'Community expansion', value: '`/welcome-config` — welcome messages\n`/autorole` — automatic join role\n`/logging` — event log channel\n`/level` and `/leaderboard` — activity XP\n`/giveaway` and `/giveaway-end` — giveaways\n`/role-menu` — self-service roles\n`/serverstats` — server analytics\n`/config-export` — export settings', inline: false },
       { name: 'Staff tools', value: '`/ticket`, `/ticket-panel`, `/setup-server`, `/setup-applications` — availability depends on your server permissions and bot setup.', inline: false }
      )
      .setFooter({ text: 'Meta Code • Learn the idea, then the code' });
