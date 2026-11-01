@@ -4,7 +4,7 @@ import {
   PermissionFlagsBits,
   SlashCommandBuilder,
 } from 'discord.js';
-import { db } from './database.js';
+import { db, getSetting } from './database.js';
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS moderation_warnings (
@@ -56,6 +56,29 @@ function hasPermission(interaction, permission) {
   return interaction.inGuild() && interaction.memberPermissions?.has(permission);
 }
 
+async function sendModerationLog(interaction, title, description) {
+  const guildId = interaction.guildId;
+  if (getSetting(guildId, 'community_log_enabled') === 'false') return;
+  const rawEvents = getSetting(guildId, 'community_log_events');
+  if (rawEvents) {
+    try {
+      const events = JSON.parse(rawEvents);
+      if (Array.isArray(events) && events.length && !events.includes('moderation_action')) return;
+    } catch { /* keep legacy all-events logging if settings are invalid */ }
+  }
+  const channelId = getSetting(guildId, 'community_log_channel_id');
+  if (!channelId) return;
+  const channel = await interaction.guild.channels.fetch(channelId).catch(() => null);
+  if (!channel?.isTextBased() || typeof channel.send !== 'function') return;
+  const rawColor = Number(getSetting(guildId, 'bot_embed_color') || 0x5865F2);
+  const color = Number.isInteger(rawColor) && rawColor >= 0 && rawColor <= 0xFFFFFF ? rawColor : 0x5865F2;
+  const footer = getSetting(guildId, 'bot_embed_footer') || 'Meta Code Community';
+  await channel.send({
+    embeds: [new EmbedBuilder().setColor(color).setTitle(title).setDescription(description.slice(0, 3500)).setFooter({ text: footer }).setTimestamp()],
+    allowedMentions: { parse: [] }
+  }).catch(error => console.error('Moderation log failed:', error.message));
+}
+
 async function fetchTarget(interaction) {
   const user = interaction.options.getUser('user', true);
   if (user.id === interaction.user.id) return { error: 'You cannot use this action on yourself.' };
@@ -103,6 +126,7 @@ export async function handleModerationCommand(interaction) {
     try {
       const deleted = await interaction.channel.bulkDelete(amount, true);
       await interaction.editReply(`Deleted **${deleted.size}** recent messages. Discord does not allow bulk deletion of messages older than 14 days.`);
+      await sendModerationLog(interaction, 'Messages purged', 'Moderator: <@' + interaction.user.id + '>\nChannel: <#' + interaction.channelId + '>\nDeleted: ' + deleted.size + ' message(s)');
     } catch (error) {
       console.error('Purge failed:', error.message);
       await interaction.editReply('I could not delete those messages. Check that I have Manage Messages permission in this channel.');
@@ -150,6 +174,7 @@ export async function handleModerationCommand(interaction) {
       .setFooter({ text: `Moderator: ${interaction.user.username} • Meta Code` })
       .setTimestamp();
     await interaction.reply({ embeds: [embed], allowedMentions: { parse: [] } });
+    await sendModerationLog(interaction, 'Member warned', 'Moderator: <@' + interaction.user.id + '>\nMember: <@' + target.user.id + '>\nReason: ' + (reason || 'No reason provided'));
     return true;
   }
 
@@ -165,6 +190,7 @@ export async function handleModerationCommand(interaction) {
       content: `⏳ Timed out <@${target.user.id}> for **${minutes} minute(s)**.\nReason: ${reason}`,
       allowedMentions: { parse: [] },
     });
+    await sendModerationLog(interaction, 'Member timed out', 'Moderator: <@' + interaction.user.id + '>\nMember: <@' + target.user.id + '>\nDuration: ' + minutes + ' minute(s)\nReason: ' + reason);
     return true;
   }
 
@@ -179,6 +205,7 @@ export async function handleModerationCommand(interaction) {
     }
     await target.member.timeout(null, reason);
     await interaction.reply({ content: `✅ Removed the timeout for <@${target.user.id}>.\nReason: ${reason}`, allowedMentions: { parse: [] } });
+    await sendModerationLog(interaction, 'Member timeout removed', 'Moderator: <@' + interaction.user.id + '>\nMember: <@' + target.user.id + '>\nReason: ' + reason);
     return true;
   }
 
