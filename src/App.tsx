@@ -3738,7 +3738,7 @@ function BotControlPage() {
     settings: {
       welcome: { enabled: true, channel: 'welcome', message: 'Welcome {user} to {server}! You are member #{membercount}.', showAvatar: true },
       autopartner: { enabled: false, channel: 'partner-announcements', intervalHours: 24, minimumMembers: 100 },
-      applications: { enabled: true, staffChannel: 'staff-applications', panelTitle: 'Meta Code | Staff Applications', panelDescription: 'Help make Meta Code a welcoming place to learn and build. Apply privately using the button below.' }
+      applications: { enabled: true, staffChannel: 'staff-applications', staffRole: 'Support Team', panelTitle: 'Meta Code | Staff Applications', panelDescription: 'Help make Meta Code a welcoming place to learn and build. Apply privately using the button below.' }
     }
   }, null, 2);
   const templatePanel = useMemo(() => {
@@ -3912,7 +3912,7 @@ function BotControlPage() {
         throw new Error('Use roles and categories arrays. Each channel must be ["text" or "voice", "channel-name"]. Limits: 40 roles, 30 categories, 50 channels each.');
       }
     } catch (error) { setStatus('Setup template JSON is invalid: ' + (error instanceof Error ? error.message : 'check the JSON')); return; }
-    const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_min_members','autopartner_template','staff_applications_enabled','staff_applications_channel_id','staff_applications_title','staff_applications_description','community_welcome_avatar','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help','ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','community_welcome_channel_id','community_welcome_message','community_autorole_id','community_log_channel_id','community_xp_enabled']);
+    const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_min_members','autopartner_template','staff_applications_enabled','staff_applications_channel_id','staff_applications_title','staff_applications_description','staff_applications_role_id','community_welcome_avatar','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help','ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','community_welcome_channel_id','community_welcome_message','community_autorole_id','community_log_channel_id','community_xp_enabled']);
     const payload = Object.fromEntries(Object.entries(settings).filter(([key]) => editableKeys.has(key) || key.startsWith('bot_command_enabled:')));
     payload.server_setup_template = template;
     setBusy(true);
@@ -4132,6 +4132,11 @@ function BotControlPage() {
               <label style={{ display: 'block', marginTop: 12 }}>
                 <strong>Private staff review channel ID</strong>
                 <input value={settings.staff_applications_channel_id || ''} onChange={event => setValue('staff_applications_channel_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Discord text channel ID" style={fieldStyle} inputMode="numeric" />
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Staff reviewer role ID (optional)</strong>
+                <input value={settings.staff_applications_role_id || ''} onChange={event => setValue('staff_applications_role_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Discord staff role ID" style={fieldStyle} inputMode="numeric" />
+                <small>Members with this role can accept or reject applications. Server managers and administrators can also review.</small>
               </label>
               <label style={{ display: 'block', marginTop: 12 }}>
                 <strong>Application panel title</strong>
