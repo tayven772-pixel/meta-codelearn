@@ -282,6 +282,12 @@ function getBotDb() {
       error TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, sent_at TEXT
     );
     CREATE INDEX IF NOT EXISTS bot_message_outbox_pending ON bot_message_outbox(status, id);
+    CREATE TABLE IF NOT EXISTS bot_setup_outbox (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT NOT NULL, template_json TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','applied','failed')),
+      result_json TEXT, error TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, completed_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS bot_setup_outbox_pending ON bot_setup_outbox(status, id);
     CREATE TABLE IF NOT EXISTS autopartner_partners (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       guild_id TEXT NOT NULL,
@@ -470,6 +476,31 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
     return res.status(400).json({ error: error.message || 'Could not save bot settings.' });
   }
 });
+app.post('/api/auth/admin/bot-control/publish-template', async (req, res) => {
+  if (!requireBotOwner(req, res)) return;
+  const guildId = String(req.body?.guildId || getHomeGuildId()).trim();
+  const template = req.body?.template;
+  if (!validGuildId(guildId)) return res.status(400).json({ error: 'The Meta home server ID is invalid.' });
+  if (!(await requireOwnedGuild(req, res, guildId))) return;
+  if (!template || !Array.isArray(template.roles) || !Array.isArray(template.categories) ||
+      template.roles.length > 40 || template.categories.length > 30 ||
+      template.roles.some(role => !role || typeof role.name !== 'string' || !role.name.trim() || role.name.length > 100 ||
+        (role.color !== undefined && (!Number.isInteger(role.color) || role.color < 0 || role.color > 0xFFFFFF))) ||
+      template.categories.some(group => !group || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 100 ||
+        !Array.isArray(group.channels) || group.channels.length > 50 ||
+        group.channels.some(channel => !Array.isArray(channel) || !['text','voice'].includes(channel[0]) ||
+          typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
+    return res.status(400).json({ error: 'Invalid setup JSON. Check roles, categories, and ["text" or "voice", "channel-name"] channel entries.' });
+  }
+  const templateJson = JSON.stringify(template);
+  if (templateJson.length > 30000) return res.status(413).json({ error: 'Setup JSON is too large (30 KB maximum).' });
+  try {
+    getBotDb().prepare("INSERT INTO settings (guild_id, setting_key, setting_value, updated_at) VALUES ('global','server_setup_template',?,CURRENT_TIMESTAMP) ON CONFLICT(guild_id,setting_key) DO UPDATE SET setting_value=excluded.setting_value, updated_at=CURRENT_TIMESTAMP").run(templateJson);
+    const result = getBotDb().prepare("INSERT INTO bot_setup_outbox (guild_id, template_json) VALUES (?, ?)").run(guildId, templateJson);
+    return res.status(202).json({ queued: true, jobId: Number(result.lastInsertRowid), message: 'Template published. Meta is applying it to Discord now.' });
+  } catch (error) { return res.status(500).json({ error: error.message || 'Could not publish setup template.' }); }
+});
+
 app.post('/api/auth/admin/bot-control/messages', async (req, res) => {
   if (!requireBotOwner(req, res)) return;
   const guildId = String(req.body?.guildId || getHomeGuildId()).trim();
