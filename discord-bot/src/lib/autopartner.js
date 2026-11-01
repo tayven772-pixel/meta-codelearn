@@ -371,12 +371,19 @@ async function verifyPendingSubmissions(client, guildId) {
       if (!Number.isFinite(count) || count < 1) continue;
       db.prepare('UPDATE autopartner_submissions SET member_count = ? WHERE id = ?').run(count, submission.id);
       if (count < minimum) continue;
-      db.prepare(`
-        INSERT INTO autopartner_partners (guild_id, name, invite_url, description, created_by)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(guild_id, name) DO UPDATE SET invite_url=excluded.invite_url, description=excluded.description
-      `).run(guildId, submission.name, submission.invite_url, submission.description, submission.user_id);
-      db.prepare("UPDATE autopartner_submissions SET status = 'eligible' WHERE id = ?").run(submission.id);
+      const approvalRequired = getSetting(guildId, 'autopartner_approval_required') === 'true';
+      db.prepare("UPDATE autopartner_submissions SET status = 'eligible', approval_status = ? WHERE id = ?")
+        .run(approvalRequired ? 'pending' : 'approved', submission.id);
+      if (approvalRequired) {
+        const refreshed = db.prepare('SELECT * FROM autopartner_submissions WHERE id = ?').get(submission.id);
+        await requestPartnerApproval(client, guildId, refreshed);
+      } else {
+        db.prepare(`
+          INSERT INTO autopartner_partners (guild_id, name, invite_url, description, created_by)
+          VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT(guild_id, name) DO UPDATE SET invite_url=excluded.invite_url, description=excluded.description
+        `).run(guildId, submission.name, submission.invite_url, submission.description, submission.user_id);
+      }
       console.log('Autopartner submission passed member-count check:', submission.name, count);
     } catch (error) {
       // A temporary API/network error leaves the submission pending for the next check.
@@ -400,7 +407,7 @@ export async function runAutoPartnerScheduler(client) {
   const last = Number(getSetting(guildId, 'autopartner_last_posted_at') || 0);
   if (Date.now() - last < hours * 3600000) return;
 
-  const eligible = db.prepare("SELECT * FROM autopartner_submissions WHERE guild_id = ? AND status = 'eligible' ORDER BY id LIMIT 1").get(guildId);
+  const eligible = db.prepare("SELECT * FROM autopartner_submissions WHERE guild_id = ? AND status = 'eligible' AND approval_status = 'approved' ORDER BY id LIMIT 1").get(guildId);
   if (eligible) {
     const partner = { id: null, name: eligible.name, invite_url: eligible.invite_url, description: eligible.description };
     try {
