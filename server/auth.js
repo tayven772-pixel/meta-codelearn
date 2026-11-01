@@ -531,21 +531,28 @@ app.post('/api/auth/admin/bot-control/apply-template', (req, res) => {
   if (!validGuildId(guildId)) return res.status(503).json({ error: 'The bot home server is not configured.' });
   try {
     const db = getBotDb();
-    const preview = db.prepare("SELECT * FROM bot_setup_outbox WHERE id = ? AND guild_id = ? AND action = 'preview' AND status = 'applied'").get(previewJobId, guildId);
-    if (!preview) return res.status(409).json({ error: 'The preview is not ready or has already been used. Publish the JSON again.' });
-    const age = Date.now() - new Date(preview.created_at.replace(' ', 'T') + 'Z').getTime();
-    if (!Number.isFinite(age) || age > 10 * 60 * 1000) return res.status(410).json({ error: 'This preview expired. Publish the JSON again to get a fresh deletion list.' });
-    let result;
-    try { result = JSON.parse(preview.result_json || 'null'); } catch { result = null; }
-    if (!result || result.mode !== 'preview' || typeof result.fingerprint !== 'string') {
-      return res.status(409).json({ error: 'The preview result is invalid. Publish the JSON again.' });
-    }
-    const queued = db.prepare("INSERT INTO bot_setup_outbox (guild_id, template_json, action, confirmation_hash) VALUES (?, ?, 'apply', ?)").run(guildId, preview.template_json, result.fingerprint);
-    db.prepare("UPDATE bot_setup_outbox SET error = 'Confirmed by owner; apply job ' || ? WHERE id = ?").run(String(queued.lastInsertRowid), previewJobId);
-    return res.status(202).json({ queued: true, jobId: Number(queued.lastInsertRowid), message: 'Confirmed. Meta is applying the reviewed setup.' });
+    const queueApply = db.transaction(() => {
+      const preview = db.prepare("SELECT * FROM bot_setup_outbox WHERE id = ? AND guild_id = ? AND action = 'preview' AND status = 'applied' AND error IS NULL").get(previewJobId, guildId);
+      if (!preview) throw new Error('This preview is not ready or has already been confirmed. Publish the JSON again.');
+      const age = Date.now() - new Date(preview.created_at.replace(' ', 'T') + 'Z').getTime();
+      if (!Number.isFinite(age) || age > 10 * 60 * 1000) throw new Error('This preview expired. Publish the JSON again to get a fresh deletion list.');
+      let result;
+      try { result = JSON.parse(preview.result_json || 'null'); } catch { result = null; }
+      if (!result || result.mode !== 'preview' || typeof result.fingerprint !== 'string') {
+        throw new Error('The preview result is invalid. Publish the JSON again.');
+      }
+      const marked = db.prepare("UPDATE bot_setup_outbox SET error = 'confirmed' WHERE id = ? AND error IS NULL").run(previewJobId);
+      if (!marked.changes) throw new Error('This preview was already confirmed.');
+      const queued = db.prepare("INSERT INTO bot_setup_outbox (guild_id, template_json, action, confirmation_hash) VALUES (?, ?, 'apply', ?)")
+        .run(guildId, preview.template_json, result.fingerprint);
+      return Number(queued.lastInsertRowid);
+    });
+    const jobId = queueApply();
+    return res.status(202).json({ queued: true, jobId, message: 'Confirmed. Meta is applying the reviewed setup.' });
   } catch (error) {
-    console.error('Setup confirmation failed:', error?.message || 'unknown error');
-    return res.status(500).json({ error: 'Could not queue the confirmed setup.' });
+    const message = error?.message || 'Could not queue the confirmed setup.';
+    const status = /preview|confirmed|expired|already/.test(message) ? 409 : 500;
+    return res.status(status).json({ error: message });
   }
 });
 
