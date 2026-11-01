@@ -512,7 +512,9 @@ export async function previewServerTemplate(guild, input) {
   const blockedDesiredRoles = template.roles.filter(definition => {
     const role = guild.roles.cache.find(item => item.name.toLowerCase() === definition.name.trim().toLowerCase());
     return role && (role.managed || role.position >= botHighest) &&
-      (role.name !== definition.name.trim() || (definition.color !== undefined && role.color !== definition.color));
+      (role.name !== definition.name.trim() || (definition.color !== undefined && role.color !== definition.color) ||
+       (definition.hoist !== undefined && role.hoist !== (definition.hoist === true)) ||
+       (definition.permissions !== undefined && role.permissions.bitfield !== definition.permissions));
   });
   if (blockedDesiredRoles.length) {
     throw new Error('Meta cannot update these template roles because they are managed or above its highest role: ' + blockedDesiredRoles.map(role => role.name).join(', '));
@@ -532,7 +534,9 @@ export async function previewServerTemplate(guild, input) {
   return {
     createRoles: template.roles.filter(definition => !guild.roles.cache.some(role => role.name.toLowerCase() === definition.name.trim().toLowerCase())).map(role => role.name),
     updateRoles: template.roles.filter(definition => guild.roles.cache.some(role => role.name.toLowerCase() === definition.name.trim().toLowerCase() &&
-      ((definition.color !== undefined && role.color !== definition.color) || role.name !== definition.name.trim()))).map(role => role.name),
+      ((definition.color !== undefined && role.color !== definition.color) || role.name !== definition.name.trim() ||
+       (definition.hoist !== undefined && role.hoist !== (definition.hoist === true)) ||
+       (definition.permissions !== undefined && role.permissions.bitfield !== definition.permissions)))).map(role => role.name),
     createCategories: template.categories.filter(group => !desiredCategories.get(group.name.trim())).map(group => group.name),
     updateCategories,
     syncCategoryPermissions: template.categories.length,
@@ -580,7 +584,8 @@ export async function applyServerTemplate(guild, input) {
         });
         created.push('role ' + role.name);
       } else if (role.name !== definition.name.trim() || (definition.color !== undefined && role.color !== definition.color) ||
-          (definition.hoist !== undefined && role.hoist !== (definition.hoist === true)) || definition.permissions !== undefined) {
+          (definition.hoist !== undefined && role.hoist !== (definition.hoist === true)) ||
+          (definition.permissions !== undefined && role.permissions.bitfield !== definition.permissions)) {
         await role.edit({
           name: definition.name.trim(),
           ...(definition.color !== undefined ? { color: definition.color } : {}),
@@ -666,7 +671,7 @@ export async function applyServerTemplate(guild, input) {
             SendMessages: false,
             AddReactions: false,
             SendMessagesInThreads: false
-          }, { reason: 'Read-only channel from Meta Code template' });
+          }, 'Read-only channel from Meta Code template');
           updated.push('read-only permissions ' + name);
         }
         desiredChannelIds.add(channel.id);
