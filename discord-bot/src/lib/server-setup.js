@@ -84,11 +84,11 @@ const layout = [
   }
 ];
 
-function normalizeChannelName(rawName) {
+export function normalizeChannelName(rawName) {
   return String(rawName).trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 100) || 'new-channel';
 }
 
-function validateServerTemplate(template) {
+export function validateServerTemplate(template) {
   if (!template || !Array.isArray(template.roles) || !Array.isArray(template.categories)) {
     throw new Error('Template must contain roles and categories arrays.');
   }
@@ -233,7 +233,7 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
     const existing = guild.channels.cache.find(channel => channel.type === definition.type && channel.name.toLowerCase() === definition.name && !usedChannelIds.has(channel.id));
     if (existing) {
       usedChannelIds.add(existing.id);
-      if (category && existing.parentId !== category.id) moveChannels.push({ id: existing.id, name: existing.name, fromCategory: existing.parent?.name || 'No category', toCategory: definition.categoryName });
+      if (!category || existing.parentId !== category.id) moveChannels.push({ id: existing.id, name: existing.name, fromCategory: existing.parent?.name || 'No category', toCategory: definition.categoryName });
     } else {
       createChannels.push({ name: definition.name, type: definition.type, categoryName: definition.categoryName });
     }
