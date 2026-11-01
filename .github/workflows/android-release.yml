@@ -2,17 +2,6 @@ name: Build Android Release
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'public/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'capacitor.config.ts'
-      - 'vite.config.ts'
-      - '.github/workflows/android-release.yml'
-
 permissions:
   contents: read
 
