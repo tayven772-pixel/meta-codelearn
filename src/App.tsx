@@ -3754,7 +3754,7 @@ function BotControlPage() {
       return { title: 'Meta Code bot control', description: 'Owner dashboard configured from this JSON template.', sections: ['setup','commands','responses','tickets','messages','community','autopartner','applications'] };
     }
   }, [templateText]);
-  const panelSectionEnabled = (name: string) => templatePanel.sections.includes(name);
+  const panelSectionEnabled = (name: string) => name === 'setup' || templatePanel.sections.includes(name);
   useEffect(() => {
     let active = true;
     setStatus('Checking Meta owner account…');
@@ -3887,12 +3887,13 @@ function BotControlPage() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Could not confirm setup.');
+      setSetupPreview(null);
       const job = await waitForSetupJob(data.jobId);
       const result = job.result || {};
       if (result.mode !== 'applied') throw new Error('The bot did not confirm that Discord changes were applied.');
       setSetupPreview(null);
-      setStatus('Discord sync completed. Created ' + (result.created?.length || 0) + ', updated ' + (result.updated?.length || 0) + ', deleted ' + (result.deleted?.length || 0) + ', skipped ' + (result.skipped?.length || 0) + '. Protected roles/channels were left untouched.');
       await loadSettings();
+      setStatus('Discord sync completed. Created ' + (result.created?.length || 0) + ', updated ' + (result.updated?.length || 0) + ', deleted ' + (result.deleted?.length || 0) + ', skipped ' + (result.skipped?.length || 0) + '. Protected roles/channels were left untouched.');
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Discord sync failed.'); }
     finally { setBusy(false); }
   };
@@ -4205,7 +4206,7 @@ function BotControlPage() {
               <h3>Verified partner rotation</h3>
               <div className="admin-content-list">
                 {partners.map(partner => <div className="admin-content-list-item" key={partner.id}>
-                  <strong>Verified partner</strong>
+                  <strong>Verified partner {partner.member_count ? '(' + partner.member_count.toLocaleString() + ' approx. members)' : ''}</strong>
                   <label style={{ display: 'block', marginTop: 8 }}>Name<input value={partner.name} maxLength={80} onChange={event => setPartners(current => current.map(item => item.id === partner.id ? { ...item, name: event.target.value } : item))} style={fieldStyle} /></label>
                   <label style={{ display: 'block', marginTop: 8 }}>Invite URL<input type="url" value={partner.invite_url} onChange={event => setPartners(current => current.map(item => item.id === partner.id ? { ...item, invite_url: event.target.value } : item))} style={fieldStyle} /></label>
                   <label style={{ display: 'block', marginTop: 8 }}>Description<input value={partner.description} maxLength={300} onChange={event => setPartners(current => current.map(item => item.id === partner.id ? { ...item, description: event.target.value } : item))} style={fieldStyle} /></label>
