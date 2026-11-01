@@ -12,7 +12,7 @@ import { getSetting, setSetting } from './database.js';
 
 export const serverSetupCommand = new SlashCommandBuilder()
   .setName('setup-server')
-  .setDescription('Reset server channels and rebuild the Meta Code template (asks for confirmation)')
+  .setDescription('Apply the saved Meta Code server setup template safely')
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
 const roleDefinitions = [
