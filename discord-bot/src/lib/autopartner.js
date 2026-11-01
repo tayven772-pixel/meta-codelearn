@@ -101,6 +101,15 @@ export async function handleAutoPartnerCommand(interaction) {
   }
 
   if (name === 'partner-add') {
+    if (getSetting(interaction.guildId, 'autopartner_enabled') !== 'true') {
+      await interaction.reply({ content: 'Automatic partnerships are currently disabled. A server administrator must enable Autopartner and configure the posting channel before members can submit partners.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    const channelId = getSetting(interaction.guildId, 'autopartner_channel_id');
+    if (!channelId) {
+      await interaction.reply({ content: 'The partner announcement channel is not configured yet. A server administrator must run /autopartner-setup first.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
     const partnerName = interaction.options.getString('name', true).trim();
     const inviteUrl = interaction.options.getString('invite', true).trim();
     const description = interaction.options.getString('description', true).trim();
