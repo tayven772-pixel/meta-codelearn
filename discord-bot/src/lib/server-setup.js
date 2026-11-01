@@ -84,6 +84,10 @@ export function validateServerTemplate(template) {
   if (welcome.showAvatar !== undefined && typeof welcome.showAvatar !== 'boolean') throw new Error('welcome.showAvatar must be true or false.');
 
   const applications = control.staffApplications ?? {};
+  if (applications.approvedRole !== undefined &&
+      (typeof applications.approvedRole !== 'string' || applications.approvedRole.length > 100)) {
+    throw new Error('staffApplications.approvedRole must be a role name of 100 characters or fewer.');
+  }
   if (applications.questions !== undefined &&
       (!Array.isArray(applications.questions) || applications.questions.length < 1 || applications.questions.length > 5 ||
        applications.questions.some(question => typeof question !== 'string' || !question.trim() || question.length > 45))) {
@@ -124,20 +128,22 @@ function applyBotControlSettings(guild, template) {
   const textTypes = [ChannelType.GuildText, ChannelType.GuildAnnouncement];
 
   const welcomeChannel = findChannelByName(guild, welcome.channel, textTypes);
-  if (welcomeChannel) {
-    setSetting('global', 'community_welcome_channel_id', welcomeChannel.id);
-    setSetting('global', 'community_welcome_message', welcome.message);
-    setSetting('global', 'community_welcome_avatar', String(welcome.showAvatar !== false));
-  }
+  setSetting('global', 'community_welcome_channel_id', welcomeChannel?.id || '');
+  setSetting('global', 'community_welcome_message', welcome.message);
+  setSetting('global', 'community_welcome_avatar', String(welcome.showAvatar !== false));
 
   const reviewChannel = findChannelByName(guild, applications.reviewChannel, textTypes);
-  if (reviewChannel) setSetting('global', 'staff_application_review_channel_id', reviewChannel.id);
+  setSetting('global', 'staff_application_review_channel_id', reviewChannel?.id || '');
   const reviewRole = guild.roles.cache.find(role => role.name.toLowerCase() === String(applications.reviewRole).trim().toLowerCase());
-  if (reviewRole) setSetting('global', 'staff_application_review_role_id', reviewRole.id);
+  setSetting('global', 'staff_application_review_role_id', reviewRole?.id || '');
+  const approvedRole = applications.approvedRole
+    ? guild.roles.cache.find(role => role.name.toLowerCase() === String(applications.approvedRole).trim().toLowerCase())
+    : null;
+  setSetting('global', 'staff_application_approved_role_id', approvedRole?.id || '');
   setSetting('global', 'staff_application_questions', JSON.stringify(applications.questions ?? defaultBotControl.staffApplications.questions));
 
   const partnerChannel = findChannelByName(guild, partner.channel, textTypes);
-  if (partnerChannel) setSetting('global', 'autopartner_channel_id', partnerChannel.id);
+  setSetting('global', 'autopartner_channel_id', partnerChannel?.id || '');
   setSetting('global', 'autopartner_enabled', String(partner.enabled !== false));
   setSetting('global', 'autopartner_interval_hours', String(partner.intervalHours ?? 24));
   setSetting('global', 'autopartner_min_members', String(partner.minimumMembers ?? 100));
@@ -238,6 +244,7 @@ export async function applyServerTemplate(guild, template) {
 
   // Create/reconcile categories and all desired channels before removing old channels.
   const desiredChannelIds = new Set();
+  const desiredCategoryIds = new Set();
   for (const group of template.categories) {
     try {
       let category = guild.channels.cache.find(item => item.type === ChannelType.GuildCategory && item.name === group.name.trim());
@@ -246,6 +253,7 @@ export async function applyServerTemplate(guild, template) {
         created.push('category ' + category.name);
       }
 
+      desiredCategoryIds.add(category.id);
       const overwrites = group.private ? [
         { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
         ...['Founder', 'Administrator', 'Moderator', 'Support Team']
@@ -280,6 +288,22 @@ export async function applyServerTemplate(guild, template) {
     }
   }
 
+  // Safety gate: never remove existing server content if any desired role,
+  // category, permission or channel could not be prepared successfully.
+  // The owner can fix permissions/names and retry without losing the old layout.
+  if (errors.length) {
+    return {
+      created, updated, skipped, deleted, protected: protectedItems, errors,
+      plan: {
+        deleteChannels: plan.deleteChannels.length,
+        deleteCategories: plan.deleteCategories.length,
+        deleteRoles: plan.deleteRoles.length,
+        protectedRoles: plan.protectedRoles.length
+      },
+      deletionsSkipped: true
+    };
+  }
+
   // Replace mode: remove every non-template channel and category. Deleting a
   // channel permanently removes its message history and any threads beneath it.
   for (const channel of guild.channels.cache.filter(item =>
@@ -293,9 +317,8 @@ export async function applyServerTemplate(guild, template) {
     }
   }
 
-  const desiredCategoryNames = new Set(template.categories.map(group => group.name.trim()));
   for (const category of guild.channels.cache.filter(item =>
-    item.type === ChannelType.GuildCategory && !desiredCategoryNames.has(item.name)
+    item.type === ChannelType.GuildCategory && !desiredCategoryIds.has(item.id)
   ).values()) {
     try {
       await category.delete('Removed by published Meta Code server template');
