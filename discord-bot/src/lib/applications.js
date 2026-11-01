@@ -197,7 +197,8 @@ export async function handleStaffApplicationComponent(interaction) {
     const dm = status === 'accepted'
       ? 'Your Meta Code staff application was accepted. A staff member will contact you with next steps.'
       : 'Thank you for applying to the Meta Code staff team. Your application was not accepted this time.';
-    await interaction.client.users.send(application.user_id, { content: dm }).catch(() => {});
+    const applicant = await interaction.client.users.fetch(application.user_id).catch(() => null);
+    if (applicant) await applicant.send({ content: dm }).catch(() => {});
     return true;
   }
   return false;
