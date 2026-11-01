@@ -118,7 +118,7 @@ export function validateServerTemplate(template) {
       (panel.title !== undefined && (typeof panel.title !== 'string' || panel.title.length > 80)) ||
       (panel.description !== undefined && (typeof panel.description !== 'string' || panel.description.length > 240)) ||
       (panel.sections !== undefined && (!Array.isArray(panel.sections) ||
-        panel.sections.some(section => !['setup','commands','responses','tickets','messages','community','autopartner','applications'].includes(section))))) {
+        panel.sections.some(section => !['setup','commands','responses','tickets','messages','community','autopartner','applications'].includes(section)))))) {
     throw new Error('controlPanel must use a title, description, and known sections only.');
   }
   const settings = template.settings;
