@@ -532,6 +532,21 @@ function validateBotSetupTemplate(template) {
       !permissions || typeof permissions !== 'object' || Array.isArray(permissions)) {
     return 'branding, bot_settings, and permissions must be JSON objects.';
   }
+  for (const [key, section] of Object.entries({
+    welcome: botSettings.welcome,
+    autorole: botSettings.autorole,
+    logging: botSettings.logging,
+    tickets: botSettings.tickets,
+    leveling: botSettings.leveling,
+    giveaways: botSettings.giveaways,
+    self_roles: botSettings.self_roles,
+    partnerships: botSettings.partnerships,
+    automod: botSettings.automod
+  })) {
+    if (section !== undefined && (!section || typeof section !== 'object' || Array.isArray(section))) {
+      return 'bot_settings.' + key + ' must be an object.';
+    }
+  }
   if (template.serverName !== undefined &&
       (typeof template.serverName !== 'string' || template.serverName.trim().length < 2 || template.serverName.trim().length > 100)) {
     return 'serverName must be 2–100 characters when provided.';
@@ -630,9 +645,13 @@ function validateBotSetupTemplate(template) {
     'UseSoundboard','CreateGuildExpressions','CreateEvents','UseExternalSounds','SendVoiceMessages','SendPolls',
     'UseExternalApps'
   ]);
+  for (const role of template.roles) if (role.permissions !== undefined && role.permissions.some(name => !knownPermissions.has(name))) {
+    return 'Role "' + role.name + '" contains an unknown Discord permission.';
+  }
   for (const [label, block] of Object.entries({
     everyone: permissions.everyone,
     read_only_channels: permissions.read_only_channels,
+    staff_category: permissions.staff_category,
     muted_role: permissions.muted_role
   })) {
     if (block !== undefined && (!block || typeof block !== 'object' || Array.isArray(block))) return 'permissions.' + label + ' must be an object.';
@@ -655,13 +674,45 @@ function validateBotSetupTemplate(template) {
   for (const group of template.categories) for (const name of group.allowed_roles || []) {
     if (!roleNameSet.has(name.trim().toLowerCase())) return 'Category "' + group.name + '" references unknown role "' + name + '".';
   }
+  for (const name of permissions.staff_category?.allowed_roles || []) {
+    if (!roleNameSet.has(name.trim().toLowerCase())) return 'permissions.staff_category references unknown role "' + name + '".';
+  }
+  if (botSettings.autorole?.role !== undefined &&
+      (typeof botSettings.autorole.role !== 'string' || !roleNameSet.has(botSettings.autorole.role.trim().toLowerCase()))) {
+    return 'bot_settings.autorole.role must reference a role in the roles array.';
+  }
+  const normalizeChannel = value => String(value).trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'new-channel';
   const channelNames = new Set(template.categories.flatMap(group => group.channels.map(channel =>
-    (Array.isArray(channel) ? channel[1] : channel.name).trim().toLowerCase()
+    normalizeChannel(Array.isArray(channel) ? channel[1] : channel.name)
   )));
-  if (botSettings.welcome?.channel && !channelNames.has(String(botSettings.welcome.channel).trim().toLowerCase())) return 'bot_settings.welcome.channel must reference a channel in the categories.';
+  const hasTextChannel = name => template.categories.some(group => group.channels.some(channel =>
+    (Array.isArray(channel) ? channel[0] : channel.type) === 'text' &&
+    normalizeChannel(Array.isArray(channel) ? channel[1] : channel.name) === normalizeChannel(name)
+  ));
+  if (botSettings.welcome?.channel && !hasTextChannel(botSettings.welcome.channel)) return 'bot_settings.welcome.channel must reference a text channel in the categories.';
+  if (botSettings.logging?.channel && !hasTextChannel(botSettings.logging.channel)) return 'bot_settings.logging.channel must reference a text channel in the categories.';
+  if (botSettings.tickets?.panel_channel && !hasTextChannel(botSettings.tickets.panel_channel)) return 'bot_settings.tickets.panel_channel must reference a text channel in the categories.';
+  if (botSettings.tickets?.transcript_channel && !hasTextChannel(botSettings.tickets.transcript_channel)) return 'bot_settings.tickets.transcript_channel must reference a text channel in the categories.';
+  if (botSettings.tickets?.category && !template.categories.some(group => normalizeChannel(group.name) === normalizeChannel(botSettings.tickets.category))) return 'bot_settings.tickets.category must reference a category in the categories array.';
   if (botSettings.welcome?.enabled !== undefined && typeof botSettings.welcome.enabled !== 'boolean') return 'bot_settings.welcome.enabled must be true or false.';
   if (botSettings.autorole?.enabled !== undefined && typeof botSettings.autorole.enabled !== 'boolean') return 'bot_settings.autorole.enabled must be true or false.';
-  if (botSettings.logging?.enabled !== undefined && typeof botSettings.logging.enabled !== 'boolean') return 'bot_settings.logging.enabled must be true or false.';
+  for (const [section, keys] of Object.entries({
+    welcome: ['enabled'],
+    logging: ['enabled'],
+    tickets: ['enabled'],
+    leveling: ['enabled','level_up_messages','leaderboard'],
+    giveaways: ['enabled','allow_early_end'],
+    self_roles: ['enabled','allow_multiple'],
+    partnerships: ['enabled','approval_required'],
+    automod: ['enabled','anti_spam','duplicate_message_filter','invite_filter']
+  })) {
+    for (const key of keys) {
+      const value = botSettings[section]?.[key];
+      if (value !== undefined && typeof value !== 'boolean') return 'bot_settings.' + section + '.' + key + ' must be true or false.';
+    }
+  }
+  if (botSettings.self_roles?.selection_type !== undefined && botSettings.self_roles.selection_type !== 'dropdown') return 'bot_settings.self_roles.selection_type currently supports dropdown.';
+  if (botSettings.giveaways?.default_winners !== undefined && (!Number.isInteger(botSettings.giveaways.default_winners) || botSettings.giveaways.default_winners < 1 || botSettings.giveaways.default_winners > 10)) return 'bot_settings.giveaways.default_winners must be 1–10.';
   if (botSettings.logging?.events !== undefined && (!Array.isArray(botSettings.logging.events) ||
       botSettings.logging.events.some(event => !['member_join','member_leave','message_delete','channel_create','channel_delete','moderation_action'].includes(event)))) {
     return 'bot_settings.logging.events contains an unsupported event.';
