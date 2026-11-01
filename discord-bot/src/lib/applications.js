@@ -31,12 +31,12 @@ try { db.exec("ALTER TABLE staff_applications ADD COLUMN avatar_url TEXT NOT NUL
 export const staffApplicationCommands = [
   new SlashCommandBuilder()
     .setName('setup-applications')
-    .setDescription('Post the staff application panel and choose the private review channel')
+    .setDescription('Publish the staff application panel using a private review channel')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addChannelOption(option => option.setName('staff_channel')
       .setDescription('Private channel where completed applications are sent')
       .addChannelTypes(ChannelType.GuildText)
-      .setRequired(true))
+      .setRequired(false))
 ].map(command => command.toJSON());
 
 function isStaffReviewer(interaction) {
@@ -76,13 +76,22 @@ export async function handleStaffApplicationCommand(interaction) {
     await interaction.reply({ content: 'Only server administrators can configure staff applications.', flags: MessageFlags.Ephemeral });
     return true;
   }
-  const staffChannel = interaction.options.getChannel('staff_channel', true);
+  const configuredChannelId = getSetting(interaction.guildId, 'staff_applications_channel_id');
+  const staffChannel = interaction.options.getChannel('staff_channel') ||
+    (configuredChannelId ? await interaction.guild.channels.fetch(configuredChannelId).catch(() => null) : null);
   if (!staffChannel?.isTextBased() || !staffChannel.send) {
-    await interaction.reply({ content: 'Choose a regular text channel for staff application reviews.', flags: MessageFlags.Ephemeral });
+    await interaction.reply({ content: 'Choose a text channel or configure settings.applications.staffChannel in the JSON template first.', flags: MessageFlags.Ephemeral });
+    return true;
+  }
+  const everyonePermissions = staffChannel.permissionsFor(interaction.guild.roles.everyone);
+  if (!everyonePermissions || everyonePermissions.has(PermissionFlagsBits.ViewChannel)) {
+    await interaction.reply({ content: 'The application review channel must be private. Deny View Channel to @everyone, grant access to your staff role, and run the command again.', flags: MessageFlags.Ephemeral });
     return true;
   }
   setSetting('global', 'staff_applications_channel_id', staffChannel.id);
-  setSetting('global', 'staff_applications_enabled', 'true');
+  if (getSetting(interaction.guildId, 'staff_applications_enabled') === null) {
+    setSetting('global', 'staff_applications_enabled', 'true');
+  }
   const title = getSetting(interaction.guildId, 'staff_applications_title') || 'Meta Code | Staff Applications';
   const description = getSetting(interaction.guildId, 'staff_applications_description') ||
     'Help make Meta Code a welcoming place to learn and build. Apply privately using the button below. Applications are sent to the configured staff review channel.';
