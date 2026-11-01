@@ -416,9 +416,10 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
   }
   if (!(await requireOwnedGuild(req, res, guildId))) return;
   const allowed = new Set([
-    'autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_template',
+    'autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_min_members','autopartner_template',
     'server_setup_template','bot_welcome_message','bot_rules_text','bot_status_text',
-    'community_welcome_channel_id','community_welcome_message','community_autorole_id','community_log_channel_id','community_xp_enabled',
+    'community_welcome_channel_id','community_welcome_message','community_welcome_avatar','community_autorole_id','community_log_channel_id','community_xp_enabled',
+    'staff_applications_enabled','staff_applications_channel_id','staff_applications_title','staff_applications_description',
     'ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id',
     ...botCommandNames.map(name => `bot_command_enabled:${name}`),
     ...['meta','lessons','ping','help'].map(name => `bot_response:${name}`)
