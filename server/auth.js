@@ -558,7 +558,7 @@ function validateBotSetupTemplate(template) {
   if (branding.embed_color !== undefined && (typeof branding.embed_color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(branding.embed_color))) {
     return 'branding.embed_color must be a six-digit hex color such as #5865F2.';
   }
-  if (branding.bot_name !== undefined && (typeof branding.bot_name !== 'string' || branding.bot_name.length > 80)) return 'branding.bot_name must be 80 characters or fewer.';
+  if (branding.bot_name !== undefined && (typeof branding.bot_name !== 'string' || branding.bot_name.length > 32)) return 'branding.bot_name must be 32 characters or fewer because it is applied as the bot server nickname.';
   if (branding.footer !== undefined && (typeof branding.footer !== 'string' || branding.footer.length > 200)) return 'branding.footer must be 200 characters or fewer.';
 
   const roleNames = template.roles.map(role => role.name.trim().toLowerCase());
