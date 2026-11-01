@@ -3714,6 +3714,7 @@ function BotControlPage() {
   const [busy, setBusy] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const defaultTemplate = JSON.stringify({
+    serverName: 'Meta Code',
     roles: [
       { name: 'Founder', color: 16042333 }, { name: 'Administrator', color: 9289215 },
       { name: 'Moderator', color: 7391137 }, { name: 'Support Team', color: 9091048 },
@@ -3899,7 +3900,12 @@ function BotControlPage() {
       const deleteCategories = Array.isArray(plan.deleteCategories) ? plan.deleteCategories.length : 0;
       const deleteRoles = Array.isArray(plan.deleteRoles) ? plan.deleteRoles.length : 0;
       const protectedRoles = Array.isArray(plan.protectedRoles) ? plan.protectedRoles.length : 0;
+      const serverNameChange = plan.serverNameChange as { current?: string; desired?: string } | null;
+      const serverNameSummary = serverNameChange
+        ? 'Rename server: ' + (serverNameChange.current || '(unknown)') + ' → ' + (serverNameChange.desired || '(unknown)') + '\n'
+        : 'Server name: unchanged\n';
       const previewSummary =
+        serverNameSummary +
         'Create roles: ' + createRoles + '\n' +
         'Update roles: ' + updateRoles + '\n' +
         'Create categories: ' + createCategories + '\n' +
@@ -4094,7 +4100,7 @@ function BotControlPage() {
           {editorOpen && <>
             <section id="bot-settings-editor" className="admin-publishing-guide">
               <h2>Publish server setup JSON</h2>
-              <p>This JSON configures the Discord layout and the sections/settings shown in this control panel. Publishing replaces the server layout: unlisted channels, categories, and removable roles are deleted after the desired layout has been created.</p>              <p>The JSON editor always stays visible so you can restore dashboard sections if your template hides them.</p>
+              <p>This JSON configures the Discord server name, layout, and the sections/settings shown in this control panel. Set the top-level serverName field to rename the server (2–100 characters), or omit it to keep the current name. Renaming requires Meta to have Manage Server permission. Publishing replaces the server layout: unlisted channels, categories, and removable roles are deleted after the desired layout has been created.</p>              <p>The JSON editor always stays visible so you can restore dashboard sections if your template hides them.</p>
               <p><strong>Warning:</strong> deleting a channel permanently removes its message history and threads. Meta cannot delete @everyone, managed bot/integration roles, or roles at/above its highest role.</p>
               <textarea value={templateText} onChange={event => setTemplateText(event.target.value)} rows={18} spellCheck={false} style={{ ...fieldStyle, fontFamily: 'monospace' }} aria-label="Discord setup JSON" />
               <button type="button" className="button-primary" onClick={() => { void publishSetupTemplate(); }} disabled={busy}>{busy ? 'Publishing…' : 'Publish JSON to Discord'}</button>
