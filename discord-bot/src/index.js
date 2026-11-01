@@ -6,7 +6,7 @@ import { applyServerTemplate, previewServerTemplate, handleServerSetup, handleSe
 import { handleStaffApplicationInteraction, postStaffApplicationPanel } from './lib/staff-applications.js';
 import { db, getSetting } from './lib/database.js';
 import { moderationCommands, handleModerationCommand } from './lib/moderation.js';
-import { autoPartnerCommands, handleAutoPartnerCommand, runAutoPartnerScheduler } from './lib/autopartner.js';
+import { autoPartnerCommands, handleAutoPartnerCommand, handleAutoPartnerInteraction, runAutoPartnerScheduler } from './lib/autopartner.js';
 import { communityCommands, handleCommunityCommand, handleCommunityComponent, handleCommunityEvents, runCommunityScheduler } from './lib/community-features.js';
 import { ActionRowBuilder, ActivityType, ButtonBuilder, ButtonStyle, Client, EmbedBuilder, Events, GatewayIntentBits, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 const siteUrl = (process.env.META_SITE_URL || 'https://metasupportcom.dbm.shared-servers.com').replace(/\/$/, '');
@@ -401,6 +401,7 @@ client.on(Events.InteractionCreate, async interaction => {
    else if (interaction.commandName === 'setup-applications') await postStaffApplicationPanel(interaction);
    return;
   }
+    if (await handleAutoPartnerInteraction(interaction)) return;
     if (await handleStaffApplicationInteraction(interaction)) return;
     if (await handleCommunityComponent(interaction)) return;
     if (
