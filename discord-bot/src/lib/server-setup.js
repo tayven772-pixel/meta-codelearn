@@ -109,7 +109,7 @@ export function validateServerTemplate(template) {
   if (welcome.message !== undefined && (typeof welcome.message !== 'string' || welcome.message.length > 1500)) throw new Error('Welcome message must be 1500 characters or fewer.');
   if (welcome.showAvatar !== undefined && typeof welcome.showAvatar !== 'boolean') throw new Error('welcome.showAvatar must be true or false.');
 
-  const applications = control.staffApplications ?? {};
+  const applications = { ...defaultBotControl.staffApplications, ...(control.staffApplications ?? {}) };
   if (applications.approvedRole !== undefined &&
       (typeof applications.approvedRole !== 'string' || applications.approvedRole.length > 100)) {
     throw new Error('staffApplications.approvedRole must be a role name of 100 characters or fewer.');
@@ -118,6 +118,21 @@ export function validateServerTemplate(template) {
       (!Array.isArray(applications.questions) || applications.questions.length < 1 || applications.questions.length > 5 ||
        applications.questions.some(question => typeof question !== 'string' || !question.trim() || question.length > 45))) {
     throw new Error('Staff application questions must contain 1–5 non-empty questions, each 45 characters or fewer.');
+  }
+  const definedRoleNames = new Set(template.roles.map(role => role.name.trim().toLowerCase()));
+  if (applications.reviewRole && !definedRoleNames.has(String(applications.reviewRole).trim().toLowerCase())) {
+    throw new Error('Staff application reviewer role "' + applications.reviewRole + '" must also be listed in the JSON roles array.');
+  }
+  if (applications.approvedRole && !definedRoleNames.has(String(applications.approvedRole).trim().toLowerCase())) {
+    throw new Error('Staff application approvedRole must also be listed in the JSON roles array.');
+  }
+  const privateGroups = template.categories.filter(group => group.private === true);
+  if (privateGroups.length) {
+    const accessRoleNames = new Set(['Founder', 'Administrator', 'Moderator', 'Support Team', String(applications.reviewRole || '')]
+      .map(name => name.trim().toLowerCase()).filter(Boolean));
+    if (!template.roles.some(role => accessRoleNames.has(role.name.trim().toLowerCase()))) {
+      throw new Error('Private categories need at least one staff role from the JSON roles array so staff are not locked out.');
+    }
   }
 
   const partner = control.autopartner ?? {};
@@ -274,6 +289,11 @@ export async function applyServerTemplate(guild, template) {
   await guild.channels.fetch();
   const plan = await previewServerTemplate(guild, template);
   const created = [], updated = [], skipped = [], deleted = [], protectedItems = [], errors = [];
+  const applications = { ...defaultBotControl.staffApplications, ...(template.botControl?.staffApplications ?? {}) };
+  const privateAccessRoleNames = [...new Set([
+    'Founder', 'Administrator', 'Moderator', 'Support Team',
+    applications.reviewRole, applications.approvedRole
+  ].filter(name => typeof name === 'string' && name.trim()).map(name => name.trim().toLowerCase()))];
 
   // Create/update desired roles first so private category access can be applied.
   for (const definition of template.roles) {
@@ -314,8 +334,8 @@ export async function applyServerTemplate(guild, template) {
       desiredCategoryIds.add(category.id);
       const overwrites = group.private ? [
         { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
-        ...['Founder', 'Administrator', 'Moderator', 'Support Team']
-          .map(name => guild.roles.cache.find(role => role.name.toLowerCase() === name.toLowerCase()))
+        ...privateAccessRoleNames
+          .map(name => guild.roles.cache.find(role => role.name.toLowerCase() === name))
           .filter(Boolean)
           .map(role => ({ id: role.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }))
       ] : [];
