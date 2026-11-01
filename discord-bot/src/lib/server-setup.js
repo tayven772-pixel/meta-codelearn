@@ -54,6 +54,12 @@ function normalizeChannelName(value) {
   return value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 100) || 'new-channel';
 }
 
+function supportedTypesForKind(kind) {
+  return kind === 'voice'
+    ? [ChannelType.GuildVoice]
+    : [ChannelType.GuildText, ChannelType.GuildAnnouncement];
+}
+
 export function validateServerTemplate(template) {
   if (!template || typeof template !== 'object' || !Array.isArray(template.roles) || !Array.isArray(template.categories)) {
     throw new Error('Template must contain roles and categories arrays.');
@@ -80,6 +86,16 @@ export function validateServerTemplate(template) {
 
   const control = template.botControl ?? {};
   if (!control || typeof control !== 'object' || Array.isArray(control)) throw new Error('botControl must be an object.');
+  for (const [key, section] of Object.entries({
+    dashboard: control.dashboard,
+    welcome: control.welcome,
+    staffApplications: control.staffApplications,
+    autopartner: control.autopartner
+  })) {
+    if (section !== undefined && (!section || typeof section !== 'object' || Array.isArray(section))) {
+      throw new Error('botControl.' + key + ' must be an object.');
+    }
+  }
   const dashboard = control.dashboard ?? {};
   const validSections = new Set(['serverSetup', 'commands', 'responses', 'tickets', 'messages', 'community', 'staffApplications', 'autopartner']);
   if (dashboard.sections !== undefined &&
@@ -180,8 +196,8 @@ export async function previewServerTemplate(guild, template) {
     const definition = template.categories.find(item => item.name.trim() === categoryName);
     for (const [kind, rawName] of definition.channels) {
       const name = normalizeChannelName(rawName);
-      const type = kind === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText;
-      const existing = guild.channels.cache.find(channel => !plannedChannelIds.has(channel.id) && channel.type === type && channel.name === name);
+      const allowedTypes = supportedTypesForKind(kind);
+      const existing = guild.channels.cache.find(channel => !plannedChannelIds.has(channel.id) && allowedTypes.includes(channel.type) && channel.name === name);
       if (existing) plannedChannelIds.add(existing.id);
       else createChannels.push({ category: categoryName, name, kind });
     }
@@ -276,8 +292,9 @@ export async function applyServerTemplate(guild, template) {
 
       for (const [kind, rawName] of group.channels) {
         const name = normalizeChannelName(rawName);
+        const allowedTypes = supportedTypesForKind(kind);
         const type = kind === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText;
-        let channel = guild.channels.cache.find(item => !desiredChannelIds.has(item.id) && item.type === type && item.name === name);
+        let channel = guild.channels.cache.find(item => !desiredChannelIds.has(item.id) && allowedTypes.includes(item.type) && item.name === name);
         if (!channel) {
           channel = await guild.channels.create({ name, type, parent: category.id, reason: 'Published Meta Code server template' });
           created.push('channel ' + name);
@@ -287,7 +304,7 @@ export async function applyServerTemplate(guild, template) {
             updated.push('moved channel ' + name);
           } else {
             // Match the category's permission overwrites exactly.
-            await channel.lockPermissions().catch(() => {});
+            await channel.lockPermissions();
             skipped.push('channel ' + name);
           }
         }
