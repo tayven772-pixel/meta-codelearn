@@ -284,6 +284,7 @@ function getBotDb() {
     CREATE INDEX IF NOT EXISTS bot_message_outbox_pending ON bot_message_outbox(status, id);
     CREATE TABLE IF NOT EXISTS bot_setup_outbox (
       id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT NOT NULL, template_json TEXT NOT NULL,
+      preview_only INTEGER NOT NULL DEFAULT 0 CHECK(preview_only IN (0,1)),
       status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','applied','failed')),
       result_json TEXT, error TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, completed_at TEXT
     );
@@ -300,6 +301,9 @@ function getBotDb() {
     );
     CREATE INDEX IF NOT EXISTS autopartner_partners_guild ON autopartner_partners(guild_id);
   `);
+  if (!connection.pragma('table_info(bot_setup_outbox)').some(column => column.name === 'preview_only')) {
+    connection.exec('ALTER TABLE bot_setup_outbox ADD COLUMN preview_only INTEGER NOT NULL DEFAULT 0');
+  }
   botDb = connection;
   return botDb;
 }
