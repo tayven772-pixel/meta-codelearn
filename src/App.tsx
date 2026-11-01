@@ -3877,7 +3877,7 @@ function BotControlPage() {
     const deleteCategories = summary.deleteCategories?.length || 0;
     const deleteRoles = summary.deleteRoles?.length || 0;
     const totalDeletes = deleteChannels + deleteCategories + deleteRoles;
-    const detail = 'This will permanently delete ' + deleteChannels + ' channel(s), ' + deleteCategories + ' category/categories, and ' + deleteRoles + ' role(s) not in the JSON. Deleted channel message history cannot be recovered. Discord-managed, administrator, and protected roles/channels are kept. Continue?';
+    const detail = 'This will permanently delete ' + deleteChannels + ' channel(s), ' + deleteCategories + ' category/categories, and ' + deleteRoles + ' role(s) not in the JSON. Deleted channel message history cannot be recovered. Category permissions and child-channel overrides will be replaced to match the JSON, including private/public visibility. Discord-managed, administrator, and protected roles/channels are kept. Continue?';
     if (!window.confirm(detail)) return;
     setBusy(true); setStatus('Confirming sync and applying changes in Discord…');
     try {
