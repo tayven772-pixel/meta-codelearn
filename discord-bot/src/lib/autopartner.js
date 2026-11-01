@@ -198,7 +198,8 @@ export async function handleAutoPartnerCommand(interaction) {
     setSetting(interaction.guildId, 'autopartner_interval_hours', hours);
     setSetting(interaction.guildId, 'autopartner_min_members', minimumMembers);
     setSetting(interaction.guildId, 'autopartner_enabled', enabled ? 'true' : 'false');
-    await interaction.reply({ content: '🤝 Autopartner settings saved.\nChannel: <#' + channel.id + '>\nInterval: every ' + hours + ' hour(s)\nMinimum members: ' + minimumMembers.toLocaleString() + '\nAutomatic posting: ' + (enabled ? 'ON' : 'OFF') + '\nMembers can submit partners with /partner-submit. Meta checks the invite count automatically; no staff approval is required.', flags: MessageFlags.Ephemeral });
+    const approvalRequired = getSetting(interaction.guildId, 'autopartner_approval_required') === 'true';
+    await interaction.reply({ content: '🤝 Autopartner settings saved.\nChannel: <#' + channel.id + '>\nInterval: every ' + hours + ' hour(s)\nMinimum members: ' + minimumMembers.toLocaleString() + '\nAutomatic posting: ' + (enabled ? 'ON' : 'OFF') + '\nMembers can submit partners with /partner-submit. Meta checks invite counts automatically; ' + (approvalRequired ? 'qualifying submissions wait for staff approval.' : 'staff approval is not required.'), flags: MessageFlags.Ephemeral });
     return true;
   }
 
@@ -233,7 +234,7 @@ export async function handleAutoPartnerCommand(interaction) {
       const message = priorInvite.status === 'posted'
         ? 'That invite has already been published as a partner.'
         : priorInvite.status === 'eligible'
-          ? 'That invite already passed the member-count check and is waiting for its scheduled post.'
+          ? (priorInvite.approval_status === 'pending' ? 'That invite passed the member-count check and is waiting for staff approval.' : 'That invite already passed the member-count check and is waiting for its scheduled post.')
           : 'That invite is already being checked. Latest approximate count: ' + Number(priorInvite.member_count || 0).toLocaleString() + ' / ' + minimum.toLocaleString() + ' members.';
       await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
       return true;
@@ -407,6 +408,17 @@ export async function handleAutoPartnerCommand(interaction) {
   return false;
 }
 
+async function retryPartnerApprovalMessages(client, guildId) {
+  if (getSetting(guildId, 'autopartner_approval_required') !== 'true') return;
+  const pendingReviews = db.prepare(
+    "SELECT * FROM autopartner_submissions WHERE guild_id = ? AND status = 'eligible' AND approval_status = 'pending' AND review_message_id IS NULL ORDER BY id LIMIT 10"
+  ).all(guildId);
+  for (const submission of pendingReviews) {
+    try { await requestPartnerApproval(client, guildId, submission); }
+    catch (error) { console.warn('Could not publish partner approval request ' + submission.id + ':', error.message); }
+  }
+}
+
 async function verifyPendingSubmissions(client, guildId) {
   const due = db.prepare(`
     SELECT * FROM autopartner_submissions
@@ -455,6 +467,7 @@ export async function runAutoPartnerScheduler(client) {
       !Number.isInteger(minimum) || minimum < 1 || minimum > 10000000) return;
 
   await verifyPendingSubmissions(client, guildId);
+  await retryPartnerApprovalMessages(client, guildId);
   const last = Number(getSetting(guildId, 'autopartner_last_posted_at') || 0);
   if (Date.now() - last < hours * 3600000) return;
 
