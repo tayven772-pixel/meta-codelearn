@@ -102,7 +102,7 @@ export async function handleTicketCommand(interaction, db) {
 
     return replyPrivate(
       interaction,
-      `Ticket settings saved.\nCategory: ${category.name}\nStaff role: ${role.name}\nLog channel: ${logChannel}`
+      `Ticket settings saved.\nCategory: ${category.name}\nStaff role: ${role.name}\nLog channel: <#${logChannel.id}>`
     );
   }
 
@@ -342,7 +342,7 @@ export async function handleTicketButton(interaction, db) {
   if (existing) {
     const channel = await guild.channels.fetch(existing.channel_id).catch(() => null);
     if (channel) {
-      await replyPrivate(interaction, 'You already have an open ticket: ' + channel);
+      await replyPrivate(interaction, 'You already have an open ticket: <#' + channel.id + '>');
       return true;
     }
     db.prepare("UPDATE tickets SET status = 'closed', closed_at = CURRENT_TIMESTAMP WHERE channel_id = ?")
@@ -398,7 +398,7 @@ export async function handleTicketButton(interaction, db) {
 
     const answerText = answers.map((item, index) => '**' + (index + 1) + '. ' + item.question + '**\n' + item.answer).join('\n\n');
     await channel.send({
-      content: interaction.user + ' ' + staffRole,
+      content: '<@' + interaction.user.id + '> <@&' + staffRole.id + '>',
       embeds: [new EmbedBuilder()
         .setColor(0x5865F2)
         .setTitle('Support Ticket #' + insert.lastInsertRowid)
@@ -412,13 +412,13 @@ export async function handleTicketButton(interaction, db) {
       allowedMentions: { users: [interaction.user.id], roles: [staffRole.id] }
     });
 
-    await interaction.editReply('Your private **' + selectedCategory + '** ticket has been created: ' + channel);
+    await interaction.editReply('Your private **' + selectedCategory + '** ticket has been created: <#' + channel.id + '>');
     const logChannelId = configured(guildId, 'ticket_log_channel_id');
     const logChannel = logChannelId ? await guild.channels.fetch(logChannelId).catch(() => null) : null;
     if (logChannel?.isTextBased()) {
       await logChannel.send({
-        content: staffRole + ' · 🎫 Ticket #' + insert.lastInsertRowid +
-          ' (' + selectedCategory + ') opened by ' + interaction.user + ' in ' + channel + '. Please respond when available.',
+        content: '<@&' + staffRole.id + '> · 🎫 Ticket #' + insert.lastInsertRowid +
+          ' (' + selectedCategory + ') opened by <@' + interaction.user.id + '> in <#' + channel.id + '>. Please respond when available.',
         allowedMentions: {
           roles: [staffRole.id],
           users: [interaction.user.id]
