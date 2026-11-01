@@ -166,8 +166,7 @@ export async function handleAutoPartnerCommand(interaction) {
       throw error;
     }
     const partner = db.prepare('SELECT id, name, invite_url, description, member_count FROM autopartner_partners WHERE guild_id = ? AND invite_url = ?').get(interaction.guildId, parsed.toString());
-    const channelId = getSetting(interaction.guildId, 'autopartner_channel_id');
-    const channel = channelId ? await interaction.client.channels.fetch(channelId).catch(() => null) : null;
+    const channel = await interaction.client.channels.fetch(channelId).catch(() => null);
     if (!channel?.isTextBased() || !channel.send) {
       await interaction.editReply('The invite passed the member check and was saved, but no valid partner posting channel is configured. An administrator must run /autopartner-setup.');
       return true;
