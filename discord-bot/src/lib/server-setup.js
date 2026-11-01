@@ -370,6 +370,7 @@ export function validateServerTemplate(input) {
   if (meta.botSettings?.leveling?.cooldown_seconds !== undefined && (!Number.isInteger(meta.botSettings.leveling.cooldown_seconds) || meta.botSettings.leveling.cooldown_seconds < 1 || meta.botSettings.leveling.cooldown_seconds > 3600)) throw new Error('bot_settings.leveling.cooldown_seconds must be 1–3600.');
   if (meta.botSettings?.partnership?.cooldown_hours !== undefined && (!Number.isInteger(meta.botSettings.partnership.cooldown_hours) || meta.botSettings.partnership.cooldown_hours < 6 || meta.botSettings.partnership.cooldown_hours > 168)) throw new Error('bot_settings.partnerships.cooldown_hours must be 6–168.');
   if (meta.botSettings?.automod?.mention_limit !== undefined && (!Number.isInteger(meta.botSettings.automod.mention_limit) || meta.botSettings.automod.mention_limit < 1 || meta.botSettings.automod.mention_limit > 50)) throw new Error('bot_settings.automod.mention_limit must be 1–50.');
+  if (meta.branding?.botName && meta.branding.botName.length > 32) throw new Error('branding.bot_name must be 32 characters or fewer because it is applied as the bot server nickname.');
   return template;
 }
 
@@ -712,14 +713,21 @@ export async function applyServerTemplate(guild, input) {
             skipped.push('channel ' + name);
           }
         }
-        const readOnlyNames = metaPermissions.read_only_channels?.channels ?? [];
+        const readOnlySettings = metaPermissions.read_only_channels ?? {};
+        const readOnlyNames = readOnlySettings.channels ?? [];
         const readOnly = channelOptions?.read_only === true || readOnlyNames.some(value => normalizeChannelName(value) === name);
         if (readOnly && channel.type !== ChannelType.GuildVoice) {
-          await channel.permissionOverwrites.edit(guild.roles.everyone, {
-            SendMessages: false,
-            AddReactions: false,
-            SendMessagesInThreads: false
-          }, 'Read-only channel from Meta Code template');
+          const denyNames = Array.isArray(readOnlySettings.deny) ? readOnlySettings.deny : ['SendMessages'];
+          const allowNames = Array.isArray(readOnlySettings.allow) ? readOnlySettings.allow : ['ViewChannel', 'ReadMessageHistory'];
+          const denySet = new Set(denyNames);
+          const channelPolicy = {};
+          for (const permission of allowNames) {
+            if (CHANNEL_OVERWRITE_FLAGS.has(permission) && !denySet.has(permission)) channelPolicy[permission] = true;
+          }
+          for (const permission of denyNames) {
+            if (CHANNEL_OVERWRITE_FLAGS.has(permission)) channelPolicy[permission] = false;
+          }
+          await channel.permissionOverwrites.edit(guild.roles.everyone, channelPolicy, 'Read-only channel from Meta Code template');
           updated.push('read-only permissions ' + name);
         }
         desiredChannelIds.add(channel.id);
