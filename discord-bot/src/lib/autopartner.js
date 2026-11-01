@@ -181,8 +181,8 @@ export async function handleAutoPartnerCommand(interaction) {
 
   if (name === 'partner-list') {
     const partners = getPartners(interaction.guildId);
-    const embed = new EmbedBuilder().setColor(0x42B883).setTitle('🤝 Verified partner servers')
-      .setDescription(partners.length ? partners.map((p, i) => '**' + (i + 1) + '. ' + p.name + '** (' + Number(p.member_count || 0).toLocaleString() + ' approx. members)\n' + p.description.slice(0, 180) + '\n[Join partner server](' + p.invite_url + ')').join('\n\n').slice(0, 4000) : 'No qualifying partners yet. Members can submit a Discord invite with /partner-add.')
+    const embed = new EmbedBuilder().setColor(0x42B883).setTitle('🤝 Partner rotation')
+      .setDescription(partners.length ? partners.map((p, i) => '**' + (i + 1) + '. ' + p.name + '** (' + Number(p.member_count || 0).toLocaleString() + ' approx. members)\n' + p.description.slice(0, 180) + '\n[Join partner server](' + p.invite_url + ')').join('\n\n').slice(0, 4000) : 'No partner entries yet. Members can submit a Discord invite with /partner-add; Meta checks the member count before posting.')
       .setFooter({ text: partners.length + ' active partner(s)' });
     await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
     return true;
