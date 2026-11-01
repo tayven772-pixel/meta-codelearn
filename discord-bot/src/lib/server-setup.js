@@ -127,13 +127,43 @@ function validateServerTemplate(template) {
       throw new Error('Unsupported settings block: ' + key);
     }
   }
-  const channelNames = new Set(template.categories.flatMap(group => group.channels.map(([, name]) => normalizeChannelName(name))));
+  const welcome = settings?.welcome;
+  if (welcome && ((welcome.enabled !== undefined && typeof welcome.enabled !== 'boolean') ||
+      (welcome.showAvatar !== undefined && typeof welcome.showAvatar !== 'boolean') ||
+      (welcome.message !== undefined && (typeof welcome.message !== 'string' || welcome.message.length > 1500)))) {
+    throw new Error('settings.welcome supports enabled/showAvatar booleans and a message up to 1500 characters.');
+  }
+  const partner = settings?.autopartner;
+  if (partner && ((partner.enabled !== undefined && typeof partner.enabled !== 'boolean') ||
+      (partner.intervalHours !== undefined && (!Number.isInteger(partner.intervalHours) || partner.intervalHours < 6 || partner.intervalHours > 168)) ||
+      (partner.minimumMembers !== undefined && (!Number.isInteger(partner.minimumMembers) || partner.minimumMembers < 10 || partner.minimumMembers > 1000000)))) {
+    throw new Error('settings.autopartner has invalid enabled, intervalHours, or minimumMembers values.');
+  }
+  const applications = settings?.applications;
+  if (applications && ((applications.enabled !== undefined && typeof applications.enabled !== 'boolean') ||
+      (applications.panelTitle !== undefined && (typeof applications.panelTitle !== 'string' || applications.panelTitle.length > 45)) ||
+      (applications.panelDescription !== undefined && (typeof applications.panelDescription !== 'string' || applications.panelDescription.length > 1000)))) {
+    throw new Error('settings.applications has invalid enabled, panelTitle, or panelDescription values.');
+  }
+  const tickets = settings?.tickets;
+  if (tickets && ((tickets.panelTitle !== undefined && (typeof tickets.panelTitle !== 'string' || tickets.panelTitle.length > 256)) ||
+      (tickets.panelDescription !== undefined && (typeof tickets.panelDescription !== 'string' || tickets.panelDescription.length > 4000)))) {
+    throw new Error('settings.tickets panel text exceeds Discord limits.');
+  }
+  const channelDefinitions = new Map();
+  for (const group of template.categories) for (const [kind, name] of group.channels) {
+    channelDefinitions.set(normalizeChannelName(name), kind);
+  }
   const categoryNamesForSettings = new Set(template.categories.map(group => normalizeChannelName(group.name)));
-  for (const [blockName, channelKey] of [['welcome','channel'],['autopartner','channel'],['applications','staffChannel'],['tickets','category']]) {
+  for (const [blockName, channelKey] of [['welcome','channel'],['autopartner','channel'],['applications','staffChannel']]) {
     const value = settings?.[blockName]?.[channelKey];
-    if (value && !(blockName === 'tickets' ? categoryNamesForSettings : channelNames).has(normalizeChannelName(value))) {
-      throw new Error('settings.' + blockName + '.' + channelKey + ' must match a channel name in categories.');
+    if (value && channelDefinitions.get(normalizeChannelName(value)) !== 'text') {
+      throw new Error('settings.' + blockName + '.' + channelKey + ' must reference a text channel in categories.');
     }
+  }
+  const ticketCategory = settings?.tickets?.category;
+  if (ticketCategory && !categoryNamesForSettings.has(normalizeChannelName(ticketCategory))) {
+    throw new Error('settings.tickets.category must reference a category name in categories.');
   }
 }
 
