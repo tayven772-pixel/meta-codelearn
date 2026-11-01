@@ -154,6 +154,11 @@ export async function handleAutoPartnerCommand(interaction) {
       await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
       return true;
     }
+    const recentUserSubmission = db.prepare("SELECT id FROM autopartner_submissions WHERE guild_id = ? AND user_id = ? AND created_at >= datetime('now', '-7 days')").get(interaction.guildId, interaction.user.id);
+    if (recentUserSubmission) {
+      await interaction.reply({ content: 'For fairness, each member can submit one partner every 7 days. Your previous submission is still within that period.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
     const existingUserSubmission = db.prepare("SELECT id FROM autopartner_submissions WHERE guild_id = ? AND user_id = ? AND status IN ('pending','eligible')").get(interaction.guildId, interaction.user.id);
     if (existingUserSubmission) {
       await interaction.reply({ content: 'You already have a partner submission being checked. Please wait for the automatic review to finish.', flags: MessageFlags.Ephemeral });
