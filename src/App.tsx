@@ -4208,10 +4208,10 @@ function BotControlPage() {
               <label style={{ display: 'block', marginTop: 12 }}>Minimum Discord server members<input type="number" min={10} max={1000000} value={settings.autopartner_min_members || '100'} onChange={event => setValue('autopartner_min_members', event.target.value)} style={fieldStyle} /></label>
               <label style={{ display: 'block', marginTop: 12 }}>Partner message template<textarea value={settings.autopartner_template || ''} onChange={event => setValue('autopartner_template', event.target.value)} placeholder="Use {name}, {invite}, and {description}" rows={4} style={fieldStyle} /></label>
               <p>Members can submit an invite with /partner-add. Meta checks the invite's approximate Discord member count and only saves/posts it when it meets this threshold. The bot re-checks the count before scheduled posts.</p>
-              <h3>Verified partner rotation</h3>
+              <h3>Partner rotation</h3>
               <div className="admin-content-list">
                 {partners.map(partner => <div className="admin-content-list-item" key={partner.id}>
-                  <strong>Verified partner {partner.member_count ? '(' + partner.member_count.toLocaleString() + ' approx. members)' : ''}</strong>
+                  <strong>Partner entry {partner.member_count ? '(' + partner.member_count.toLocaleString() + ' approx. members)' : '(member count not checked yet)'}</strong>
                   <label style={{ display: 'block', marginTop: 8 }}>Name<input value={partner.name} maxLength={80} onChange={event => setPartners(current => current.map(item => item.id === partner.id ? { ...item, name: event.target.value } : item))} style={fieldStyle} /></label>
                   <label style={{ display: 'block', marginTop: 8 }}>Invite URL<input type="url" value={partner.invite_url} onChange={event => setPartners(current => current.map(item => item.id === partner.id ? { ...item, invite_url: event.target.value } : item))} style={fieldStyle} /></label>
                   <label style={{ display: 'block', marginTop: 8 }}>Description<input value={partner.description} maxLength={300} onChange={event => setPartners(current => current.map(item => item.id === partner.id ? { ...item, description: event.target.value } : item))} style={fieldStyle} /></label>
