@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { ticketCommand } from './lib/ticket-commands.js';
 import { serverSetupCommand } from './lib/server-setup.js';
-import { handleTicketCommand, handleTicketButton, handleTicketPanelCommand } from './lib/tickets.js';
+import { handleTicketCommand, handleTicketButton, handleTicketPanelCommand, runPendingTicketDeletions } from './lib/tickets.js';
 import { staffApplicationCommands, handleStaffApplicationCommand, handleStaffApplicationComponent } from './lib/applications.js';
 import { applyServerTemplate, previewServerTemplate, handleServerSetup, handleServerSetupButton } from './lib/server-setup.js';
 import { db, getSetting } from './lib/database.js';
@@ -129,6 +129,8 @@ client.once(Events.ClientReady, async readyClient => {
  };
  applyConfiguredPresence();
  runAutoPartnerScheduler(readyClient).catch(error => console.error('Autopartner startup check failed:', error.message));
+ runPendingTicketDeletions(readyClient).catch(error => console.error('Ticket deletion recovery failed:', error.message));
+ setInterval(() => runPendingTicketDeletions(readyClient).catch(error => console.error('Ticket deletion scheduler failed:', error.message)), 1000).unref();
  setInterval(() => {
   try { applyConfiguredPresence(); }
   catch (error) { console.error('Bot presence refresh failed:', error.message); }
@@ -415,7 +417,8 @@ client.on(Events.InteractionCreate, async interaction => {
       (interaction.customId === 'ticket_create' ||
        interaction.customId === 'ticket_category_select' ||
        interaction.customId.startsWith('ticket_category_button_') ||
-       interaction.customId.startsWith('ticket_form_submit_'))
+       interaction.customId.startsWith('ticket_form_submit_') ||
+       interaction.customId.startsWith('ticket_close_'))
     ) {
       await handleTicketButton(interaction, db);
       return;
