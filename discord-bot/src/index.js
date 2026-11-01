@@ -434,4 +434,27 @@ client.on(Events.InteractionCreate, async interaction => {
  }
 });
 handleCommunityEvents(client);
+let processingWebsiteMessages = false;
+async function processWebsiteMessages() {
+ if (processingWebsiteMessages || !client.isReady()) return;
+ processingWebsiteMessages = true;
+ try {
+  const pending = db.prepare("SELECT * FROM bot_message_outbox WHERE status = 'pending' ORDER BY id LIMIT 5").all();
+  for (const item of pending) {
+   try {
+    const homeGuildId = String(process.env.META_HOME_GUILD_ID || process.env.DISCORD_GUILD_ID || '').trim();
+    if (!homeGuildId || item.guild_id !== homeGuildId) throw new Error('Destination is not the configured Meta home server.');
+    const channel = await client.channels.fetch(item.channel_id);
+    if (!channel || channel.guildId !== homeGuildId || !channel.isTextBased() || typeof channel.send !== 'function') throw new Error('Destination is not an accessible text channel in the Meta home server.');
+    await channel.send({ content: item.content, allowedMentions: { parse: [] } });
+    db.prepare("UPDATE bot_message_outbox SET status = 'sent', sent_at = CURRENT_TIMESTAMP, error = NULL WHERE id = ? AND status = 'pending'").run(item.id);
+   } catch (error) {
+    db.prepare("UPDATE bot_message_outbox SET status = 'failed', error = ? WHERE id = ? AND status = 'pending'").run(String(error?.message || 'Send failed').slice(0, 500), item.id);
+    console.error('Website message send failed:', error?.message || error);
+   }
+  }
+ } catch (error) { console.error('Website message queue check failed:', error?.message || error); }
+ finally { processingWebsiteMessages = false; }
+}
+setInterval(() => { void processWebsiteMessages(); }, 2000).unref();
 client.login(token);
