@@ -37,6 +37,13 @@ jobs:
       - name: Check authentication server syntax
         run: node --check server/auth.js
 
+      - name: Check Discord bot JavaScript syntax
+        run: |
+          set -eu
+          find discord-bot/src discord-bot/scripts -type f -name '*.js' -print0 | while IFS= read -r -d '' file; do
+            node --check "$file"
+          done
+
       - name: Type-check frontend
         run: npx tsc --noEmit
 
