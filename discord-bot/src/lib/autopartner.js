@@ -13,6 +13,22 @@ db.exec(`
     UNIQUE (guild_id, name)
   );
   CREATE INDEX IF NOT EXISTS autopartner_guild_active ON autopartner_partners (guild_id, id);
+  CREATE TABLE IF NOT EXISTS autopartner_submissions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    invite_url TEXT NOT NULL,
+    invite_code TEXT NOT NULL,
+    description TEXT NOT NULL,
+    member_count INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','eligible','posted','expired')),
+    last_checked_at INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    posted_at TEXT,
+    UNIQUE (guild_id, invite_code)
+  );
+  CREATE INDEX IF NOT EXISTS autopartner_submissions_due ON autopartner_submissions(guild_id, status, last_checked_at);
 `);
 
 const admin = PermissionFlagsBits.Administrator;
@@ -23,12 +39,17 @@ export const autoPartnerCommands = [
     .setDefaultMemberPermissions(admin)
     .addChannelOption(o => o.setName('channel').setDescription('Where partner adverts are posted').addChannelTypes(...channelTypes).setRequired(true))
     .addIntegerOption(o => o.setName('interval_hours').setDescription('Hours between posts (6–168)').setMinValue(6).setMaxValue(168).setRequired(true))
+    .addIntegerOption(o => o.setName('minimum_members').setDescription('Minimum approximate members for automatic partner eligibility').setMinValue(1).setMaxValue(10000000).setRequired(false))
     .addBooleanOption(o => o.setName('enabled').setDescription('Enable automatic posting').setRequired(true)),
   new SlashCommandBuilder().setName('partner-add').setDescription('Add an approved partner server')
     .setDefaultMemberPermissions(admin)
     .addStringOption(o => o.setName('name').setDescription('Unique partner name').setMaxLength(60).setRequired(true))
     .addStringOption(o => o.setName('invite').setDescription('Discord invite URL').setMaxLength(200).setRequired(true))
     .addStringOption(o => o.setName('description').setDescription('Partner community description').setMaxLength(700).setRequired(true)),
+  new SlashCommandBuilder().setName('partner-submit').setDescription('Submit a partner server for automatic member-count verification')
+    .addStringOption(o => o.setName('name').setDescription('Community name').setMaxLength(60).setRequired(true))
+    .addStringOption(o => o.setName('invite').setDescription('Permanent or active Discord invite URL').setMaxLength(200).setRequired(true))
+    .addStringOption(o => o.setName('description').setDescription('Short community description').setMaxLength(700).setRequired(true)),
   new SlashCommandBuilder().setName('partner-remove').setDescription('Remove a partner from rotation')
     .setDefaultMemberPermissions(admin)
     .addStringOption(o => o.setName('name').setDescription('Exact partner name').setMaxLength(60).setRequired(true)),
@@ -86,10 +107,87 @@ export async function handleAutoPartnerCommand(interaction) {
     const channel = interaction.options.getChannel('channel', true);
     const hours = interaction.options.getInteger('interval_hours', true);
     const enabled = interaction.options.getBoolean('enabled', true);
+    const minimumMembers = interaction.options.getInteger('minimum_members') ?? Number(getSetting(interaction.guildId, 'autopartner_min_members') || 100);
     setSetting(interaction.guildId, 'autopartner_channel_id', channel.id);
     setSetting(interaction.guildId, 'autopartner_interval_hours', hours);
+    setSetting(interaction.guildId, 'autopartner_min_members', minimumMembers);
     setSetting(interaction.guildId, 'autopartner_enabled', enabled ? 'true' : 'false');
-    await interaction.reply({ content: '🤝 Autopartner settings saved.\nChannel: <#' + channel.id + '>\nInterval: every ' + hours + ' hour(s)\nAutomatic posting: ' + (enabled ? 'ON' : 'OFF') + '\nAdd approved partners with /partner-add. Automatic posting stays quiet when the partner list is empty.', flags: MessageFlags.Ephemeral });
+    await interaction.reply({ content: '🤝 Autopartner settings saved.\nChannel: <#' + channel.id + '>\nInterval: every ' + hours + ' hour(s)\nMinimum members: ' + minimumMembers.toLocaleString() + '\nAutomatic posting: ' + (enabled ? 'ON' : 'OFF') + '\nMembers can submit partners with /partner-submit. Meta checks the invite count automatically; no staff approval is required.', flags: MessageFlags.Ephemeral });
+    return true;
+  }
+
+  if (name === 'partner-submit') {
+    const partnerName = interaction.options.getString('name', true).trim();
+    const inviteUrl = interaction.options.getString('invite', true).trim();
+    const description = interaction.options.getString('description', true).trim();
+    const channelId = getSetting(interaction.guildId, 'autopartner_channel_id');
+    if (getSetting(interaction.guildId, 'autopartner_enabled') !== 'true' || !channelId) {
+      await interaction.reply({ content: 'Automatic partnerships are not open right now. Please check back later.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    if (!partnerName || !description) {
+      await interaction.reply({ content: 'Community name and description cannot be blank.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    let parsed, inviteCode;
+    try {
+      parsed = new URL(inviteUrl);
+      const host = parsed.hostname.toLowerCase();
+      const validHost = ['discord.gg', 'www.discord.gg', 'discord.com', 'www.discord.com'].includes(host);
+      const segments = parsed.pathname.split('/').filter(Boolean);
+      inviteCode = host.includes('discord.com') ? (segments[0] === 'invite' ? segments[1] : null) : segments[0];
+      if (!validHost || parsed.protocol !== 'https:' || !inviteCode || (host.includes('discord.com') && segments[0] !== 'invite')) throw new Error('invalid');
+    } catch {
+      await interaction.reply({ content: 'Provide a valid HTTPS Discord invite, such as https://discord.gg/example.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    const existingUserSubmission = db.prepare("SELECT id FROM autopartner_submissions WHERE guild_id = ? AND user_id = ? AND status IN ('pending','eligible')").get(interaction.guildId, interaction.user.id);
+    if (existingUserSubmission) {
+      await interaction.reply({ content: 'You already have a partner submission being checked. Please wait for the automatic review to finish.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    try {
+      const invite = await interaction.client.fetchInvite(inviteUrl, { withCounts: true });
+      const memberCount = Number(invite.approximateMemberCount);
+      if (!Number.isFinite(memberCount) || memberCount < 1 || !invite.guild?.id) {
+        await interaction.editReply('Discord did not return a usable member count for that invite. Please submit an active server invite.');
+        return true;
+      }
+      if (invite.guild.id === interaction.guildId) {
+        await interaction.editReply('Meta Code cannot be submitted as its own partner.');
+        return true;
+      }
+      const minimum = Number(getSetting(interaction.guildId, 'autopartner_min_members') || 100);
+      const normalizedInvite = 'https://discord.gg/' + invite.code;
+      const status = memberCount >= minimum ? 'eligible' : 'pending';
+      const result = db.prepare(`
+        INSERT INTO autopartner_submissions
+          (guild_id, user_id, name, invite_url, invite_code, description, member_count, status, last_checked_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(guild_id, invite_code) DO UPDATE SET
+          user_id=excluded.user_id, name=excluded.name, description=excluded.description,
+          member_count=excluded.member_count, status=CASE WHEN excluded.status='eligible' THEN 'eligible' ELSE autopartner_submissions.status END,
+          last_checked_at=excluded.last_checked_at
+      `).run(interaction.guildId, interaction.user.id, partnerName, normalizedInvite, invite.code, description, memberCount, status, Date.now());
+      if (status === 'eligible') {
+        db.prepare(`
+          INSERT INTO autopartner_partners (guild_id, name, invite_url, description, created_by)
+          VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT(guild_id, name) DO UPDATE SET invite_url=excluded.invite_url, description=excluded.description
+        `).run(interaction.guildId, partnerName, normalizedInvite, description, interaction.user.id);
+        await interaction.editReply('✅ **Member-count check passed.** Discord reports approximately ' + memberCount.toLocaleString() + ' members (minimum ' + minimum.toLocaleString() + '). The server is now eligible for automatic posting; staff approval is not required.');
+        await runAutoPartnerScheduler(interaction.client);
+      } else {
+        await interaction.editReply('Thanks! Discord reports approximately ' + memberCount.toLocaleString() + ' members. The requirement is ' + minimum.toLocaleString() + '. Meta will automatically recheck this invite periodically and add it to the posting rotation when it qualifies. No staff approval is required.');
+      }
+    } catch (error) {
+      if (String(error?.code || '').includes('CONSTRAINT')) {
+        await interaction.editReply('That invite has already been submitted.');
+      } else {
+        await interaction.editReply('Could not verify that Discord invite: ' + (error?.message || 'unknown error'));
+      }
+    }
     return true;
   }
 
@@ -149,6 +247,7 @@ export async function handleAutoPartnerCommand(interaction) {
         { name: 'Status', value: enabled ? 'Enabled' : 'Disabled', inline: true },
         { name: 'Interval', value: 'Every ' + hours + ' hour(s)', inline: true },
         { name: 'Approved partners', value: String(getPartners(interaction.guildId).length), inline: true },
+        { name: 'Minimum members', value: Number(getSetting(interaction.guildId, 'autopartner_min_members') || 100).toLocaleString(), inline: true },
         { name: 'Posting channel', value: channelId ? '<#' + channelId + '>' : 'Not configured', inline: true },
         { name: 'Last post', value: last ? '<t:' + Math.floor(last / 1000) + ':R>' : 'Never', inline: true },
         { name: 'Template', value: template.slice(0, 900), inline: false },
@@ -199,19 +298,63 @@ export async function handleAutoPartnerCommand(interaction) {
   return false;
 }
 
+async function verifyPendingSubmissions(client, guildId) {
+  const due = db.prepare(`
+    SELECT * FROM autopartner_submissions
+    WHERE guild_id = ? AND status = 'pending' AND last_checked_at <= ?
+    ORDER BY id LIMIT 10
+  `).all(guildId, Date.now() - 30 * 60_000);
+  const minimum = Number(getSetting(guildId, 'autopartner_min_members') || 100);
+  for (const submission of due) {
+    db.prepare('UPDATE autopartner_submissions SET last_checked_at = ? WHERE id = ?').run(Date.now(), submission.id);
+    try {
+      const invite = await client.fetchInvite(submission.invite_url, { withCounts: true });
+      const count = Number(invite.approximateMemberCount);
+      if (!Number.isFinite(count) || count < 1) continue;
+      db.prepare('UPDATE autopartner_submissions SET member_count = ? WHERE id = ?').run(count, submission.id);
+      if (count < minimum) continue;
+      db.prepare(`
+        INSERT INTO autopartner_partners (guild_id, name, invite_url, description, created_by)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(guild_id, name) DO UPDATE SET invite_url=excluded.invite_url, description=excluded.description
+      `).run(guildId, submission.name, submission.invite_url, submission.description, submission.user_id);
+      db.prepare("UPDATE autopartner_submissions SET status = 'eligible' WHERE id = ?").run(submission.id);
+      console.log('Autopartner submission passed member-count check:', submission.name, count);
+    } catch (error) {
+      // A temporary API/network error leaves the submission pending for the next check.
+      console.warn('Autopartner invite recheck failed for submission ' + submission.id + ':', error.message);
+    }
+  }
+}
+
 export async function runAutoPartnerScheduler(client) {
-  // The website stores owner-managed bot settings under the global key, while
-  // approved partner records remain scoped to the configured Meta home server.
-  // Resolve the global setting to that server before looking up its partners.
   const guildId = String(process.env.META_HOME_GUILD_ID || process.env.DISCORD_GUILD_ID || '').trim();
-  if (!/^\d{17,20}$/.test(guildId)) return;
+  if (!/^\\d{17,20}$/.test(guildId)) return;
   if (getSetting(guildId, 'autopartner_enabled') !== 'true') return;
 
   const channelId = getSetting(guildId, 'autopartner_channel_id');
   const hours = Number(getSetting(guildId, 'autopartner_interval_hours') || 24);
-  if (!channelId || !Number.isFinite(hours) || hours < 6 || hours > 168) return;
+  const minimum = Number(getSetting(guildId, 'autopartner_min_members') || 100);
+  if (!channelId || !Number.isFinite(hours) || hours < 6 || hours > 168 ||
+      !Number.isInteger(minimum) || minimum < 1 || minimum > 10000000) return;
+
+  await verifyPendingSubmissions(client, guildId);
   const last = Number(getSetting(guildId, 'autopartner_last_posted_at') || 0);
   if (Date.now() - last < hours * 3600000) return;
+
+  const eligible = db.prepare("SELECT * FROM autopartner_submissions WHERE guild_id = ? AND status = 'eligible' ORDER BY id LIMIT 1").get(guildId);
+  if (eligible) {
+    const partner = { id: null, name: eligible.name, invite_url: eligible.invite_url, description: eligible.description };
+    try {
+      const message = await postPartner(client, guildId, partner);
+      db.prepare("UPDATE autopartner_submissions SET status = 'posted', posted_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'eligible'").run(eligible.id);
+      console.log('Autopartner posted qualifying public submission ' + eligible.name + ' in ' + message.channelId);
+    } catch (error) {
+      console.error('Autopartner qualifying submission could not be posted:', error.message);
+    }
+    return;
+  }
+
   const partners = getPartners(guildId);
   if (!partners.length) return;
   const lastId = Number(getSetting(guildId, 'autopartner_last_partner_id') || 0);
