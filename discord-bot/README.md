@@ -15,6 +15,7 @@ This companion bot provides learning links, staff utilities, and community tools
 - `/8ball` — get a playful answer to a question
 - `/announce` — publish an official embed announcement (administrators only)
 - `/meta`, `/lessons`, `/ping` — learning links and bot status
+- `/challenge today`, `/challenge answer`, `/challenge hint`, `/challenge stats` — daily coding prompt, private answer checking, hints, and progress
 - `/ticket` and server/staff setup commands — additional tools, depending on configuration and permissions
 
 Polls and suggestions are posted in the channel where the command is used. Staff setup commands should only be used by trusted moderators or administrators.
@@ -64,6 +65,7 @@ The website has a private bot-owner page at `/bot-control`. It is protected by t
 ## Expanded non-AI community features
 
 The bot also includes:
+- Daily coding challenges selected by UTC date. Use `/challenge today` to post the prompt, `/challenge answer` to submit privately, `/challenge hint` for a hint, and `/challenge stats` to view solved days and streaks. A correct answer awards 25 XP once per UTC day; challenge completions also count toward `/level` and `/leaderboard`.
 - Welcome messages with `{user}`, `{server}`, and `{membercount}` placeholders (`/welcome-config`).
 - Automatic join roles (`/autorole`).
 - Server event logging for joins, departures, message deletions, and channel creation/deletion (`/logging`).
@@ -78,3 +80,7 @@ The bot also includes:
 The bot requests the **Server Members Intent** to support welcome messages and autoroles. Enable **Server Members Intent** under Discord Developer Portal → Application → Bot → Privileged Gateway Intents. The bot also requests the non-privileged Guild Messages intent for activity XP and message deletion logs. Message Content Intent is not required for these features.
 
 Give the bot only the permissions it needs: View Channels, Send Messages, Embed Links, Read Message History, Add Reactions, Manage Roles (for autoroles and self-service roles), and Manage Channels only if you use channel-management tools. Keep its role below roles it must not assign.
+
+## Run bot tests
+
+From this folder, run `npm test` to verify the daily challenge rotation, answer matching, and streak calculation.
