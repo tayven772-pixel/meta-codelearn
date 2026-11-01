@@ -321,6 +321,37 @@ function requireBotOwner(req, res) {
   // Use the verified Meta website owner account. Discord OAuth is not required.
   return requireAdmin(req, res);
 }
+
+function normalizeServerSetupTemplate(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('Setup JSON must be an object.');
+  }
+
+  const roles = Array.isArray(input.roles) ? input.roles.map(role => {
+    if (!role || typeof role !== 'object' || Array.isArray(role)) return role;
+    let color = role.color;
+    if (typeof color === 'string' && /^#?[0-9a-f]{6}$/i.test(color.trim())) {
+      color = Number.parseInt(color.trim().replace(/^#/, ''), 16);
+    }
+    return { ...role, color };
+  }) : input.roles;
+
+  const categories = Array.isArray(input.categories) ? input.categories.map(category => {
+    if (!category || typeof category !== 'object' || Array.isArray(category)) return category;
+    const channels = Array.isArray(category.channels) ? category.channels.map(channel => {
+      if (Array.isArray(channel)) return channel;
+      if (channel && typeof channel === 'object' && !Array.isArray(channel) &&
+          ['text', 'voice'].includes(channel.type) && typeof channel.name === 'string') {
+        return [channel.type, channel.name];
+      }
+      return channel;
+    }) : category.channels;
+    return { ...category, channels };
+  }) : input.categories;
+
+  return { ...input, roles, categories };
+}
+
 function validGuildId(value) {
   return typeof value === 'string' && /^\d{17,20}$/.test(value);
 }
@@ -434,7 +465,7 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
   const transaction = getBotDb().transaction(() => {
     for (const [key, rawValue] of Object.entries(values)) {
       if (!allowed.has(key)) throw new Error(`Unsupported setting: ${key}`);
-      const value = String(rawValue ?? '');
+      let value = String(rawValue ?? '');
       if (value.length > (key === 'server_setup_template' ? 30000 : key.endsWith('template') ? 1800 : ['bot_welcome_message','bot_rules_text','community_welcome_message'].includes(key) ? 4096 : 5000)) {
         throw new Error(`Setting ${key} is too long.`);
       }
@@ -468,16 +499,18 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
       if (key === 'autopartner_channel_id' && value && !/^\d{17,20}$/.test(value)) throw new Error('Autopartner channel ID must be a Discord ID.');
       if (key.startsWith('bot_command_enabled:') && !['true','false'].includes(value)) throw new Error('Command toggles must be true or false.');
       if (key === 'server_setup_template' && value) {
-        const template = JSON.parse(value);
+        const template = normalizeServerSetupTemplate(JSON.parse(value));
         if (!Array.isArray(template.roles) || !Array.isArray(template.categories) ||
             template.roles.length > 40 || template.categories.length > 30 ||
-            template.roles.some(role => !role || typeof role.name !== 'string' || !role.name.trim() || role.name.length > 100) ||
+            template.roles.some(role => !role || typeof role.name !== 'string' || !role.name.trim() || role.name.length > 100 ||
+              (role.color !== undefined && (!Number.isInteger(role.color) || role.color < 0 || role.color > 0xFFFFFF))) ||
             template.categories.some(group => !group || typeof group.name !== 'string' || !group.name.trim() ||
               !Array.isArray(group.channels) || group.channels.length > 50 ||
               group.channels.some(channel => !Array.isArray(channel) || !['text','voice'].includes(channel[0]) ||
                 typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
-          throw new Error('Setup template needs valid roles and categories. Each channel must be ["text" or "voice", "channel-name"]. Limits: 40 roles, 30 categories, 50 channels per category.');
+          throw new Error('Setup template needs valid roles and categories. Channels may be ["text", "channel-name"] or {"type":"text","name":"channel-name"}. Limits: 40 roles, 30 categories, 50 channels per category.');
         }
+        value = JSON.stringify(template);
       }
       put.run('global', key, value);
     }
@@ -492,7 +525,12 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
 app.post('/api/auth/admin/bot-control/publish-template', async (req, res) => {
   if (!requireBotOwner(req, res)) return;
   const guildId = String(req.body?.guildId || getHomeGuildId()).trim();
-  const template = req.body?.template;
+  let template;
+  try {
+    template = normalizeServerSetupTemplate(req.body?.template);
+  } catch (error) {
+    return res.status(400).json({ error: error.message || 'Invalid setup JSON.' });
+  }
   if (!validGuildId(guildId)) return res.status(400).json({ error: 'The Meta home server ID is invalid.' });
   if (!(await requireOwnedGuild(req, res, guildId))) return;
   if (!template || !Array.isArray(template.roles) || !Array.isArray(template.categories) ||
@@ -503,7 +541,7 @@ app.post('/api/auth/admin/bot-control/publish-template', async (req, res) => {
         !Array.isArray(group.channels) || group.channels.length > 50 ||
         group.channels.some(channel => !Array.isArray(channel) || !['text','voice'].includes(channel[0]) ||
           typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
-    return res.status(400).json({ error: 'Invalid setup JSON. Check roles, categories, and ["text" or "voice", "channel-name"] channel entries.' });
+    return res.status(400).json({ error: 'Invalid setup JSON. Check role names/colors and category channel entries.' });
   }
   const templateJson = JSON.stringify(template);
   if (templateJson.length > 30000) return res.status(413).json({ error: 'Setup JSON is too large (30 KB maximum).' });
