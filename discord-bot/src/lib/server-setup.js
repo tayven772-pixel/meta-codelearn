@@ -5,6 +5,7 @@ import {
   ChannelType
 } from 'discord.js';
 import { getSetting, setSetting } from './database.js';
+import { publishTicketPanel } from './tickets.js';
 
 export const serverSetupCommand = new SlashCommandBuilder()
   .setName('setup-server')
@@ -64,6 +65,7 @@ function parseTemplateColor(value, label = 'color') {
 function permissionBits(names, label) {
   if (names === undefined) return undefined;
   if (!Array.isArray(names)) throw new Error(label + ' must be an array of Discord permission names.');
+  if (names.every(name => typeof name === 'bigint')) return new PermissionsBitField(names).bitfield;
   const bits = [];
   for (const name of names) {
     if (typeof name !== 'string' || !Object.hasOwn(PermissionFlagsBits, name)) {
@@ -384,16 +386,18 @@ function applyBotControlSettings(guild, template) {
     const role = autorole.role ? guild.roles.cache.find(item => item.name.toLowerCase() === String(autorole.role).trim().toLowerCase()) : null;
     setSetting('global', 'community_autorole_id', autorole.enabled !== false ? (role?.id || '') : '');
   }
+  const markedChannel = panel => template.categories.flatMap(group => group.channels).find(([, , options]) => options?.bot_panel === panel)?.[1] || '';
   const logging = botSettings.logging;
   if (logging) {
-    const channel = logging.channel ? findChannelByName(guild, logging.channel, textTypes) : null;
+    const channel = (logging.channel || markedChannel('logging')) ? findChannelByName(guild, logging.channel || markedChannel('logging'), textTypes) : null;
     setSetting('global', 'community_log_channel_id', logging.enabled === false ? '' : (channel?.id || ''));
     setSetting('global', 'community_log_enabled', String(logging.enabled !== false));
     setSetting('global', 'community_log_events', JSON.stringify(Array.isArray(logging.events) ? logging.events : []));
   }
   const ticket = botSettings.tickets;
   if (ticket) {
-    const channel = ticket.panel_channel ? findChannelByName(guild, ticket.panel_channel, textTypes) : null;
+    const panelChannelName = ticket.panel_channel || markedChannel('tickets');
+    const channel = panelChannelName ? findChannelByName(guild, panelChannelName, textTypes) : null;
     const category = ticket.category ? guild.channels.cache.find(item =>
       item.type === ChannelType.GuildCategory &&
       normalizeChannelName(item.name) === normalizeChannelName(String(ticket.category))
@@ -740,6 +744,17 @@ export async function applyServerTemplate(guild, input) {
   }
 
   applyBotControlSettings(guild, template);
+  const ticketSettings = template.__templateMeta?.botSettings?.ticket;
+  const ticketPanelName = ticketSettings?.panel_channel || template.categories.flatMap(group => group.channels).find(([, , options]) => options?.bot_panel === 'tickets')?.[1];
+  if (ticketSettings?.enabled !== false && ticketPanelName) {
+    const ticketPanelChannel = findChannelByName(guild, ticketPanelName, [ChannelType.GuildText, ChannelType.GuildAnnouncement]);
+    if (ticketPanelChannel) {
+      try { await publishTicketPanel(guild, ticketPanelChannel.id); }
+      catch (error) { errors.push('Ticket panel: ' + error.message); }
+    } else {
+      errors.push('Ticket panel: configured panel channel was not found.');
+    }
+  }
   return {
     created, updated, skipped, deleted, protected: protectedItems,
     errors, plan: {
