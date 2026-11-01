@@ -206,8 +206,8 @@ async function reopenTicketById(interaction, database, guild, guildId, staffRole
 
 async function handleTicketControlButton(interaction, database) {
   const customId = interaction.customId || '';
-  const confirmMatch = customId.match(/^ticket_close_(confirm|cancel)_(\\d+)$/);
-  const startMatch = customId.match(/^ticket_close_(\\d+)$/);
+  const confirmMatch = customId.match(/^ticket_close_(confirm|cancel)_(\d+)$/);
+  const startMatch = customId.match(/^ticket_close_(\d+)$/);
   if (!confirmMatch && !startMatch) return false;
   const ticketId = Number(confirmMatch ? confirmMatch[2] : startMatch[1]);
   const ticket = findTicketById(database, ticketId, interaction.guildId);
