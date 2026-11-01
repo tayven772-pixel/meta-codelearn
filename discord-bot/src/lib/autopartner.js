@@ -1,4 +1,4 @@
-import { ChannelType, EmbedBuilder, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { db, getSetting, setSetting } from './database.js';
 
 db.exec(`
@@ -30,6 +30,12 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS autopartner_submissions_due ON autopartner_submissions(guild_id, status, last_checked_at);
 `);
+if (!db.pragma('table_info(autopartner_submissions)').some(column => column.name === 'approval_status')) {
+  db.exec("ALTER TABLE autopartner_submissions ADD COLUMN approval_status TEXT NOT NULL DEFAULT 'approved'");
+}
+if (!db.pragma('table_info(autopartner_submissions)').some(column => column.name === 'review_message_id')) {
+  db.exec('ALTER TABLE autopartner_submissions ADD COLUMN review_message_id TEXT');
+}
 
 const admin = PermissionFlagsBits.Administrator;
 const channelTypes = [ChannelType.GuildText, ChannelType.GuildAnnouncement];
@@ -73,11 +79,38 @@ function getPartners(guildId) {
   return db.prepare('SELECT id, name, invite_url, description FROM autopartner_partners WHERE guild_id = ? ORDER BY id').all(guildId);
 }
 
+async function requestPartnerApproval(client, guildId, submission) {
+  if (submission.review_message_id) return;
+  const reviewChannelId = getSetting(guildId, 'autopartner_review_channel_id') || getSetting(guildId, 'community_log_channel_id');
+  const channel = reviewChannelId ? await client.channels.fetch(reviewChannelId).catch(() => null) : null;
+  if (!channel?.isTextBased() || typeof channel.send !== 'function') {
+    console.error('Autopartner approval is required, but no private review channel is configured for guild ' + guildId);
+    return;
+  }
+  const embed = new EmbedBuilder()
+    .setColor(0xF1C40F)
+    .setTitle('Partner submission awaiting approval')
+    .setDescription('**' + submission.name + '**\n' + submission.description.slice(0, 1200) + '\n\n[Open Discord invite](' + submission.invite_url + ')')
+    .addFields(
+      { name: 'Approximate members', value: Number(submission.member_count || 0).toLocaleString(), inline: true },
+      { name: 'Submitted by', value: '<@' + submission.user_id + '>', inline: true }
+    )
+    .setFooter({ text: 'Meta Code • Partner review' })
+    .setTimestamp();
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('partner_review:approve:' + submission.id).setLabel('Approve').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('partner_review:reject:' + submission.id).setLabel('Reject').setStyle(ButtonStyle.Danger)
+  );
+  const message = await channel.send({ embeds: [embed], components: [row], allowedMentions: { parse: [] } });
+  db.prepare('UPDATE autopartner_submissions SET review_message_id = ? WHERE id = ?').run(message.id, submission.id);
+}
+
 function renderEmbed(partner, guildId) {
   const template = getSetting(guildId, 'autopartner_template') || defaultTemplate();
   const description = template.replaceAll('{name}', partner.name).replaceAll('{invite}', partner.invite_url).replaceAll('{description}', partner.description);
-  return new EmbedBuilder().setColor(0x42B883).setTitle('🤝 Community Partner')
-    .setDescription(description.slice(0, 4000)).setFooter({ text: 'Meta Code • Community partnerships' }).setTimestamp();
+  const color = Number(getSetting(guildId, 'bot_embed_color') || 0x42B883);
+  return new EmbedBuilder().setColor(Number.isInteger(color) && color >= 0 && color <= 0xFFFFFF ? color : 0x42B883).setTitle('🤝 Community Partner')
+    .setDescription(description.slice(0, 4000)).setFooter({ text: getSetting(guildId, 'bot_embed_footer') || 'Meta Code • Community partnerships' }).setTimestamp();
 }
 
 async function postPartner(client, guildId, partner) {
