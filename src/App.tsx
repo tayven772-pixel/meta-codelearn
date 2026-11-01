@@ -3814,11 +3814,28 @@ function BotControlPage() {
         method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...(guildId.trim() ? { guildId: guildId.trim() } : {}), settings: payload })
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Could not save settings.');
+      const responseText = await response.text();
+      let data: { error?: string; settings?: Record<string, string>; saved?: number } = {};
+      if (responseText) {
+        try { data = JSON.parse(responseText); }
+        catch {
+          if (response.ok) throw new Error('The server returned an unreadable response while saving settings.');
+        }
+      }
+      if (!response.ok) {
+        const detail = typeof data.error === 'string' && data.error.trim()
+          ? data.error.trim()
+          : (responseText ? responseText.slice(0, 240) : response.statusText || 'No error details returned.');
+        throw new Error(`Save failed (HTTP ${response.status}): ${detail}`);
+      }
       setSettings(data.settings || payload);
       setStatus('Saved ' + String(data.saved || 0) + ' bot settings. Command toggles apply immediately. Discord may still show disabled commands in the command picker, but the bot will reject them.');
-    } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not save settings.'); }
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      setStatus(detail === 'Failed to fetch'
+        ? 'Could not reach the save API. Check the site connection and try again. (Network error: Failed to fetch)'
+        : 'Save error: ' + detail);
+    }
     finally { setBusy(false); }
   };
   const addPartner = async (event: FormEvent) => {
