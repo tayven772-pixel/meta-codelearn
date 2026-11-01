@@ -83,309 +83,85 @@ const layout = [
   }
 ];
 
-export async function handleServerSetup(interaction, confirmed = false, alreadyDeferred = false) {
-  if (!interaction.inGuild()) {
-    return interaction.reply({
-      content: 'Run this command inside your Discord server.',
-      ephemeral: true
-    });
+export async function applyServerTemplate(guild, template) {
+  if (!template || !Array.isArray(template.roles) || !Array.isArray(template.categories)) {
+    throw new Error('Template must contain roles and categories arrays.');
   }
-
-  if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-    return interaction.reply({
-      content: 'You need Administrator permission to use this command.',
-      ephemeral: true
-    });
+  if (template.roles.length > 40 || template.categories.length > 30 ||
+      template.roles.some(role => !role || typeof role.name !== 'string' || !role.name.trim() || role.name.length > 100 ||
+        (role.color !== undefined && (!Number.isInteger(role.color) || role.color < 0 || role.color > 0xFFFFFF))) ||
+      template.categories.some(group => !group || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 100 ||
+        !Array.isArray(group.channels) || group.channels.length > 50 ||
+        group.channels.some(channel => !Array.isArray(channel) || !['text','voice'].includes(channel[0]) ||
+          typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
+    throw new Error('Invalid template structure or values.');
   }
-
-  if (!alreadyDeferred) await interaction.deferReply({ ephemeral: true });
-
-  const guild = interaction.guild;
-  await guild.channels.fetch();
   await guild.roles.fetch();
-  const botMember = guild.members.me ??
-    await guild.members.fetchMe();
-
-  const requiredPermissions = [
-    PermissionFlagsBits.ManageChannels,
-    PermissionFlagsBits.ManageRoles,
-    PermissionFlagsBits.ViewChannel,
-    PermissionFlagsBits.SendMessages,
-    PermissionFlagsBits.EmbedLinks,
-    PermissionFlagsBits.ReadMessageHistory
-  ];
-
-  const missing = requiredPermissions.filter(
-    permission => !botMember.permissions.has(permission)
-  );
-
-  if (missing.length) {
-    return interaction.editReply(
-      'I am missing required server permissions. Please grant me Manage Channels, Manage Roles, View Channels, Send Messages, Embed Links, and Read Message History, then run `/setup-server` again.'
-    );
-  }
-
-
-  if (!confirmed) {
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('setup_server_confirm')
-        .setLabel('Delete channels and rebuild')
-        .setStyle(ButtonStyle.Danger),
-      new ButtonBuilder()
-        .setCustomId('setup_server_cancel')
-        .setLabel('Cancel')
-        .setStyle(ButtonStyle.Secondary)
-    );
-    return interaction.editReply({
-      content: '⚠️ **Confirm server reset**\n\nThis will delete every regular channel, category, and its message history in this server, then recreate the Meta Code template. **Roles will be kept.** This cannot be undone. Only continue if you are sure.',
-      components: [row]
-    });
-  }
-
-  const errors = [];
-  const channelDeletionErrors = [];
-  const channelsToDelete = [...guild.channels.cache.values()]
-    .sort((a, b) => {
-      const aCategory = a.type === ChannelType.GuildCategory ? 1 : 0;
-      const bCategory = b.type === ChannelType.GuildCategory ? 1 : 0;
-      return aCategory - bCategory;
-    });
-  for (const channel of channelsToDelete) {
-    try {
-      await channel.delete('Administrator confirmed Meta Code server channel reset');
-    } catch (error) {
-      channelDeletionErrors.push(`${channel.name}: ${error.message}`);
-    }
-  }
   await guild.channels.fetch();
-  if (channelDeletionErrors.length) {
-    return interaction.editReply(
-      '⚠️ I could not delete all channels, so I stopped before rebuilding. Please check my Manage Channels permission. Failed: ' +
-      channelDeletionErrors.slice(0, 8).join('; ')
-    );
+  const botMember = guild.members.me ?? await guild.members.fetchMe();
+  if (!botMember.permissions.has(PermissionFlagsBits.ManageChannels) ||
+      !botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
+    throw new Error('Meta needs Manage Channels and Manage Roles permissions.');
   }
-
-  let activeRoleDefinitions = roleDefinitions;
-  let activeLayout = layout;
-  const savedTemplate = getSetting(guild.id, 'server_setup_template');
-  if (savedTemplate) {
+  const created = [], updated = [], skipped = [], errors = [];
+  for (const definition of template.roles) {
     try {
-      const parsed = JSON.parse(savedTemplate);
-      if (!Array.isArray(parsed.roles) || !Array.isArray(parsed.categories) ||
-          parsed.roles.length > 40 || parsed.categories.length > 30 ||
-          parsed.roles.some(role => typeof role.name !== 'string' || !role.name.trim() || role.name.length > 100) ||
-          parsed.categories.some(group => typeof group.name !== 'string' || !group.name.trim() || !Array.isArray(group.channels) || group.channels.length > 50 ||
-            group.channels.some(channel => !Array.isArray(channel) || !['text','voice'].includes(channel[0]) || typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
-        throw new Error('Template must contain roles and categories with valid channel entries.');
-      }
-      activeRoleDefinitions = parsed.roles.map(role => ({ name: role.name.trim(), color: Number.isInteger(role.color) && role.color >= 0 && role.color <= 0xFFFFFF ? role.color : 0xD7DCE4 }));
-      activeLayout = parsed.categories.map(group => ({ name: group.name.trim().slice(0, 100), private: Boolean(group.private), channels: group.channels.map(([kind, name]) => [kind, name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 100) || 'new-channel']) }));
-    } catch (error) {
-      errors.push(`Saved setup template was invalid; used the built-in template instead: ${error.message}`);
-    }
-  }
-
-  const created = [];
-  const reused = [];
-
-  for (const definition of activeRoleDefinitions) {
-    try {
-      let role = guild.roles.cache.find(
-        item => item.name === definition.name
-      );
-
+      let role = guild.roles.cache.find(item => item.name === definition.name.trim());
       if (!role) {
-        role = await guild.roles.create({
-          name: definition.name,
-          color: definition.color,
-          reason: 'Meta CodeLearn server setup'
-        });
-        created.push(`role: ${definition.name}`);
+        role = await guild.roles.create({ name: definition.name.trim(), color: definition.color ?? 0xD7DCE4, reason: 'Published Meta Code setup template' });
+        created.push('role ' + role.name);
       } else {
-        reused.push(`role: ${definition.name}`);
+        const color = definition.color ?? role.color;
+        if (role.color !== color) { await role.edit({ color, reason: 'Published Meta Code setup template' }); updated.push('role ' + role.name); }
+        else skipped.push('role ' + role.name);
       }
-    } catch (error) {
-      errors.push(`Role ${definition.name}: ${error.message}`);
-    }
+    } catch (error) { errors.push('Role ' + definition.name + ': ' + error.message); }
   }
-
-  const staffRole = guild.roles.cache.find(
-    role => role.name === 'Administrator'
-  );
-
-  for (const group of activeLayout) {
+  for (const group of template.categories) {
     try {
-      let category = guild.channels.cache.find(
-        channel =>
-          channel.type === ChannelType.GuildCategory &&
-          channel.name === group.name
-      );
-
+      let category = guild.channels.cache.find(item => item.type === ChannelType.GuildCategory && item.name === group.name.trim());
+      const overwrites = group.private ? [
+        { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
+        ...['Founder','Administrator','Moderator','Support Team'].map(name => guild.roles.cache.find(role => role.name === name)).filter(Boolean)
+          .map(role => ({ id: role.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }))
+      ] : [];
       if (!category) {
-        const overwrites = group.private
-          ? [
-              {
-                id: guild.roles.everyone.id,
-                deny: [PermissionFlagsBits.ViewChannel]
-              },
-              ...(staffRole ? [{
-                id: staffRole.id,
-                allow: [
-                  PermissionFlagsBits.ViewChannel,
-                  PermissionFlagsBits.SendMessages,
-                  PermissionFlagsBits.ReadMessageHistory
-                ]
-              }] : [])
-            ]
-          : [];
-
-        category = await guild.channels.create({
-          name: group.name,
-          type: ChannelType.GuildCategory,
-          permissionOverwrites: overwrites,
-          reason: 'Meta CodeLearn server setup'
-        });
-        created.push(`category: ${group.name}`);
+        category = await guild.channels.create({ name: group.name.trim(), type: ChannelType.GuildCategory, permissionOverwrites: overwrites, reason: 'Published Meta Code setup template' });
+        created.push('category ' + category.name);
       } else {
-        reused.push(`category: ${group.name}`);
+        await category.edit({ permissionOverwrites: overwrites, reason: 'Published Meta Code setup template' });
+        updated.push('category ' + category.name);
       }
-
-      for (const [kind, name] of group.channels) {
-        try {
-          const type = kind === 'voice'
-            ? ChannelType.GuildVoice
-            : ChannelType.GuildText;
-
-          const existing = guild.channels.cache.find(
-            channel =>
-              channel.name === name &&
-              channel.type === type &&
-              channel.parentId === category.id
-          );
-
-          if (existing) {
-            reused.push(`channel: ${name}`);
-            continue;
-          }
-
-          await guild.channels.create({
-            name,
-            type,
-            parent: category.id,
-            reason: 'Meta CodeLearn server setup'
-          });
-
-          created.push(`channel: ${name}`);
-        } catch (error) {
-          errors.push(`Channel ${name}: ${error.message}`);
-        }
+      for (const [kind, rawName] of group.channels) {
+        const name = rawName.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 100) || 'new-channel';
+        const type = kind === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText;
+        const existing = guild.channels.cache.find(item => item.name === name && item.type === type && item.parentId === category.id);
+        if (existing) { skipped.push('channel ' + name); continue; }
+        await guild.channels.create({ name, type, parent: category.id, reason: 'Published Meta Code setup template' });
+        created.push('channel ' + name);
       }
-    } catch (error) {
-      errors.push(`Category ${group.name}: ${error.message}`);
-    }
+    } catch (error) { errors.push('Category ' + group.name + ': ' + error.message); }
   }
+  return { created, updated, skipped, errors };
+}
 
-  const welcome = guild.channels.cache.find(
-    channel => channel.name === 'welcome' && channel.type === ChannelType.GuildText
-  );
-  if (welcome) {
-    try {
-      const messages = await welcome.messages.fetch({ limit: 20 });
-      const existing = messages.find(message => message.author.id === botMember.id &&
-        message.embeds.some(embed => ['Welcome to Meta Code!', 'Welcome to Meta CodeLearn!'].includes(embed.title)));
-      const welcomeOverride = getSetting(guild.id, 'bot_welcome_message');
-      const embed = new EmbedBuilder()
-        .setColor(0x54C8D8)
-        .setTitle('Welcome to Meta Code!')
-        .setDescription((welcomeOverride || 'A friendly community for learning, building projects, and helping each other grow.').slice(0, 4096))
-        .addFields(
-          { name: '💻 Learn', value: 'Explore coding topics and resources.', inline: true },
-          { name: '🛠️ Build', value: 'Share websites, bots, and projects.', inline: true },
-          { name: '🤝 Connect', value: 'Meet other learners and creators.', inline: true },
-          { name: '🚀 Get started', value: 'Read #rules, introduce yourself, and join the conversation.' }
-        )
-        .setFooter({ text: 'Learn together. Build together. Grow together.' });
-      if (existing) await existing.edit({ embeds: [embed] });
-      else await welcome.send({ embeds: [embed], allowedMentions: { parse: [] } });
-    } catch (error) {
-      errors.push('Welcome message: ' + error.message);
-    }
+export async function handleServerSetup(interaction) {
+  if (!interaction.inGuild()) return interaction.reply({ content: 'Run this command inside your Discord server.', ephemeral: true });
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: 'You need Administrator permission to use this command.', ephemeral: true });
+  await interaction.deferReply({ ephemeral: true });
+  const guild = interaction.guild;
+  const botMember = guild.members.me ?? await guild.members.fetchMe();
+  if (!botMember.permissions.has(PermissionFlagsBits.ManageChannels) || !botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
+    return interaction.editReply('I need Manage Channels and Manage Roles permissions before applying a setup.');
   }
-
-  const rules = guild.channels.cache.find(
-    channel => channel.name === 'rules' && channel.type === ChannelType.GuildText
-  );
-  if (rules) {
-    try {
-      const messages = await rules.messages.fetch({ limit: 20 });
-      const existing = messages.find(message => message.author.id === botMember.id &&
-        message.embeds.some(embed => ['Meta Code Community Rules', 'Meta CodeLearn Community Rules'].includes(embed.title)));
-      const rulesOverride = getSetting(guild.id, 'bot_rules_text');
-      const defaultRules = [
-        '1. Treat everyone with respect.',
-        '2. No harassment, hate, or threats.',
-        '3. Keep messages in the appropriate channels.',
-        '4. No spam or unsolicited advertising.',
-        '5. Never share passwords, tokens, or private information.',
-        '6. Only share projects and content you have permission to share.',
-        '7. Follow Discord’s Terms of Service and Community Guidelines.',
-        '8. Follow moderator instructions and use support tickets when needed.'
-      ].join('\n\n');
-      const embed = new EmbedBuilder()
-        .setColor(0x54C8D8)
-        .setTitle('Meta Code Community Rules')
-        .setDescription((rulesOverride || defaultRules).slice(0, 4096))
-        .setFooter({ text: 'Help us keep Meta Code friendly and welcoming.' });
-      if (existing) await existing.edit({ embeds: [embed] });
-      else await rules.send({ embeds: [embed], allowedMentions: { parse: [] } });
-    } catch (error) {
-      errors.push('Rules message: ' + error.message);
-    }
-  }
-
-  const summary = [
-    '✅ **Meta Code setup finished. Existing channels were deleted and the template was rebuilt. Roles were preserved.**',
-    `Created: ${created.length} items`,
-    `Already existed: ${reused.length} items`,
-    `Issues: ${errors.length}`
-  ];
-
-  if (errors.length) {
-    summary.push(
-      '',
-      '**Issues to review:**',
-      ...errors.slice(0, 8).map(error => `• ${error}`)
-    );
-  }
-
-  summary.push(
-    '',
-    'Please review channel permissions and assign trusted staff roles before opening the server to everyone.'
-  );
-
-  await interaction.editReply(summary.join('\n'));
+  let template = null;
+  const saved = getSetting(guild.id, 'server_setup_template');
+  if (saved) { try { template = JSON.parse(saved); } catch { /* use built-in fallback */ } }
+  if (!template) template = { roles: roleDefinitions, categories: layout };
+  try {
+    const result = await applyServerTemplate(guild, template);
+    return interaction.editReply('✅ **Meta Code setup applied safely.**\nCreated: ' + result.created.length + '\nUpdated: ' + result.updated.length + '\nAlready matched: ' + result.skipped.length + '\nIssues: ' + result.errors.length + (result.errors.length ? '\n' + result.errors.slice(0, 8).join('\n') : '') + '\nExisting channels and messages were preserved.');
+  } catch (error) { return interaction.editReply('Setup failed: ' + error.message); }
 }
 
 
-export async function handleServerSetupButton(interaction) {
-  if (interaction.customId === 'setup_server_cancel') {
-    return interaction.update({
-      content: 'Reset cancelled. No channels were deleted.',
-      components: [],
-      embeds: []
-    });
-  }
-
-  if (interaction.customId === 'setup_server_confirm') {
-    if (!interaction.inGuild() ||
-        !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-      return interaction.reply({
-        content: 'Only a server administrator can confirm this reset.',
-        ephemeral: true
-      });
-    }
-    await interaction.deferUpdate();
-    return handleServerSetup(interaction, true, true);
-  }
-}
