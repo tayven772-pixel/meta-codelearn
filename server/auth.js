@@ -516,6 +516,10 @@ function validateBotSetupTemplate(template) {
           typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
     return 'Invalid setup JSON. Check roles, categories, and ["text" or "voice", "channel-name"] entries.';
   }
+  if (template.serverName !== undefined &&
+      (typeof template.serverName !== 'string' || template.serverName.trim().length < 2 || template.serverName.trim().length > 100)) {
+    return 'serverName must be 2–100 characters when provided. Omit it to keep the current server name.';
+  }
 
   const roleNames = template.roles.map(role => role.name.trim().toLowerCase());
   const categoryNames = template.categories.map(group => group.name.trim().toLowerCase());
