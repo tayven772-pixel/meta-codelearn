@@ -3852,7 +3852,7 @@ function BotControlPage() {
     try {
       const response = await fetch('/api/auth/admin/bot-control/publish-template', {
         method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guildId, template })
+        body: JSON.stringify({ guildId, template, confirmReplace: true })
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Could not publish setup.');
