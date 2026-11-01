@@ -376,7 +376,7 @@ export async function applyServerTemplate(guild, template, options = {}) {
     }
   }
   await applyTemplateSettings(guild, template);
-  return { created, updated, deleted, skipped, protectedRoles: plan.protectedRoles, protectedChannels: plan.protectedChannels };
+  return { created, updated, deleted, skipped, errors: [], protectedRoles: plan.protectedRoles, protectedChannels: plan.protectedChannels };
 }
 
 export async function previewServerTemplate(guild, template) {
@@ -415,7 +415,7 @@ export async function handleServerSetup(interaction) {
   if (!template) template = { roles: roleDefinitions, categories: layout };
   try {
     const result = await applyServerTemplate(guild, template);
-    return interaction.editReply('✅ **Meta Code setup applied safely.**\nCreated: ' + result.created.length + '\nUpdated: ' + result.updated.length + '\nAlready matched: ' + result.skipped.length + '\nIssues: ' + result.errors.length + (result.errors.length ? '\n' + result.errors.slice(0, 8).join('\n') : '') + '\nExisting channels and messages were preserved.');
+    return interaction.editReply('✅ **Meta Code setup applied safely.**\nCreated: ' + result.created.length + '\nUpdated: ' + result.updated.length + '\nDeleted: ' + result.deleted.length + '\nAlready matched: ' + result.skipped.length + '\nExisting channels and messages were preserved.');
   } catch (error) { return interaction.editReply('Setup failed: ' + error.message); }
 }
 
