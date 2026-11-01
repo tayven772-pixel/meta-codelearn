@@ -4023,15 +4023,15 @@ function BotControlPage() {
             <p>Settings can be edited while the bot is offline and will take effect when it reconnects.</p>
           </section>
           {editorOpen && <>
-            <section id="bot-settings-editor" className="admin-publishing-guide">
+            {showDashboardSection('serverSetup') && <section id="bot-settings-editor" className="admin-publishing-guide">
               <h2>Publish server setup JSON</h2>
               <p>This JSON configures the Discord layout and the sections/settings shown in this control panel. Publishing replaces the server layout: unlisted channels, categories, and removable roles are deleted after the desired layout has been created.</p>
               <p><strong>Warning:</strong> deleting a channel permanently removes its message history and threads. Meta cannot delete @everyone, managed bot/integration roles, or roles at/above its highest role.</p>
               <textarea value={templateText} onChange={event => setTemplateText(event.target.value)} rows={18} spellCheck={false} style={{ ...fieldStyle, fontFamily: 'monospace' }} aria-label="Discord setup JSON" />
               <button type="button" className="button-primary" onClick={() => { void publishSetupTemplate(); }} disabled={busy}>{busy ? 'Publishing…' : 'Publish JSON to Discord'}</button>
               <button type="button" className="button-secondary" onClick={() => setTemplateText(defaultTemplate)} disabled={busy}>Reset template</button>
-            </section>
-            <section className="admin-publishing-guide">
+            </section>}
+            {showDashboardSection('commands') && <section className="admin-publishing-guide">
               <h2>Bot settings editor</h2>
               <p>The editor is open. Change any fields below, then choose Save all settings.</p>
               <h3>Command controls</h3>
@@ -4042,8 +4042,8 @@ function BotControlPage() {
                   <input type="checkbox" checked={isEnabled(command)} onChange={event => toggleCommand(command, event.target.checked)} aria-label={'Enable /' + command} />
                 </label>)}
               </div>
-            </section>
-            <section className="admin-publishing-guide">
+            </section>}
+            {showDashboardSection('responses') && <section className="admin-publishing-guide">
               <h2>Editable bot responses</h2>
               <p>Use <code>{'{siteUrl}'}</code> as a placeholder in messages. Leave a field empty to use the built-in default.</p>
               {(['meta','lessons','ping','help'] as const).map(name => <label key={name} style={{ display: 'block', marginTop: 14 }}>
@@ -4062,8 +4062,8 @@ function BotControlPage() {
                 <strong>Rules text override</strong>
                 <textarea value={settings.bot_rules_text || ''} onChange={event => setValue('bot_rules_text', event.target.value)} placeholder="Leave blank to use the default rules" rows={5} style={fieldStyle} />
               </label>
-            </section>
-            <section className="admin-publishing-guide">
+            </section>}
+            {showDashboardSection('tickets') && <section className="admin-publishing-guide">
               <h2>Ticket system builder</h2>
               <p>Choose how members select a ticket category, customize the panel text, and configure the form they must complete before a private ticket channel is created. Save all settings, then run <code>/ticket panel</code> again to post the updated panel.</p>
               <label style={{ display: 'block', marginTop: 12 }}>
@@ -4105,8 +4105,8 @@ function BotControlPage() {
                 <small>Use 1–5 questions. Each question becomes a required field shown before the bot creates the ticket channel. Each question must be 45 characters or fewer.</small>
               </label>
               <p>Important: the ticket category and staff role used for channel permissions still need to be configured with <code>/ticket setup</code>. This editor controls the categories members choose on the panel. The channel category, staff role, and log channel can be set here or with `/ticket setup`.</p>
-            </section>
-            <section className="admin-publishing-guide">
+            </section>}
+            {showDashboardSection('messages') && <section className="admin-publishing-guide">
               <h2>Send a message as Meta</h2>
               <p>Post directly to a text channel in the configured Meta home server. Discord will show the message as sent by the bot.</p>
               <form onSubmit={sendBotMessage}>
@@ -4123,8 +4123,8 @@ function BotControlPage() {
                   {sendingMessage ? 'Sending…' : 'Send as Meta'}
                 </button>
               </form>
-            </section>
-            <section className="admin-publishing-guide">
+            </section>}
+            {showDashboardSection('community') && <section className="admin-publishing-guide">
               <h2>Community features</h2>
               <p>Configure welcome messages, automatic roles, event logging, and activity XP for the Meta home server. Use Discord Developer Mode to copy channel and role IDs. The bot's role must be above any role it assigns.</p>
               <label style={{ display: 'block', marginTop: 12 }}>
@@ -4150,8 +4150,8 @@ function BotControlPage() {
                 Enable message activity XP and leveling
               </label>
               <p>Members can use <code>/level</code> and <code>/leaderboard</code>. XP is awarded at most once per minute per member.</p>
-            </section>
-            <section className="admin-publishing-guide">
+            </section>}
+            {showDashboardSection('autopartner') && <section className="admin-publishing-guide">
               <h2>Automatic partnerships</h2>
               <label style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}>
                 <input type="checkbox" checked={settings.autopartner_enabled === 'true'} onChange={event => setValue('autopartner_enabled', event.target.checked ? 'true' : 'false')} />
@@ -4181,7 +4181,7 @@ function BotControlPage() {
                 <label style={{ display: 'block', marginTop: 10 }}>Description<input maxLength={300} value={partnerDescription} onChange={event => setPartnerDescription(event.target.value)} style={fieldStyle} /></label>
                 <button type="submit" className="button-primary" disabled={busy} style={{ marginTop: 12 }}>Add approved partner</button>
               </form>
-            </section>
+            </section>}
           </>}
           <section className="admin-publishing-guide">
             <h2>More commands added</h2>
