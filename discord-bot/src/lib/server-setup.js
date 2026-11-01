@@ -159,7 +159,7 @@ export function validateServerTemplate(template) {
     channelDefinitions.set(normalizeChannelName(name), kind);
   }
   const categoryNamesForSettings = new Set(template.categories.map(group => normalizeChannelName(group.name)));
-  if (categoryNamesForSettings.size !== channelKeys.length + categoryNamesForSettings.size || [...categoryNamesForSettings].some(name => channelKeys.includes(name))) {
+  if ([...categoryNamesForSettings].some(name => channelKeys.includes(name))) {
     throw new Error('Category names must not also be used as channel names.');
   }
   const roleNamesForSettings = new Set(template.roles.map(role => role.name.trim().toLowerCase()));
