@@ -3891,6 +3891,8 @@ function BotControlPage() {
       const createRoles = Array.isArray(plan.createRoles) ? plan.createRoles.length : 0;
       const updateRoles = Array.isArray(plan.updateRoles) ? plan.updateRoles.length : 0;
       const createCategories = Array.isArray(plan.createCategories) ? plan.createCategories.length : 0;
+      const updateCategories = Array.isArray(plan.updateCategories) ? plan.updateCategories.length : 0;
+      const syncCategoryPermissions = Number(plan.syncCategoryPermissions) || 0;
       const createChannels = Array.isArray(plan.createChannels) ? plan.createChannels.length : 0;
       const moveChannels = Array.isArray(plan.moveChannels) ? plan.moveChannels.length : 0;
       const deleteChannels = Array.isArray(plan.deleteChannels) ? plan.deleteChannels.length : 0;
@@ -3901,6 +3903,8 @@ function BotControlPage() {
         'Create roles: ' + createRoles + '\n' +
         'Update roles: ' + updateRoles + '\n' +
         'Create categories: ' + createCategories + '\n' +
+        'Rename categories: ' + updateCategories + '\n' +
+        'Reset category permissions to the JSON layout: ' + syncCategoryPermissions + '\n' +
         'Create channels: ' + createChannels + '\n' +
         'Move existing channels: ' + moveChannels + '\n' +
         'DELETE channels (messages and threads included): ' + deleteChannels + '\n' +
@@ -3911,6 +3915,7 @@ function BotControlPage() {
       const warning = "DISCORD REPLACEMENT PREVIEW\n\n" + previewSummary +
         "\n\nThe preview has not changed Discord. Deleting channels permanently removes their messages and threads. " +
         "Managed bot/integration roles and roles at or above Meta's highest role are protected. " +
+        "Category permissions will be reset to the template, including making non-private categories public. " +
         "Continue with the replacement?";
       if (!window.confirm(warning)) {
         setStatus('Preview complete. No Discord changes were made; publishing was cancelled.');
