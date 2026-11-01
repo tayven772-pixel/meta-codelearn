@@ -102,6 +102,7 @@ export function validateServerTemplate(template) {
     throw new Error('Invalid template structure or values.');
   }
   const roleNames = template.roles.map(role => role.name.trim().toLowerCase());
+  if (roleNames.includes('@everyone')) throw new Error('The @everyone role is managed by Discord and cannot be included in roles.');
   if (new Set(roleNames).size !== roleNames.length) throw new Error('Role names must be unique.');
   const categoryNames = template.categories.map(group => group.name.trim().toLowerCase());
   if (new Set(categoryNames).size !== categoryNames.length) throw new Error('Category names must be unique.');
@@ -195,8 +196,7 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
     throw new Error('Meta needs Manage Channels and Manage Roles permissions.');
   }
 
-  const desiredRoles = new Set(template.roles.map(role => role.name.trim().toLowerCase()));
-  const desiredCategories = new Set(template.categories.map(group => group.name.trim().toLowerCase()));
+  const botHighest = botMember.roles.highest.position;
   const desiredChannels = desiredChannelDefinitions(template);
   const usedRoleIds = new Set();
   const usedCategoryIds = new Set();
@@ -210,11 +210,13 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
     if (!existing) createRoles.push({ name: definition.name.trim(), color: definition.color ?? 0xD7DCE4 });
     else {
       usedRoleIds.add(existing.id);
-      if (definition.color !== undefined && existing.color !== definition.color) updateRoles.push({ id: existing.id, name: existing.name, color: definition.color });
+      if (definition.color !== undefined && existing.color !== definition.color) {
+        if (existing.managed || existing.position >= botHighest) protectedRoles.push({ id: existing.id, name: existing.name, reason: existing.managed ? 'managed by Discord/integration' : 'at or above Meta bot role' });
+        else updateRoles.push({ id: existing.id, name: existing.name, color: definition.color });
+      }
     }
   }
 
-  const botHighest = botMember.roles.highest.position;
   for (const role of guild.roles.cache.values()) {
     if (role.id === guild.id || usedRoleIds.has(role.id)) continue;
     const protectedRole = role.managed || role.permissions.has(PermissionFlagsBits.Administrator) ||
@@ -237,7 +239,8 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
     const existing = guild.channels.cache.find(channel => channel.type === definition.type && channel.name.toLowerCase() === definition.name && !usedChannelIds.has(channel.id));
     if (existing) {
       usedChannelIds.add(existing.id);
-      if (!category || existing.parentId !== category.id) moveChannels.push({ id: existing.id, name: existing.name, fromCategory: existing.parent?.name || 'No category', toCategory: definition.categoryName });
+      if (!existing.manageable) protectedChannels.push({ id: existing.id, name: existing.name, reason: 'channel is not manageable by Meta bot' });
+      else if (!category || existing.parentId !== category.id) moveChannels.push({ id: existing.id, name: existing.name, fromCategory: existing.parent?.name || 'No category', toCategory: definition.categoryName });
       else syncChannelPermissions.push({ id: existing.id, name: existing.name, categoryName: definition.categoryName });
     } else {
       createChannels.push({ name: definition.name, type: definition.type, categoryName: definition.categoryName });
