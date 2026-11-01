@@ -3911,7 +3911,7 @@ function BotControlPage() {
         throw new Error('Use roles and categories arrays. Each channel must be ["text" or "voice", "channel-name"]. Limits: 40 roles, 30 categories, 50 channels each.');
       }
     } catch (error) { setStatus('Setup template JSON is invalid: ' + (error instanceof Error ? error.message : 'check the JSON')); return; }
-    const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_min_members','autopartner_template','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help','ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','community_welcome_channel_id','community_welcome_message','community_autorole_id','community_log_channel_id','community_xp_enabled']);
+    const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_min_members','autopartner_template','staff_applications_enabled','staff_applications_channel_id','staff_applications_title','staff_applications_description','community_welcome_avatar','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help','ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','community_welcome_channel_id','community_welcome_message','community_autorole_id','community_log_channel_id','community_xp_enabled']);
     const payload = Object.fromEntries(Object.entries(settings).filter(([key]) => editableKeys.has(key) || key.startsWith('bot_command_enabled:')));
     payload.server_setup_template = template;
     setBusy(true);
@@ -4121,6 +4121,27 @@ function BotControlPage() {
               </label>
               <p>Important: the ticket category and staff role used for channel permissions still need to be configured with <code>/ticket setup</code>. This editor controls the categories members choose on the panel. The channel category, staff role, and log channel can be set here or with `/ticket setup`.</p>
             </section>
+            <section className="admin-publishing-guide" hidden={!panelSectionEnabled('applications')}>
+              <h2>Staff applications</h2>
+              <p>Applications use a private Discord modal and are delivered to the review channel below. Reviewers with Manage Server or Administrator permission can accept or reject each submission.</p>
+              <label style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}>
+                <input type="checkbox" checked={settings.staff_applications_enabled !== 'false'} onChange={event => setValue('staff_applications_enabled', event.target.checked ? 'true' : 'false')} />
+                Accept new staff applications
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Private staff review channel ID</strong>
+                <input value={settings.staff_applications_channel_id || ''} onChange={event => setValue('staff_applications_channel_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Discord text channel ID" style={fieldStyle} inputMode="numeric" />
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Application panel title</strong>
+                <input value={settings.staff_applications_title || ''} onChange={event => setValue('staff_applications_title', event.target.value)} maxLength={45} placeholder="Meta Code | Staff Applications" style={fieldStyle} />
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Application panel description</strong>
+                <textarea value={settings.staff_applications_description || ''} onChange={event => setValue('staff_applications_description', event.target.value)} maxLength={1000} rows={4} placeholder="Explain who you are looking for and how to apply." style={fieldStyle} />
+              </label>
+              <p>After saving the channel and panel text, run <code>/setup-applications staff_channel:#your-private-review-channel</code> in Discord to publish the Apply button. The channel should be private to staff.</p>
+            </section>
             <section className="admin-publishing-guide" hidden={!panelSectionEnabled('messages')}>
               <h2>Send a message as Meta</h2>
               <p>Post directly to a text channel in the configured Meta home server. Discord will show the message as sent by the bot.</p>
@@ -4151,6 +4172,10 @@ function BotControlPage() {
                 <textarea value={settings.community_welcome_message || ''} onChange={event => setValue('community_welcome_message', event.target.value)} maxLength={1500} rows={4} placeholder="Welcome {user} to {server}! You are member #{membercount}." style={fieldStyle} />
                 <small>Placeholders: {'{user}'}, {'{server}'}, {'{membercount}'}. Leave blank to use the built-in welcome message.</small>
               </label>
+              <label style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 16 }}>
+                <input type="checkbox" checked={settings.community_welcome_avatar !== 'false'} onChange={event => setValue('community_welcome_avatar', event.target.checked ? 'true' : 'false')} />
+                Show the new member's profile picture in the welcome embed
+              </label>
               <label style={{ display: 'block', marginTop: 12 }}>
                 <strong>Automatic join role ID</strong>
                 <input value={settings.community_autorole_id || ''} onChange={event => setValue('community_autorole_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Discord role ID (optional)" style={fieldStyle} inputMode="numeric" />
@@ -4170,16 +4195,17 @@ function BotControlPage() {
               <h2>Automatic partnerships</h2>
               <label style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}>
                 <input type="checkbox" checked={settings.autopartner_enabled === 'true'} onChange={event => setValue('autopartner_enabled', event.target.checked ? 'true' : 'false')} />
-                Enable automatic approved-partner posts
+                Enable automatic member-count verified partner posts
               </label>
               <label style={{ display: 'block', marginTop: 12 }}>Announcement channel ID<input value={settings.autopartner_channel_id || ''} onChange={event => setValue('autopartner_channel_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Discord channel ID" style={fieldStyle} /></label>
               <label style={{ display: 'block', marginTop: 12 }}>Interval (6–168 hours)<input type="number" min={6} max={168} value={settings.autopartner_interval_hours || '24'} onChange={event => setValue('autopartner_interval_hours', event.target.value)} style={fieldStyle} /></label>
+              <label style={{ display: 'block', marginTop: 12 }}>Minimum Discord server members<input type="number" min={10} max={1000000} value={settings.autopartner_min_members || '100'} onChange={event => setValue('autopartner_min_members', event.target.value)} style={fieldStyle} /></label>
               <label style={{ display: 'block', marginTop: 12 }}>Partner message template<textarea value={settings.autopartner_template || ''} onChange={event => setValue('autopartner_template', event.target.value)} placeholder="Use {name}, {invite}, and {description}" rows={4} style={fieldStyle} /></label>
-              <p>Automatic posting stays disabled until you enable it, choose a channel, and add at least one partner.</p>
-              <h3>Approved partners</h3>
+              <p>Members can submit an invite with /partner-add. Meta checks the invite's approximate Discord member count and only saves/posts it when it meets this threshold. The bot re-checks the count before scheduled posts.</p>
+              <h3>Verified partner rotation</h3>
               <div className="admin-content-list">
                 {partners.map(partner => <div className="admin-content-list-item" key={partner.id}>
-                  <strong>Approved partner</strong>
+                  <strong>Verified partner</strong>
                   <label style={{ display: 'block', marginTop: 8 }}>Name<input value={partner.name} maxLength={80} onChange={event => setPartners(current => current.map(item => item.id === partner.id ? { ...item, name: event.target.value } : item))} style={fieldStyle} /></label>
                   <label style={{ display: 'block', marginTop: 8 }}>Invite URL<input type="url" value={partner.invite_url} onChange={event => setPartners(current => current.map(item => item.id === partner.id ? { ...item, invite_url: event.target.value } : item))} style={fieldStyle} /></label>
                   <label style={{ display: 'block', marginTop: 8 }}>Description<input value={partner.description} maxLength={300} onChange={event => setPartners(current => current.map(item => item.id === partner.id ? { ...item, description: event.target.value } : item))} style={fieldStyle} /></label>
@@ -4188,13 +4214,13 @@ function BotControlPage() {
                     <button type="button" className="button-secondary" onClick={() => removePartner(partner.id)} disabled={busy}>Remove partner</button>
                   </div>
                 </div>)}
-                {!partners.length && <p>No approved partners yet.</p>}
+                {!partners.length && <p>No partner servers in the rotation yet.</p>}
               </div>
               <form onSubmit={addPartner} style={{ marginTop: 18 }}>
                 <label style={{ display: 'block' }}>Partner name<input required maxLength={80} value={partnerName} onChange={event => setPartnerName(event.target.value)} style={fieldStyle} /></label>
                 <label style={{ display: 'block', marginTop: 10 }}>Discord invite URL<input required type="url" value={partnerInvite} onChange={event => setPartnerInvite(event.target.value)} placeholder="https://discord.gg/..." style={fieldStyle} /></label>
                 <label style={{ display: 'block', marginTop: 10 }}>Description<input maxLength={300} value={partnerDescription} onChange={event => setPartnerDescription(event.target.value)} style={fieldStyle} /></label>
-                <button type="submit" className="button-primary" disabled={busy} style={{ marginTop: 12 }}>Add approved partner</button>
+                <button type="submit" className="button-primary" disabled={busy} style={{ marginTop: 12 }}>Add owner-managed partner</button>
               </form>
             </section>
           </>}
