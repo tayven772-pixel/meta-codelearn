@@ -415,7 +415,9 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
   const allowed = new Set([
     'autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_template',
     'server_setup_template','bot_welcome_message','bot_rules_text','bot_status_text',
-    'community_welcome_channel_id','community_welcome_message','community_autorole_id','community_log_channel_id','community_xp_enabled',
+    'community_welcome_channel_id','community_welcome_message','community_welcome_avatar','community_autorole_id','community_log_channel_id','community_xp_enabled',
+    'staff_application_review_channel_id','staff_application_review_role_id','staff_application_approved_role_id','staff_application_questions','bot_dashboard_config',
+    'autopartner_min_members',
     'ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id',
     ...botCommandNames.map(name => `bot_command_enabled:${name}`),
     ...['meta','lessons','ping','help'].map(name => `bot_response:${name}`)
@@ -434,6 +436,26 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
       }
       if (['ticket_category_id','ticket_staff_role_id','ticket_log_channel_id'].includes(key) && value && !/^\d{17,20}$/.test(value)) throw new Error(key + ' must be a valid Discord ID (17–20 digits).');
       if (['community_welcome_channel_id','community_autorole_id','community_log_channel_id'].includes(key) && value && !/^\d{17,20}$/.test(value)) throw new Error(key + ' must be a valid Discord ID (17–20 digits).');
+      if (['staff_application_review_channel_id','staff_application_review_role_id','staff_application_approved_role_id'].includes(key) && value && !/^\d{17,20}$/.test(value)) throw new Error(key + ' must be a valid Discord ID (17–20 digits).');
+      if (key === 'community_welcome_avatar' && !['true','false'].includes(value)) throw new Error('Welcome avatar setting must be true or false.');
+      if (key === 'autopartner_min_members' && (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > 10000000)) throw new Error('Autopartner minimum members must be between 1 and 10,000,000.');
+      if (key === 'staff_application_questions' && value) {
+        const questions = JSON.parse(value);
+        if (!Array.isArray(questions) || questions.length < 1 || questions.length > 5 ||
+            questions.some(item => typeof item !== 'string' || !item.trim() || item.length > 45)) {
+          throw new Error('Staff application questions must be a JSON array of 1–5 questions, each 1–45 characters.');
+        }
+      }
+      if (key === 'bot_dashboard_config' && value) {
+        const dashboard = JSON.parse(value);
+        const validSections = ['serverSetup','commands','responses','tickets','messages','community','staffApplications','autopartner'];
+        if (!dashboard || typeof dashboard !== 'object' || Array.isArray(dashboard) ||
+            (dashboard.sections !== undefined && (!Array.isArray(dashboard.sections) || dashboard.sections.some(section => !validSections.includes(section)))) ||
+            (dashboard.title !== undefined && (typeof dashboard.title !== 'string' || dashboard.title.length > 80)) ||
+            (dashboard.description !== undefined && (typeof dashboard.description !== 'string' || dashboard.description.length > 240))) {
+          throw new Error('Bot dashboard configuration is invalid.');
+        }
+      }
       if (key === 'community_xp_enabled' && !['true','false'].includes(value)) throw new Error('Community XP enabled must be true or false.');
       if (key === 'ticket_panel_style' && !['dropdown','buttons'].includes(value)) throw new Error('Ticket panel style must be dropdown or buttons.');
       if (key === 'ticket_categories' && value) {
@@ -499,6 +521,26 @@ app.post('/api/auth/admin/bot-control/publish-template', async (req, res) => {
     const result = getBotDb().prepare("INSERT INTO bot_setup_outbox (guild_id, template_json) VALUES (?, ?)").run(guildId, templateJson);
     return res.status(202).json({ queued: true, jobId: Number(result.lastInsertRowid), message: 'Template published. Meta is applying it to Discord now.' });
   } catch (error) { return res.status(500).json({ error: error.message || 'Could not publish setup template.' }); }
+});
+app.get('/api/auth/admin/bot-control/publish-template/:jobId', async (req, res) => {
+  if (!requireBotOwner(req, res)) return;
+  const guildId = String(req.query.guildId || getHomeGuildId()).trim();
+  const jobId = Number(req.params.jobId);
+  if (!validGuildId(guildId) || !Number.isSafeInteger(jobId) || jobId < 1) {
+    return res.status(400).json({ error: 'A valid Discord server and publish job ID are required.' });
+  }
+  if (!(await requireOwnedGuild(req, res, guildId))) return;
+  try {
+    const job = getBotDb().prepare(
+      'SELECT id, guild_id, status, result_json, error, created_at, completed_at FROM bot_setup_outbox WHERE id = ? AND guild_id = ?'
+    ).get(jobId, guildId);
+    if (!job) return res.status(404).json({ error: 'Publish job not found.' });
+    let result = null;
+    try { result = job.result_json ? JSON.parse(job.result_json) : null; } catch { result = null; }
+    return res.json({ job: { id: job.id, status: job.status, result, error: job.error, createdAt: job.created_at, completedAt: job.completed_at } });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Could not read the publish status.' });
+  }
 });
 
 app.post('/api/auth/admin/bot-control/messages', async (req, res) => {
