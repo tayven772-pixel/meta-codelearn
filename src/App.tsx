@@ -3840,16 +3840,86 @@ function BotControlPage() {
   };
   const publishSetupTemplate = async () => {
     let template;
-    try { template = JSON.parse(templateText); } catch (error) { setStatus('Invalid JSON: ' + (error instanceof Error ? error.message : 'check the template')); return; }
-    if (!Array.isArray(template.roles) || !Array.isArray(template.categories)) { setStatus('JSON must contain roles and categories arrays.'); return; }
-    const warning = "REPLACEMENT MODE WILL DELETE every server channel/category not listed in this JSON and every removable role not listed. Deleting a channel permanently removes its messages and threads. Managed bot/integration roles and roles at or above Meta's highest role are protected. This cannot be rolled back. Continue?";
-    if (!window.confirm(warning)) return;
-    if (window.prompt('To confirm the Discord server replacement, type REPLACE exactly:') !== 'REPLACE') {
-      setStatus('Publish cancelled. Nothing was sent to Discord.');
+    try { template = JSON.parse(templateText); }
+    catch (error) {
+      setStatus('Invalid JSON: ' + (error instanceof Error ? error.message : 'check the template'));
       return;
     }
-    setBusy(true); setStatus('Publishing replacement template to Discord…');
+    if (!Array.isArray(template.roles) || !Array.isArray(template.categories)) {
+      setStatus('JSON must contain roles and categories arrays.');
+      return;
+    }
+
+    const waitForSetupJob = async (jobId: number, label: string) => {
+      for (let attempt = 0; attempt < 40; attempt++) {
+        await new Promise(resolve => window.setTimeout(resolve, 1500));
+        const response = await fetch(
+          '/api/auth/admin/bot-control/publish-template/' + jobId + '?guildId=' + encodeURIComponent(guildId),
+          { credentials: 'same-origin', cache: 'no-store' }
+        );
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Could not read ' + label + ' job #' + jobId + '.');
+        const job = data.job;
+        if (job?.status === 'applied') return job;
+        if (job?.status === 'failed') {
+          const details = job.error || 'The bot reported a failure.';
+          throw new Error(label + ' job #' + jobId + ' failed: ' + details);
+        }
+        if (job?.status !== 'pending') throw new Error('Unexpected status for ' + label + ' job #' + jobId + '.');
+      }
+      throw new Error(label + ' job #' + jobId + ' is still pending after 60 seconds. No replacement was started. Check again before submitting another copy.');
+    };
+
+    setBusy(true);
     try {
+      setStatus('Checking the Discord server layout without changing anything…');
+      const previewResponse = await fetch('/api/auth/admin/bot-control/preview-template', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guildId, template })
+      });
+      const previewData = await previewResponse.json().catch(() => ({}));
+      if (!previewResponse.ok) throw new Error(previewData.error || 'Could not create a server preview.');
+      const previewJobId = Number(previewData.jobId);
+      if (!Number.isSafeInteger(previewJobId) || previewJobId < 1) {
+        throw new Error('The preview endpoint did not return a valid job ID.');
+      }
+      setStatus('Preview job #' + previewJobId + ' queued. Reading the current Discord layout…');
+      const previewJob = await waitForSetupJob(previewJobId, 'Preview');
+      const plan = previewJob.result || {};
+      if (plan.mode !== 'preview') throw new Error('The bot returned an unexpected preview result. No replacement was started.');
+
+      const createRoles = Array.isArray(plan.createRoles) ? plan.createRoles.length : 0;
+      const updateRoles = Array.isArray(plan.updateRoles) ? plan.updateRoles.length : 0;
+      const createCategories = Array.isArray(plan.createCategories) ? plan.createCategories.length : 0;
+      const createChannels = Array.isArray(plan.createChannels) ? plan.createChannels.length : 0;
+      const deleteChannels = Array.isArray(plan.deleteChannels) ? plan.deleteChannels.length : 0;
+      const deleteCategories = Array.isArray(plan.deleteCategories) ? plan.deleteCategories.length : 0;
+      const deleteRoles = Array.isArray(plan.deleteRoles) ? plan.deleteRoles.length : 0;
+      const protectedRoles = Array.isArray(plan.protectedRoles) ? plan.protectedRoles.length : 0;
+      const previewSummary =
+        'Create roles: ' + createRoles + '\\n' +
+        'Update roles: ' + updateRoles + '\\n' +
+        'Create categories: ' + createCategories + '\\n' +
+        'Create channels: ' + createChannels + '\\n' +
+        'DELETE channels (messages and threads included): ' + deleteChannels + '\\n' +
+        'DELETE categories: ' + deleteCategories + '\\n' +
+        'DELETE removable roles: ' + deleteRoles + '\\n' +
+        'Protected roles that Meta cannot delete: ' + protectedRoles;
+
+      const warning = 'DISCORD REPLACEMENT PREVIEW\\n\\n' + previewSummary +
+        '\\n\\nThe preview has not changed Discord. Deleting channels permanently removes their messages and threads. ' +
+        'Managed bot/integration roles and roles at or above Meta\\'s highest role are protected. ' +
+        'Continue with the replacement?';
+      if (!window.confirm(warning)) {
+        setStatus('Preview complete. No Discord changes were made; publishing was cancelled.');
+        return;
+      }
+      if (window.prompt('To confirm these exact changes, type REPLACE:') !== 'REPLACE') {
+        setStatus('Confirmation did not match. No Discord changes were made.');
+        return;
+      }
+
+      setStatus('Replacement confirmed. Sending the template to Meta…');
       const response = await fetch('/api/auth/admin/bot-control/publish-template', {
         method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ guildId, template, confirmReplace: true })
@@ -3857,39 +3927,30 @@ function BotControlPage() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Could not publish setup.');
       const jobId = Number(data.jobId);
-      if (!Number.isSafeInteger(jobId) || jobId < 1) throw new Error('The server accepted the request but did not return a publish job ID.');
-      setStatus('Publish job #' + jobId + ' queued. Waiting for Discord to finish…');
-      for (let attempt = 0; attempt < 40; attempt++) {
-        await new Promise(resolve => window.setTimeout(resolve, 1500));
-        const statusResponse = await fetch('/api/auth/admin/bot-control/publish-template/' + jobId + '?guildId=' + encodeURIComponent(guildId), { credentials: 'same-origin', cache: 'no-store' });
-        const statusData = await statusResponse.json().catch(() => ({}));
-        if (!statusResponse.ok) throw new Error(statusData.error || 'Could not read publish job status. Job #' + jobId + ' may still be running.');
-        const job = statusData.job;
-        if (job?.status === 'applied' || job?.status === 'failed') {
-          const result = job.result || {};
-          const summary = 'Created ' + (result.created?.length || 0) +
-            ', updated ' + (result.updated?.length || 0) +
-            ', deleted ' + (result.deleted?.length || 0) +
-            ', skipped ' + (result.skipped?.length || 0) +
-            ', protected ' + (result.protected?.length || 0) +
-            ', errors ' + (result.errors?.length || 0) + '.';
-          if (job.status === 'applied') {
-            setSettings(current => ({ ...current, server_setup_template: templateText }));
-            setStatus('Discord template applied successfully. ' + summary);
-          } else {
-            const errorText = Array.isArray(result.errors) && result.errors.length
-              ? result.errors.slice(0, 4).join(' | ')
-              : (job.error || 'Discord reported a failure.');
-            setStatus('Discord applied the template only partially or failed. ' + summary + ' Details: ' + errorText);
-          }
-          return;
-        }
-        if (job?.status !== 'pending') throw new Error('Unexpected publish job status for job #' + jobId + '.');
+      if (!Number.isSafeInteger(jobId) || jobId < 1) throw new Error('The publish endpoint did not return a valid job ID.');
+      setStatus('Replacement job #' + jobId + ' queued. Waiting for Discord to apply it…');
+      const job = await waitForSetupJob(jobId, 'Replacement');
+      const result = job.result || {};
+      if (result.mode !== 'applied') throw new Error('The bot returned an unexpected replacement result.');
+      const errors = Array.isArray(result.errors) ? result.errors : [];
+      const summary =
+        'Created ' + (result.created?.length || 0) +
+        ', updated ' + (result.updated?.length || 0) +
+        ', deleted ' + (result.deleted?.length || 0) +
+        ', skipped ' + (result.skipped?.length || 0) +
+        ', protected ' + (result.protected?.length || 0) +
+        ', errors ' + errors.length + '.';
+      if (errors.length) {
+        setStatus('Discord replacement finished with errors. ' + summary + ' Details: ' + errors.slice(0, 4).join(' | '));
+        return;
       }
-      setStatus('Publish job #' + jobId + ' is still pending after 60 seconds. The request is queued; check its status before submitting another copy.');
+      setSettings(current => ({ ...current, server_setup_template: templateText }));
+      setStatus('Discord template applied successfully. ' + summary);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Could not publish setup.');
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
   const saveSettings = async () => {
     setStatus('Saving bot settings…');
