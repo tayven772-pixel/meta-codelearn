@@ -233,7 +233,6 @@ export async function previewServerTemplate(guild, template) {
   const updateCategories = [];
   for (const [categoryName, category] of desiredCategories) {
     if (category && category.name !== categoryName) updateCategories.push(categoryName);
-  }
     const definition = template.categories.find(item => item.name.trim() === categoryName);
     for (const [kind, rawName] of definition.channels) {
       const name = normalizeChannelName(rawName);
