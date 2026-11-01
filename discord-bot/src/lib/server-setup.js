@@ -145,11 +145,27 @@ export function validateServerTemplate(template) {
     [welcome, 'channel'],
     [applications, 'reviewChannel'],
     [applications, 'reviewRole'],
+    [applications, 'approvedRole'],
     [partner, 'channel']
   ]) {
     if (groupName[key] !== undefined && (typeof groupName[key] !== 'string' || groupName[key].length > 100)) {
       throw new Error('botControl channel and role names must be strings of 100 characters or fewer.');
     }
+  }
+  const hasTextChannel = name => {
+    const target = normalizeChannelName(name);
+    return template.categories.some(group => group.channels.some(([kind, rawName]) =>
+      kind === 'text' && normalizeChannelName(rawName) === target
+    ));
+  };
+  if (control.welcome?.channel && !hasTextChannel(control.welcome.channel)) {
+    throw new Error('botControl.welcome.channel must point to a text channel listed in the JSON categories.');
+  }
+  if (control.staffApplications?.reviewChannel && !hasTextChannel(control.staffApplications.reviewChannel)) {
+    throw new Error('botControl.staffApplications.reviewChannel must point to a text channel listed in the JSON categories.');
+  }
+  if (control.autopartner?.channel && !hasTextChannel(control.autopartner.channel)) {
+    throw new Error('botControl.autopartner.channel must point to a text channel listed in the JSON categories.');
   }
   return template;
 }
