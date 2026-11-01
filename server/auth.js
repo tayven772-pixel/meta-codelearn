@@ -311,7 +311,7 @@ const botCommandNames = [
   'meta','lessons','ping','membercount','avatar','roleinfo','slowmode','lock','unlock','embed','help',
   'serverinfo','userinfo','poll','suggest','coinflip','roll','choose','8ball','announce',
   'setup-applications','ticket','ticket-panel','setup-server','warn','warnings','timeout','untimeout','purge',
-  'autopartner-setup','partner-add','partner-remove','partner-list','partner-settings','partner-template','partner-post',
+  'autopartner-setup','partner-add','partner-submit','partner-remove','partner-list','partner-settings','partner-template','partner-post',
   'welcome-config','autorole','logging','level','leaderboard','giveaway','giveaway-end','role-menu','serverstats','config-export',
   'thread','topic','randomcolor','remindme'
 ];
