@@ -6,13 +6,14 @@ import { handleServerSetup, handleServerSetupButton } from './lib/server-setup.j
 import { db, getSetting } from './lib/database.js';
 import { moderationCommands, handleModerationCommand } from './lib/moderation.js';
 import { autoPartnerCommands, handleAutoPartnerCommand, runAutoPartnerScheduler } from './lib/autopartner.js';
+import { communityCommands, handleCommunityCommand, handleCommunityComponent, handleCommunityEvents, runCommunityScheduler } from './lib/community-features.js';
 import { ActionRowBuilder, ActivityType, ButtonBuilder, ButtonStyle, Client, EmbedBuilder, Events, GatewayIntentBits, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 const siteUrl = (process.env.META_SITE_URL || 'https://metasupportcom.dbm.shared-servers.com').replace(/\/$/, '');
 const token = process.env.DISCORD_BOT_TOKEN;
 const clientId = process.env.DISCORD_CLIENT_ID;
 const guildId = process.env.DISCORD_GUILD_ID;
 if (!token || !clientId) { console.error('Missing bot token or client ID in .env'); process.exit(1); }
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages] });
 const commands = [
  new SlashCommandBuilder().setName('meta').setDescription('Open Meta CodeLearn and explore coding lessons'),
  new SlashCommandBuilder().setName('lessons').setDescription('Get Meta CodeLearn learning links'),
@@ -72,6 +73,7 @@ const commands = [
  serverSetupCommand,
  ...moderationCommands.map(command => ({ toJSON: () => command })),
  ...autoPartnerCommands.map(command => ({ toJSON: () => command })),
+ ...communityCommands.map(command => ({ toJSON: () => command })),
 ].map(command => command.toJSON());
 client.once(Events.ClientReady, async readyClient => {
  console.log(`Meta bot ready as ${readyClient.user.tag}`);
@@ -130,6 +132,7 @@ client.once(Events.ClientReady, async readyClient => {
   try { applyConfiguredPresence(); }
   catch (error) { console.error('Bot presence refresh failed:', error.message); }
   runAutoPartnerScheduler(readyClient).catch(error => console.error('Autopartner scheduler failed:', error.message));
+  runCommunityScheduler(readyClient).catch(error => console.error('Community scheduler failed:', error.message));
  }, 60_000).unref();
  try {
   // Register commands globally so the bot works in every server it is invited to.
@@ -154,6 +157,7 @@ client.on(Events.InteractionCreate, async interaction => {
    }
    if (await handleAutoPartnerCommand(interaction)) return;
    if (await handleModerationCommand(interaction)) return;
+   if (await handleCommunityCommand(interaction)) return;
    if (interaction.commandName === 'setup-server') {
     await handleServerSetup(interaction);
     return;
@@ -401,6 +405,7 @@ client.on(Events.InteractionCreate, async interaction => {
    }
    return;
   }
+    if (await handleCommunityComponent(interaction)) return;
     if (
       interaction.isButton() &&
       ['setup_server_confirm', 'setup_server_cancel'].includes(interaction.customId)
@@ -427,4 +432,5 @@ client.on(Events.InteractionCreate, async interaction => {
   if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) await interaction.reply({ content: 'Something went wrong. Please try again later.', flags: MessageFlags.Ephemeral }).catch(() => {});
  }
 });
+handleCommunityEvents(client);
 client.login(token);
