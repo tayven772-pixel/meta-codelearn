@@ -3897,19 +3897,19 @@ function BotControlPage() {
       const deleteRoles = Array.isArray(plan.deleteRoles) ? plan.deleteRoles.length : 0;
       const protectedRoles = Array.isArray(plan.protectedRoles) ? plan.protectedRoles.length : 0;
       const previewSummary =
-        'Create roles: ' + createRoles + '\\n' +
-        'Update roles: ' + updateRoles + '\\n' +
-        'Create categories: ' + createCategories + '\\n' +
-        'Create channels: ' + createChannels + '\\n' +
-        'DELETE channels (messages and threads included): ' + deleteChannels + '\\n' +
-        'DELETE categories: ' + deleteCategories + '\\n' +
-        'DELETE removable roles: ' + deleteRoles + '\\n' +
+        'Create roles: ' + createRoles + '\n' +
+        'Update roles: ' + updateRoles + '\n' +
+        'Create categories: ' + createCategories + '\n' +
+        'Create channels: ' + createChannels + '\n' +
+        'DELETE channels (messages and threads included): ' + deleteChannels + '\n' +
+        'DELETE categories: ' + deleteCategories + '\n' +
+        'DELETE removable roles: ' + deleteRoles + '\n' +
         'Protected roles that Meta cannot delete: ' + protectedRoles;
 
-      const warning = 'DISCORD REPLACEMENT PREVIEW\\n\\n' + previewSummary +
-        '\\n\\nThe preview has not changed Discord. Deleting channels permanently removes their messages and threads. ' +
-        'Managed bot/integration roles and roles at or above Meta\\'s highest role are protected. ' +
-        'Continue with the replacement?';
+      const warning = "DISCORD REPLACEMENT PREVIEW\n\n" + previewSummary +
+        "\n\nThe preview has not changed Discord. Deleting channels permanently removes their messages and threads. " +
+        "Managed bot/integration roles and roles at or above Meta's highest role are protected. " +
+        "Continue with the replacement?";
       if (!window.confirm(warning)) {
         setStatus('Preview complete. No Discord changes were made; publishing was cancelled.');
         return;
