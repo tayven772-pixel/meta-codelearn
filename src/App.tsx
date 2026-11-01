@@ -4116,12 +4116,6 @@ function BotControlPage() {
                 <button type="submit" className="button-primary" disabled={busy} style={{ marginTop: 12 }}>Add approved partner</button>
               </form>
             </section>
-            <section className="admin-publishing-guide">
-              <h2>Server setup template editor</h2>
-              <p>Edit the JSON that <code>/setup-server</code> uses. This setup now only creates missing roles, categories, and channels; it does not delete existing channels or message history.</p>
-              <textarea value={templateText} onChange={event => setTemplateText(event.target.value)} rows={20} spellCheck={false} style={{ ...fieldStyle, fontFamily: 'monospace' }} />
-              <button type="button" className="button-secondary" onClick={() => setTemplateText(defaultTemplate)} style={{ marginTop: 10 }}>Reset editor to built-in template</button>
-            </section>
           </>}
           <section className="admin-publishing-guide">
             <h2>More commands added</h2>
