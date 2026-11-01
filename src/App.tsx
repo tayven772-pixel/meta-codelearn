@@ -4124,7 +4124,7 @@ function BotControlPage() {
             </section>
             <section className="admin-publishing-guide" hidden={!panelSectionEnabled('applications')}>
               <h2>Staff applications</h2>
-              <p>Applications use a private Discord modal and are delivered to the review channel below. Reviewers with Manage Server or Administrator permission can accept or reject each submission.</p>
+              <p>Applications use a private Discord modal and are delivered to the review channel below. Reviewers with the configured staff role, Manage Server, or Administrator permission can accept or reject each submission.</p>
               <label style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}>
                 <input type="checkbox" checked={settings.staff_applications_enabled !== 'false'} onChange={event => setValue('staff_applications_enabled', event.target.checked ? 'true' : 'false')} />
                 Accept new staff applications
@@ -4146,7 +4146,7 @@ function BotControlPage() {
                 <strong>Application panel description</strong>
                 <textarea value={settings.staff_applications_description || ''} onChange={event => setValue('staff_applications_description', event.target.value)} maxLength={1000} rows={4} placeholder="Explain who you are looking for and how to apply." style={fieldStyle} />
               </label>
-              <p>After saving the channel and panel text, run <code>/setup-applications staff_channel:#your-private-review-channel</code> in Discord to publish the Apply button. The channel should be private to staff.</p>
+              <p>After saving, run <code>/setup-applications</code> to publish the Apply button, or pass <code>staff_channel:#private-channel</code> to override the saved channel. The review channel must deny View Channel to @everyone.</p>
             </section>
             <section className="admin-publishing-guide" hidden={!panelSectionEnabled('messages')}>
               <h2>Send a message as Meta</h2>
