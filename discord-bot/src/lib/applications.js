@@ -39,11 +39,14 @@ export const staffApplicationCommands = [
       .setRequired(false))
 ].map(command => command.toJSON());
 
-function isStaffReviewer(interaction) {
-  return interaction.inGuild() && (
-    interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild) ||
-    interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)
-  );
+async function isStaffReviewer(interaction) {
+  if (!interaction.inGuild()) return false;
+  if (interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild) ||
+      interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) return true;
+  const roleId = getSetting(interaction.guildId, 'staff_applications_role_id');
+  if (!roleId) return false;
+  const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+  return Boolean(member?.roles.cache.has(roleId));
 }
 
 function buildApplicationEmbed(application, guild) {
@@ -186,7 +189,7 @@ export async function handleStaffApplicationComponent(interaction) {
   }
 
   if (interaction.isButton() && /^staff_application_(accept|reject)_\d+$/.test(interaction.customId)) {
-    if (!isStaffReviewer(interaction)) {
+    if (!(await isStaffReviewer(interaction))) {
       await interaction.reply({ content: 'You need Manage Server or Administrator permission to review applications.', flags: MessageFlags.Ephemeral });
       return true;
     }
