@@ -3738,6 +3738,7 @@ function BotControlPage() {
       staffApplications: {
         reviewChannel: 'staff-applications',
         reviewRole: 'Support Team',
+        approvedRole: '',
         questions: [
           'Name you would like staff to use',
           'Which role are you applying for?',
@@ -4207,11 +4208,11 @@ function BotControlPage() {
               </form>
             </section>}
           </>}
-          <section className="admin-publishing-guide">
+          {showDashboardSection('commands') && <section className="admin-publishing-guide">
             <h2>More commands added</h2>
             <p><code>/thread</code> starts a public discussion, <code>/topic</code> updates a channel topic with staff permission, <code>/randomcolor</code> creates a hex color, and <code>/remindme</code> DMs a reminder (reminders are temporary and are lost if the bot restarts).</p>
             <p>Changes save to the bot's local database shared with the running bot. Some slash-command visibility changes may require a bot restart to refresh Discord's command list.</p>
-          </section>
+          </section>}
         </>}
       </main>
     </AppShell>
