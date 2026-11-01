@@ -145,7 +145,7 @@ function normalizeServerTemplate(input) {
         footer: branding.footer || ''
       },
       permissions: input.permissions ?? {},
-      botSettings: { welcome, logging, ticket, leveling, giveaways, selfRoles, partnership, automod },
+      botSettings: { welcome, autorole: botSettings.autorole, logging, ticket, leveling, giveaways, selfRoles, partnership, automod },
       placeholders: input.placeholders ?? {}
     }
   };
@@ -613,14 +613,17 @@ export async function applyServerTemplate(guild, input) {
       const allowedNames = group.allowed_roles ?? metaPermissions.staff_category?.allowed_roles ?? privateAccessRoleNames;
       const allowEverywhere = (everyonePolicy.allow ?? []).filter(name => CHANNEL_OVERWRITE_FLAGS.has(name)).map(name => PermissionFlagsBits[name]);
       const denyEverywhere = (everyonePolicy.deny ?? []).filter(name => CHANNEL_OVERWRITE_FLAGS.has(name)).map(name => PermissionFlagsBits[name]);
+      const everyoneDeny = [...new Set([
+        ...denyEverywhere,
+        ...(group.private ? [PermissionFlagsBits.ViewChannel] : [])
+      ])];
       const overwrites = [
-        { id: guild.roles.everyone.id, ...(allowEverywhere.length ? { allow: allowEverywhere } : {}), ...(denyEverywhere.length ? { deny: denyEverywhere } : {}) },
-        ...(group.private ? [
-          { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
-          ...allowedNames.map(name => guild.roles.cache.find(role => role.name.toLowerCase() === String(name).trim().toLowerCase()))
+        { id: guild.roles.everyone.id, ...(allowEverywhere.length ? { allow: allowEverywhere } : {}), ...(everyoneDeny.length ? { deny: everyoneDeny } : {}) },
+        ...(group.private
+          ? allowedNames.map(name => guild.roles.cache.find(role => role.name.toLowerCase() === String(name).trim().toLowerCase()))
             .filter(Boolean)
             .map(role => ({ id: role.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak] }))
-        ] : []),
+          : []),
         ...(mutedRole && mutedPolicy.deny?.length ? [{
           id: mutedRole.id,
           deny: mutedPolicy.deny.filter(name => CHANNEL_OVERWRITE_FLAGS.has(name)).map(name => PermissionFlagsBits[name])
