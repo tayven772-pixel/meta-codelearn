@@ -76,7 +76,7 @@ const commands = [
 client.once(Events.ClientReady, async readyClient => {
  console.log(`Meta bot ready as ${readyClient.user.tag}`);
  const homeGuildId = String(process.env.META_HOME_GUILD_ID || process.env.DISCORD_GUILD_ID || '').trim();
- const hasConfiguredHomeGuild = /^\\d{17,20}$/.test(homeGuildId);
+ const hasConfiguredHomeGuild = /^\d{17,20}$/.test(homeGuildId);
  const upsertGuildPresence = db.prepare(`INSERT INTO bot_guild_presence (guild_id, name, icon, updated_at)
   VALUES (?, ?, ?, CURRENT_TIMESTAMP)
   ON CONFLICT(guild_id) DO UPDATE SET name=excluded.name, icon=excluded.icon, updated_at=CURRENT_TIMESTAMP`);
