@@ -532,6 +532,11 @@ export async function previewServerTemplate(guild, input) {
   );
 
   return {
+    templateMetadata: {
+      name: template.__templateMeta?.name || '',
+      version: template.__templateMeta?.version || '',
+      description: template.__templateMeta?.description || ''
+    },
     createRoles: template.roles.filter(definition => !guild.roles.cache.some(role => role.name.toLowerCase() === definition.name.trim().toLowerCase())).map(role => role.name),
     updateRoles: template.roles.filter(definition => guild.roles.cache.some(role => role.name.toLowerCase() === definition.name.trim().toLowerCase() &&
       ((definition.color !== undefined && role.color !== definition.color) || role.name !== definition.name.trim() ||
@@ -630,8 +635,10 @@ export async function applyServerTemplate(guild, input) {
         ...denyEverywhere,
         ...(group.private ? [PermissionFlagsBits.ViewChannel] : [])
       ])];
+      const deniedSet = new Set(everyoneDeny.map(String));
+      const effectiveEveryoneAllow = allowEverywhere.filter(permission => !deniedSet.has(String(permission)));
       const overwrites = [
-        { id: guild.roles.everyone.id, ...(allowEverywhere.length ? { allow: allowEverywhere } : {}), ...(everyoneDeny.length ? { deny: everyoneDeny } : {}) },
+        { id: guild.roles.everyone.id, ...(effectiveEveryoneAllow.length ? { allow: effectiveEveryoneAllow } : {}), ...(everyoneDeny.length ? { deny: everyoneDeny } : {}) },
         ...(group.private
           ? allowedNames.map(name => guild.roles.cache.find(role => role.name.toLowerCase() === String(name).trim().toLowerCase()))
             .filter(Boolean)
@@ -753,6 +760,21 @@ export async function applyServerTemplate(guild, input) {
   }
 
   applyBotControlSettings(guild, template);
+  const desiredBotName = String(template.__templateMeta?.branding?.botName || '').trim();
+  if (desiredBotName && desiredBotName.length <= 32 && desiredBotName !== botMember.nickname) {
+    try {
+      if (botMember.permissions.has(PermissionFlagsBits.ChangeNickname) ||
+          botMember.permissions.has(PermissionFlagsBits.ManageNicknames) ||
+          botMember.permissions.has(PermissionFlagsBits.Administrator)) {
+        await botMember.setNickname(desiredBotName, 'Applied Meta Code template bot branding');
+        updated.push('bot server nickname ' + desiredBotName);
+      } else {
+        skipped.push('bot nickname (Meta lacks Change Nickname permission)');
+      }
+    } catch (error) {
+      skipped.push('bot nickname: ' + error.message);
+    }
+  }
   const ticketSettings = template.__templateMeta?.botSettings?.ticket;
   const ticketPanelName = ticketSettings?.panel_channel || template.categories.flatMap(group => group.channels).find(([, , options]) => options?.bot_panel === 'tickets')?.[1];
   if (ticketSettings?.enabled !== false && ticketPanelName) {
