@@ -300,6 +300,9 @@ function getBotDb() {
     );
     CREATE INDEX IF NOT EXISTS autopartner_partners_guild ON autopartner_partners(guild_id);
   `);
+
+  try { connection.exec("ALTER TABLE bot_setup_outbox ADD COLUMN action TEXT NOT NULL DEFAULT 'preview'"); } catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
+  try { connection.exec('ALTER TABLE bot_setup_outbox ADD COLUMN confirmation_hash TEXT'); } catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
   botDb = connection;
   return botDb;
 }
