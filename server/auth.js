@@ -462,7 +462,7 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
 });
 app.post('/api/auth/admin/bot-control/partners', async (req, res) => {
   if (!requireBotOwner(req, res)) return;
-  const guildId = String(req.body?.guildId || '').trim();
+  const guildId = String(req.body?.guildId || getHomeGuildId()).trim();
   if (!validGuildId(guildId)) return res.status(400).json({ error: 'Select a valid Discord server.' });
   if (!(await requireOwnedGuild(req, res, guildId))) return;
   const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
@@ -483,7 +483,7 @@ app.post('/api/auth/admin/bot-control/partners', async (req, res) => {
 });
 app.put('/api/auth/admin/bot-control/partners/:id', async (req, res) => {
   if (!requireBotOwner(req, res)) return;
-  const guildId = String(req.body?.guildId || '').trim();
+  const guildId = String(req.body?.guildId || getHomeGuildId()).trim();
   if (!validGuildId(guildId)) return res.status(400).json({ error: 'Select a valid Discord server.' });
   if (!(await requireOwnedGuild(req, res, guildId))) return;
   const id = Number(req.params.id);
@@ -508,7 +508,7 @@ app.put('/api/auth/admin/bot-control/partners/:id', async (req, res) => {
 });
 app.delete('/api/auth/admin/bot-control/partners/:id', async (req, res) => {
   if (!requireBotOwner(req, res)) return;
-  const guildId = String(req.query.guildId || '').trim();
+  const guildId = String(req.query.guildId || getHomeGuildId()).trim();
   if (!validGuildId(guildId)) return res.status(400).json({ error: 'Select a valid Discord server.' });
   if (!(await requireOwnedGuild(req, res, guildId))) return;
   const id = Number(req.params.id);
