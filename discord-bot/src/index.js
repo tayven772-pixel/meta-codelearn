@@ -439,8 +439,11 @@ async function processWebsiteSetups() {
     const guild = await client.guilds.fetch(homeGuildId);
     const template = JSON.parse(item.template_json);
     const result = await applyServerTemplate(guild, template);
-    db.prepare("UPDATE bot_setup_outbox SET status = 'applied', result_json = ?, error = NULL, completed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'").run(JSON.stringify(result), item.id);
-    console.log('Website setup template applied:', item.id, 'created', result.created.length, 'updated', result.updated.length, 'errors', result.errors.length);
+    const failed = result.errors.length > 0;
+    const errorSummary = failed ? result.errors.slice(0, 8).join('; ').slice(0, 1000) : null;
+    db.prepare("UPDATE bot_setup_outbox SET status = ?, result_json = ?, error = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'")
+      .run(failed ? 'failed' : 'applied', JSON.stringify(result), errorSummary, item.id);
+    console.log('Website setup template finished:', item.id, 'created', result.created.length, 'updated', result.updated.length, 'deleted', result.deleted.length, 'errors', result.errors.length);
    } catch (error) {
     db.prepare("UPDATE bot_setup_outbox SET status = 'failed', error = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'").run(String(error?.message || 'Setup failed').slice(0, 1000), item.id);
     console.error('Website setup publish failed:', error?.message || error);
