@@ -3722,13 +3722,39 @@ function BotControlPage() {
     ],
     categories: [
       { name: '📍 GET STARTED', channels: [['text','welcome'],['text','rules'],['text','announcements'],['text','official-links'],['text','choose-roles']] },
-      { name: '💬 COMMUNITY', channels: [['text','general-chat'],['text','introductions'],['text','questions'],['text','ideas-and-feedback'],['text','project-showcase']] },
+      { name: '💬 COMMUNITY', channels: [['text','general-chat'],['text','introductions'],['text','questions'],['text','ideas-and-feedback'],['text','project-showcase'],['text','partner-advertisements']] },
       { name: '💻 LEARN AND BUILD', channels: [['text','learning-resources'],['text','web-development'],['text','discord-bots'],['text','coding-challenges'],['text','github-and-projects']] },
       { name: '🛟 META SUPPORT', channels: [['text','open-a-ticket'],['text','bug-reports'],['text','suggestions']] },
-      { name: '🔊 VOICE LOUNGE', channels: [['voice','Community Lounge'],['voice','Coding Together'],['voice','AFK']] },
+      { name: '🔊 VOICE LOUNGE', channels: [['voice','community-lounge'],['voice','coding-together'],['voice','afk']] },
       { name: '🔐 STAFF HQ', private: true, channels: [['text','staff-chat'],['text','staff-applications'],['text','ticket-logs'],['text','moderation-logs']] }
-    ]
+    ],
+    botControl: {
+      dashboard: {
+        title: 'Meta Code bot control',
+        description: 'Manage the bot and configure the matching Discord server layout.',
+        sections: ['serverSetup','commands','responses','tickets','messages','community','staffApplications','autopartner']
+      },
+      welcome: { channel: 'welcome', showAvatar: true, message: 'Welcome {user} to {server}! You are member #{membercount}.' },
+      staffApplications: {
+        reviewChannel: 'staff-applications',
+        reviewRole: 'Support Team',
+        questions: [
+          'Name you would like staff to use',
+          'Which role are you applying for?',
+          'Why do you want to help Meta Code?',
+          'What experience or skills would you bring?',
+          'How would you handle a community conflict?'
+        ]
+      },
+      autopartner: { enabled: true, channel: 'partner-advertisements', intervalHours: 24, minimumMembers: 100 }
+    }
   }, null, 2);
+  const dashboardConfig = (() => {
+    try { return JSON.parse(templateText)?.botControl?.dashboard || {}; }
+    catch { return {}; }
+  })();
+  const showDashboardSection = (section: string) =>
+    !Array.isArray(dashboardConfig.sections) || dashboardConfig.sections.includes(section);
   useEffect(() => {
     let active = true;
     setStatus('Checking Meta owner account…');
