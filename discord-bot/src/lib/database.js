@@ -42,6 +42,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS bot_message_outbox_pending ON bot_message_outbox(status, id);
   CREATE TABLE IF NOT EXISTS bot_setup_outbox (
     id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT NOT NULL, template_json TEXT NOT NULL,
+    action TEXT NOT NULL DEFAULT 'preview', confirmation_hash TEXT,
     status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','applied','failed')),
     result_json TEXT, error TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, completed_at TEXT
   );
@@ -89,6 +90,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS applications_guild_status
     ON applications (guild_id, status);
 `);
+
+try { db.exec("ALTER TABLE bot_setup_outbox ADD COLUMN action TEXT NOT NULL DEFAULT 'preview'"); } catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
+try { db.exec('ALTER TABLE bot_setup_outbox ADD COLUMN confirmation_hash TEXT'); } catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
 
 const getSettingStatement = db.prepare(
   'SELECT setting_value FROM settings WHERE guild_id = ? AND setting_key = ?'

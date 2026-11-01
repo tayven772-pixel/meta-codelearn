@@ -3706,8 +3706,9 @@ function BotControlPage() {
   const [guildId, setGuildId] = useState('');
   const [commands, setCommands] = useState<string[]>([]);
   const [settings, setSettings] = useState<Record<string, string>>({});
-  const [partners, setPartners] = useState<Array<{id:number;name:string;invite_url:string;description:string;created_at:string}>>([]);
+  const [partners, setPartners] = useState<Array<{id:number;name:string;invite_url:string;description:string;member_count?:number|null;created_at:string}>>([]);
   const [templateText, setTemplateText] = useState('');
+  const [setupPreview, setSetupPreview] = useState<any>(null);
   const [partnerName, setPartnerName] = useState('');
   const [partnerInvite, setPartnerInvite] = useState('');
   const [partnerDescription, setPartnerDescription] = useState('');
@@ -3725,10 +3726,35 @@ function BotControlPage() {
       { name: '💬 COMMUNITY', channels: [['text','general-chat'],['text','introductions'],['text','questions'],['text','ideas-and-feedback'],['text','project-showcase']] },
       { name: '💻 LEARN AND BUILD', channels: [['text','learning-resources'],['text','web-development'],['text','discord-bots'],['text','coding-challenges'],['text','github-and-projects']] },
       { name: '🛟 META SUPPORT', channels: [['text','open-a-ticket'],['text','bug-reports'],['text','suggestions']] },
+      { name: '🤝 PARTNERSHIPS', channels: [['text','partner-announcements']] },
       { name: '🔊 VOICE LOUNGE', channels: [['voice','Community Lounge'],['voice','Coding Together'],['voice','AFK']] },
       { name: '🔐 STAFF HQ', private: true, channels: [['text','staff-chat'],['text','staff-applications'],['text','ticket-logs'],['text','moderation-logs']] }
-    ]
+    ],
+    controlPanel: {
+      title: 'Meta Code bot control',
+      description: 'Owner dashboard configured from this JSON template.',
+      sections: ['setup','commands','responses','tickets','messages','community','autopartner','applications']
+    },
+    settings: {
+      welcome: { enabled: true, channel: 'welcome', message: 'Welcome {user} to {server}! You are member #{membercount}.', showAvatar: true },
+      autopartner: { enabled: false, channel: 'partner-announcements', intervalHours: 24, minimumMembers: 100 },
+      applications: { enabled: true, staffChannel: 'staff-applications', staffRole: 'Support Team', panelTitle: 'Meta Code | Staff Applications', panelDescription: 'Help make Meta Code a welcoming place to learn and build. Apply privately using the button below.' }
+    }
   }, null, 2);
+  const templatePanel = useMemo(() => {
+    try {
+      const parsed = JSON.parse(templateText);
+      const panel = parsed.controlPanel || {};
+      return {
+        title: typeof panel.title === 'string' && panel.title.trim() ? panel.title.slice(0, 80) : 'Meta Code bot control',
+        description: typeof panel.description === 'string' ? panel.description.slice(0, 240) : 'Owner dashboard configured from this JSON template.',
+        sections: Array.isArray(panel.sections) ? panel.sections : ['setup','commands','responses','tickets','messages','community','autopartner','applications']
+      };
+    } catch {
+      return { title: 'Meta Code bot control', description: 'Owner dashboard configured from this JSON template.', sections: ['setup','commands','responses','tickets','messages','community','autopartner','applications'] };
+    }
+  }, [templateText]);
+  const panelSectionEnabled = (name: string) => name === 'setup' || templatePanel.sections.includes(name);
   useEffect(() => {
     let active = true;
     setStatus('Checking Meta owner account…');
@@ -3811,18 +3837,64 @@ function BotControlPage() {
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not send the message.'); }
     finally { setSendingMessage(false); }
   };
+  const waitForSetupJob = async (jobId: number) => {
+    for (let attempt = 0; attempt < 40; attempt++) {
+      await new Promise(resolve => window.setTimeout(resolve, 1000));
+      const response = await fetch('/api/auth/admin/bot-control/setup-jobs/' + jobId, { credentials: 'same-origin', cache: 'no-store' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Could not check setup status.');
+      if (data.status === 'failed') throw new Error(data.error || 'The Discord bot could not process the setup.');
+      if (data.status === 'applied') return data;
+    }
+    throw new Error('The bot has not completed this step yet. Reopen the editor and check again before submitting another sync.');
+  };
   const publishSetupTemplate = async () => {
     let template;
     try { template = JSON.parse(templateText); } catch (error) { setStatus('Invalid JSON: ' + (error instanceof Error ? error.message : 'check the template')); return; }
     if (!Array.isArray(template.roles) || !Array.isArray(template.categories)) { setStatus('JSON must contain roles and categories arrays.'); return; }
-    if (!window.confirm('Publish this setup to Discord? Existing channels and messages will not be deleted.')) return;
-    setBusy(true); setStatus('Publishing setup to Discord…');
+    setBusy(true); setSetupPreview(null); setStatus('Requesting a Discord preview. No changes will be made yet…');
     try {
-      const response = await fetch('/api/auth/admin/bot-control/publish-template', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guildId, template }) });
+      const response = await fetch('/api/auth/admin/bot-control/publish-template', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guildId, template })
+      });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Could not publish setup.');
-      setStatus(data.message || 'Template queued for Discord.');
-    } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not publish setup.'); }
+      if (!response.ok) throw new Error(data.error || 'Could not create setup preview.');
+      if (!Number.isSafeInteger(data.jobId)) throw new Error('The server did not return a valid preview job ID.');
+      const job = await waitForSetupJob(data.jobId);
+      if (!job.result || job.result.mode !== 'preview' || !job.result.summary || !job.result.fingerprint) throw new Error('The bot returned an incomplete preview.');
+      setSetupPreview({ jobId: data.jobId, result: job.result });
+      const summary = job.result.summary;
+      const deletions = (summary.deleteChannels?.length || 0) + (summary.deleteCategories?.length || 0) + (summary.deleteRoles?.length || 0);
+      setStatus('Preview ready. ' + deletions + ' unlisted Discord items would be deleted. Nothing has changed yet; review the full list below.');
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not preview Discord setup.'); }
+    finally { setBusy(false); }
+  };
+  const confirmSetupSync = async () => {
+    if (!setupPreview?.jobId) return;
+    const summary = setupPreview.result.summary;
+    const deleteChannels = summary.deleteChannels?.length || 0;
+    const deleteCategories = summary.deleteCategories?.length || 0;
+    const deleteRoles = summary.deleteRoles?.length || 0;
+    const totalDeletes = deleteChannels + deleteCategories + deleteRoles;
+    const detail = 'This will permanently delete ' + deleteChannels + ' channel(s), ' + deleteCategories + ' category/categories, and ' + deleteRoles + ' role(s) not in the JSON. Deleted channel message history cannot be recovered. Deleting a role also removes it from members who have it. Category permissions and child-channel overrides will be replaced to match the JSON, including private/public visibility. Discord-managed, administrator, and protected roles/channels are kept. Continue?';
+    if (!window.confirm(detail)) return;
+    setBusy(true); setStatus('Confirming sync and applying changes in Discord…');
+    try {
+      const response = await fetch('/api/auth/admin/bot-control/apply-template', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ previewJobId: setupPreview.jobId })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Could not confirm setup.');
+      setSetupPreview(null);
+      const job = await waitForSetupJob(data.jobId);
+      const result = job.result || {};
+      if (result.mode !== 'applied') throw new Error('The bot did not confirm that Discord changes were applied.');
+      setSetupPreview(null);
+      await loadSettings();
+      setStatus('Discord sync completed. Created ' + (result.created?.length || 0) + ', updated ' + (result.updated?.length || 0) + ', deleted ' + (result.deleted?.length || 0) + ', skipped ' + (result.skipped?.length || 0) + '. Protected roles/channels were left untouched.');
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'Discord sync failed.'); }
     finally { setBusy(false); }
   };
   const saveSettings = async () => {
@@ -3840,7 +3912,7 @@ function BotControlPage() {
         throw new Error('Use roles and categories arrays. Each channel must be ["text" or "voice", "channel-name"]. Limits: 40 roles, 30 categories, 50 channels each.');
       }
     } catch (error) { setStatus('Setup template JSON is invalid: ' + (error instanceof Error ? error.message : 'check the JSON')); return; }
-    const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_template','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help','ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','community_welcome_channel_id','community_welcome_message','community_autorole_id','community_log_channel_id','community_xp_enabled']);
+    const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_min_members','autopartner_template','staff_applications_enabled','staff_applications_channel_id','staff_applications_title','staff_applications_description','staff_applications_role_id','community_welcome_avatar','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help','ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','community_welcome_channel_id','community_welcome_message','community_autorole_id','community_log_channel_id','community_xp_enabled']);
     const payload = Object.fromEntries(Object.entries(settings).filter(([key]) => editableKeys.has(key) || key.startsWith('bot_command_enabled:')));
     payload.server_setup_template = template;
     setBusy(true);
@@ -3889,7 +3961,7 @@ function BotControlPage() {
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not add partner.'); }
     finally { setBusy(false); }
   };
-  const updatePartner = async (partner: {id:number;name:string;invite_url:string;description:string;created_at:string}) => {
+  const updatePartner = async (partner: {id:number;name:string;invite_url:string;description:string;member_count?:number|null;created_at:string}) => {
     setBusy(true);
     try {
       const response = await fetch('/api/auth/admin/bot-control/partners/' + partner.id, {
@@ -3926,8 +3998,8 @@ function BotControlPage() {
       <main className="admin-publishing-page">
         <div className="admin-publishing-heading">
           <p className="section-kicker">Private · owner access only</p>
-          <h1>Meta Code bot control</h1>
-          <p>Manage Meta bot globally from one private control panel: commands, partnership rotation, server setup templates, tickets, and bot messages. Settings apply to the bot as a whole, not separate servers. Bot tokens and secrets are never displayed.</p>
+          <h1>{templatePanel.title}</h1>
+          <p>{templatePanel.description} Settings apply to the configured Meta home server. Bot tokens and secrets are never displayed.</p>
         </div>
         <p className="admin-publishing-status" role="status">{status}</p>
         {discordChecked && !discordReady && <section className="admin-publishing-guide">
@@ -3958,14 +4030,24 @@ function BotControlPage() {
             <p>Settings can be edited while the bot is offline and will take effect when it reconnects.</p>
           </section>
           {editorOpen && <>
-            <section id="bot-settings-editor" className="admin-publishing-guide">
+            <section id="bot-settings-editor" className="admin-publishing-guide" hidden={!panelSectionEnabled('setup')}>
               <h2>Publish server setup JSON</h2>
-              <p>Paste a roles/categories template and publish it to Discord. Missing roles, categories, and channels are created; matching role colours and category privacy are updated. Existing channels and messages are preserved.</p>
+              <p>The JSON controls Discord roles, categories and channels, supported bot settings, and which dashboard sections are shown. Publish first creates a read-only preview. Confirm only after reviewing all removals. Deleting channels also deletes their message history.</p>
               <textarea value={templateText} onChange={event => setTemplateText(event.target.value)} rows={18} spellCheck={false} style={{ ...fieldStyle, fontFamily: 'monospace' }} aria-label="Discord setup JSON" />
               <button type="button" className="button-primary" onClick={() => { void publishSetupTemplate(); }} disabled={busy}>{busy ? 'Publishing…' : 'Publish JSON to Discord'}</button>
-              <button type="button" className="button-secondary" onClick={() => setTemplateText(defaultTemplate)} disabled={busy}>Reset template</button>
+              <button type="button" className="button-secondary" onClick={() => { setTemplateText(defaultTemplate); setSetupPreview(null); }} disabled={busy}>Reset template</button>
+              {setupPreview && <div className="admin-publishing-guide" style={{ marginTop: 16 }}>
+                <h3>Discord sync preview</h3>
+                <p>Review these exact changes. Nothing is removed until you press the confirmation button.</p>
+                <pre style={{ ...fieldStyle, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: 420, overflow: 'auto' }}>{JSON.stringify(setupPreview.result.summary, null, 2)}</pre>
+                <div className="admin-publishing-actions">
+                  <button type="button" className="button-primary" onClick={() => { void confirmSetupSync(); }} disabled={busy}>Confirm sync and delete unlisted items</button>
+                  <button type="button" className="button-secondary" onClick={() => setSetupPreview(null)} disabled={busy}>Cancel preview</button>
+                </div>
+                <small>Protected Discord system channels, managed roles, roles with Administrator permission, and roles above Meta's highest role are not removed.</small>
+              </div>}
             </section>
-            <section className="admin-publishing-guide">
+            <section className="admin-publishing-guide" hidden={!panelSectionEnabled('commands')}>
               <h2>Bot settings editor</h2>
               <p>The editor is open. Change any fields below, then choose Save all settings.</p>
               <h3>Command controls</h3>
@@ -3977,7 +4059,7 @@ function BotControlPage() {
                 </label>)}
               </div>
             </section>
-            <section className="admin-publishing-guide">
+            <section className="admin-publishing-guide" hidden={!panelSectionEnabled('responses')}>
               <h2>Editable bot responses</h2>
               <p>Use <code>{'{siteUrl}'}</code> as a placeholder in messages. Leave a field empty to use the built-in default.</p>
               {(['meta','lessons','ping','help'] as const).map(name => <label key={name} style={{ display: 'block', marginTop: 14 }}>
@@ -3997,7 +4079,7 @@ function BotControlPage() {
                 <textarea value={settings.bot_rules_text || ''} onChange={event => setValue('bot_rules_text', event.target.value)} placeholder="Leave blank to use the default rules" rows={5} style={fieldStyle} />
               </label>
             </section>
-            <section className="admin-publishing-guide">
+            <section className="admin-publishing-guide" hidden={!panelSectionEnabled('tickets')}>
               <h2>Ticket system builder</h2>
               <p>Choose how members select a ticket category, customize the panel text, and configure the form they must complete before a private ticket channel is created. Save all settings, then run <code>/ticket panel</code> again to post the updated panel.</p>
               <label style={{ display: 'block', marginTop: 12 }}>
@@ -4040,7 +4122,33 @@ function BotControlPage() {
               </label>
               <p>Important: the ticket category and staff role used for channel permissions still need to be configured with <code>/ticket setup</code>. This editor controls the categories members choose on the panel. The channel category, staff role, and log channel can be set here or with `/ticket setup`.</p>
             </section>
-            <section className="admin-publishing-guide">
+            <section className="admin-publishing-guide" hidden={!panelSectionEnabled('applications')}>
+              <h2>Staff applications</h2>
+              <p>Applications use a private Discord modal and are delivered to the review channel below. Reviewers with the configured staff role, Manage Server, or Administrator permission can accept or reject each submission.</p>
+              <label style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}>
+                <input type="checkbox" checked={settings.staff_applications_enabled !== 'false'} onChange={event => setValue('staff_applications_enabled', event.target.checked ? 'true' : 'false')} />
+                Accept new staff applications
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Private staff review channel ID</strong>
+                <input value={settings.staff_applications_channel_id || ''} onChange={event => setValue('staff_applications_channel_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Discord text channel ID" style={fieldStyle} inputMode="numeric" />
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Staff reviewer role ID (optional)</strong>
+                <input value={settings.staff_applications_role_id || ''} onChange={event => setValue('staff_applications_role_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Discord staff role ID" style={fieldStyle} inputMode="numeric" />
+                <small>Members with this role can accept or reject applications. Server managers and administrators can also review.</small>
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Application panel title</strong>
+                <input value={settings.staff_applications_title || ''} onChange={event => setValue('staff_applications_title', event.target.value)} maxLength={45} placeholder="Meta Code | Staff Applications" style={fieldStyle} />
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Application panel description</strong>
+                <textarea value={settings.staff_applications_description || ''} onChange={event => setValue('staff_applications_description', event.target.value)} maxLength={1000} rows={4} placeholder="Explain who you are looking for and how to apply." style={fieldStyle} />
+              </label>
+              <p>After saving, run <code>/setup-applications</code> to publish the Apply button, or pass <code>staff_channel:#private-channel</code> to override the saved channel. The review channel must deny View Channel to @everyone.</p>
+            </section>
+            <section className="admin-publishing-guide" hidden={!panelSectionEnabled('messages')}>
               <h2>Send a message as Meta</h2>
               <p>Post directly to a text channel in the configured Meta home server. Discord will show the message as sent by the bot.</p>
               <form onSubmit={sendBotMessage}>
@@ -4058,7 +4166,7 @@ function BotControlPage() {
                 </button>
               </form>
             </section>
-            <section className="admin-publishing-guide">
+            <section className="admin-publishing-guide" hidden={!panelSectionEnabled('community')}>
               <h2>Community features</h2>
               <p>Configure welcome messages, automatic roles, event logging, and activity XP for the Meta home server. Use Discord Developer Mode to copy channel and role IDs. The bot's role must be above any role it assigns.</p>
               <label style={{ display: 'block', marginTop: 12 }}>
@@ -4069,6 +4177,10 @@ function BotControlPage() {
                 <strong>Welcome message</strong>
                 <textarea value={settings.community_welcome_message || ''} onChange={event => setValue('community_welcome_message', event.target.value)} maxLength={1500} rows={4} placeholder="Welcome {user} to {server}! You are member #{membercount}." style={fieldStyle} />
                 <small>Placeholders: {'{user}'}, {'{server}'}, {'{membercount}'}. Leave blank to use the built-in welcome message.</small>
+              </label>
+              <label style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 16 }}>
+                <input type="checkbox" checked={settings.community_welcome_avatar !== 'false'} onChange={event => setValue('community_welcome_avatar', event.target.checked ? 'true' : 'false')} />
+                Show the new member's profile picture in the welcome embed
               </label>
               <label style={{ display: 'block', marginTop: 12 }}>
                 <strong>Automatic join role ID</strong>
@@ -4085,20 +4197,21 @@ function BotControlPage() {
               </label>
               <p>Members can use <code>/level</code> and <code>/leaderboard</code>. XP is awarded at most once per minute per member.</p>
             </section>
-            <section className="admin-publishing-guide">
+            <section className="admin-publishing-guide" hidden={!panelSectionEnabled('autopartner')}>
               <h2>Automatic partnerships</h2>
               <label style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}>
                 <input type="checkbox" checked={settings.autopartner_enabled === 'true'} onChange={event => setValue('autopartner_enabled', event.target.checked ? 'true' : 'false')} />
-                Enable automatic approved-partner posts
+                Enable automatic member-count verified partner posts
               </label>
               <label style={{ display: 'block', marginTop: 12 }}>Announcement channel ID<input value={settings.autopartner_channel_id || ''} onChange={event => setValue('autopartner_channel_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Discord channel ID" style={fieldStyle} /></label>
               <label style={{ display: 'block', marginTop: 12 }}>Interval (6–168 hours)<input type="number" min={6} max={168} value={settings.autopartner_interval_hours || '24'} onChange={event => setValue('autopartner_interval_hours', event.target.value)} style={fieldStyle} /></label>
+              <label style={{ display: 'block', marginTop: 12 }}>Minimum Discord server members<input type="number" min={10} max={1000000} value={settings.autopartner_min_members || '100'} onChange={event => setValue('autopartner_min_members', event.target.value)} style={fieldStyle} /></label>
               <label style={{ display: 'block', marginTop: 12 }}>Partner message template<textarea value={settings.autopartner_template || ''} onChange={event => setValue('autopartner_template', event.target.value)} placeholder="Use {name}, {invite}, and {description}" rows={4} style={fieldStyle} /></label>
-              <p>Automatic posting stays disabled until you enable it, choose a channel, and add at least one partner.</p>
-              <h3>Approved partners</h3>
+              <p>Members can submit an invite with /partner-add. Meta checks the invite's approximate Discord member count and only saves/posts it when it meets this threshold. The bot re-checks the count before scheduled posts.</p>
+              <h3>Partner rotation</h3>
               <div className="admin-content-list">
                 {partners.map(partner => <div className="admin-content-list-item" key={partner.id}>
-                  <strong>Approved partner</strong>
+                  <strong>Partner entry {partner.member_count ? '(' + partner.member_count.toLocaleString() + ' approx. members)' : '(member count not checked yet)'}</strong>
                   <label style={{ display: 'block', marginTop: 8 }}>Name<input value={partner.name} maxLength={80} onChange={event => setPartners(current => current.map(item => item.id === partner.id ? { ...item, name: event.target.value } : item))} style={fieldStyle} /></label>
                   <label style={{ display: 'block', marginTop: 8 }}>Invite URL<input type="url" value={partner.invite_url} onChange={event => setPartners(current => current.map(item => item.id === partner.id ? { ...item, invite_url: event.target.value } : item))} style={fieldStyle} /></label>
                   <label style={{ display: 'block', marginTop: 8 }}>Description<input value={partner.description} maxLength={300} onChange={event => setPartners(current => current.map(item => item.id === partner.id ? { ...item, description: event.target.value } : item))} style={fieldStyle} /></label>
@@ -4107,13 +4220,13 @@ function BotControlPage() {
                     <button type="button" className="button-secondary" onClick={() => removePartner(partner.id)} disabled={busy}>Remove partner</button>
                   </div>
                 </div>)}
-                {!partners.length && <p>No approved partners yet.</p>}
+                {!partners.length && <p>No partner servers in the rotation yet.</p>}
               </div>
               <form onSubmit={addPartner} style={{ marginTop: 18 }}>
                 <label style={{ display: 'block' }}>Partner name<input required maxLength={80} value={partnerName} onChange={event => setPartnerName(event.target.value)} style={fieldStyle} /></label>
                 <label style={{ display: 'block', marginTop: 10 }}>Discord invite URL<input required type="url" value={partnerInvite} onChange={event => setPartnerInvite(event.target.value)} placeholder="https://discord.gg/..." style={fieldStyle} /></label>
                 <label style={{ display: 'block', marginTop: 10 }}>Description<input maxLength={300} value={partnerDescription} onChange={event => setPartnerDescription(event.target.value)} style={fieldStyle} /></label>
-                <button type="submit" className="button-primary" disabled={busy} style={{ marginTop: 12 }}>Add approved partner</button>
+                <button type="submit" className="button-primary" disabled={busy} style={{ marginTop: 12 }}>Add owner-managed partner</button>
               </form>
             </section>
           </>}
