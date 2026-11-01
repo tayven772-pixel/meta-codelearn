@@ -92,14 +92,23 @@ export function validateServerTemplate(template) {
   if (!template || !Array.isArray(template.roles) || !Array.isArray(template.categories)) {
     throw new Error('Template must contain roles and categories arrays.');
   }
+  const validRolePermissions = new Set(Object.keys(PermissionFlagsBits));
+  if (template.branding !== undefined && (!template.branding || typeof template.branding !== 'object' ||
+      Array.isArray(template.branding) || (template.branding.server_name !== undefined &&
+        (typeof template.branding.server_name !== 'string' || !template.branding.server_name.trim() ||
+          template.branding.server_name.trim().length > 100)))) {
+    throw new Error('branding.server_name must be a non-empty Discord server name of 100 characters or fewer.');
+  }
   if (template.roles.length > 40 || template.categories.length > 30 ||
       template.roles.some(role => !role || typeof role.name !== 'string' || !role.name.trim() || role.name.length > 100 ||
-        (role.color !== undefined && (!Number.isInteger(role.color) || role.color < 0 || role.color > 0xFFFFFF))) ||
+        (role.color !== undefined && (!Number.isInteger(role.color) || role.color < 0 || role.color > 0xFFFFFF)) ||
+        (role.permissions !== undefined && (!Array.isArray(role.permissions) ||
+          role.permissions.some(permission => typeof permission !== 'string' || !validRolePermissions.has(permission))))) ||
       template.categories.some(group => !group || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 100 ||
         !Array.isArray(group.channels) || group.channels.length > 50 || (group.private !== undefined && typeof group.private !== 'boolean') ||
         group.channels.some(channel => !Array.isArray(channel) || !['text','voice'].includes(channel[0]) ||
           typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
-    throw new Error('Invalid template structure or values.');
+    throw new Error('Invalid template structure or values. Role permissions must be valid Discord permission names.');
   }
   const totalChannels = template.categories.reduce((total, group) => total + group.channels.length, 0);
   if (totalChannels + template.categories.length > 450) throw new Error('The template exceeds the conservative 450-channel/category safety limit.');
@@ -209,15 +218,35 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
   const createRoles = [], updateRoles = [], deleteRoles = [], protectedRoles = [];
   const createCategories = [], updateCategories = [], deleteCategories = [];
   const createChannels = [], moveChannels = [], syncChannelPermissions = [], deleteChannels = [], protectedChannels = [];
+  const desiredServerName = template.branding?.server_name?.trim();
+  const renameServer = desiredServerName && desiredServerName !== guild.name
+    ? { current: guild.name, desired: desiredServerName } : null;
 
   for (const definition of template.roles) {
     const existing = guild.roles.cache.find(role => role.name.toLowerCase() === definition.name.trim().toLowerCase());
-    if (!existing) createRoles.push({ name: definition.name.trim(), color: definition.color ?? 0xD7DCE4 });
+    const desiredPermissions = definition.permissions === undefined ? undefined : [...new Set(definition.permissions)].sort();
+    if (!existing) createRoles.push({
+      name: definition.name.trim(),
+      color: definition.color ?? 0xD7DCE4,
+      permissions: desiredPermissions ?? []
+    });
     else {
       usedRoleIds.add(existing.id);
-      if (definition.color !== undefined && existing.color !== definition.color) {
-        if (existing.managed || existing.position >= botHighest) protectedRoles.push({ id: existing.id, name: existing.name, reason: existing.managed ? 'managed by Discord/integration' : 'at or above Meta bot role' });
-        else updateRoles.push({ id: existing.id, name: existing.name, color: definition.color });
+      const colorChanged = definition.color !== undefined && existing.color !== definition.color;
+      const currentPermissions = existing.permissions.toArray().sort();
+      const permissionsChanged = desiredPermissions !== undefined &&
+        JSON.stringify(currentPermissions) !== JSON.stringify(desiredPermissions);
+      if (colorChanged || permissionsChanged) {
+        if (existing.managed || existing.position >= botHighest) {
+          protectedRoles.push({ id: existing.id, name: existing.name, reason: existing.managed ? 'managed by Discord/integration' : 'at or above Meta bot role' });
+        } else {
+          updateRoles.push({
+            id: existing.id,
+            name: existing.name,
+            ...(colorChanged ? { color: definition.color } : {}),
+            ...(permissionsChanged ? { permissions: desiredPermissions } : {})
+          });
+        }
       }
     }
   }
@@ -275,7 +304,7 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
     } else if (deleteUnlisted) deleteCategories.push({ id: category.id, name: category.name });
   }
 
-  const plan = { createRoles, updateRoles, deleteRoles, protectedRoles, createCategories, updateCategories, deleteCategories, createChannels, moveChannels, syncChannelPermissions, deleteChannels, protectedChannels };
+  const plan = { renameServer, createRoles, updateRoles, deleteRoles, protectedRoles, createCategories, updateCategories, deleteCategories, createChannels, moveChannels, syncChannelPermissions, deleteChannels, protectedChannels };
   const fingerprint = createHash('sha256').update(JSON.stringify(plan)).digest('hex');
   return { fingerprint, plan };
 }
@@ -328,13 +357,36 @@ export async function applyServerTemplate(guild, template, options = {}) {
   const created = [], updated = [], deleted = [], skipped = [];
   const protectedIds = new Set(plan.protectedChannels.map(item => item.id));
   const botMember = guild.members.me ?? await guild.members.fetchMe();
+  if (plan.renameServer) {
+    try {
+      await guild.edit({ name: plan.renameServer.desired }, 'Meta Code JSON setup sync');
+      updated.push('server name ' + plan.renameServer.desired);
+    } catch (error) {
+      throw new Error('Could not rename the Discord server: ' + error.message);
+    }
+  }
   for (const role of plan.createRoles) {
-    try { const item = await guild.roles.create({ name: role.name, color: role.color, reason: 'Meta Code JSON setup sync' }); created.push('role ' + item.name); }
-    catch (error) { throw new Error('Could not create role ' + role.name + ': ' + error.message); }
+    try {
+      const item = await guild.roles.create({
+        name: role.name,
+        color: role.color,
+        permissions: role.permissions,
+        reason: 'Meta Code JSON setup sync'
+      });
+      created.push('role ' + item.name);
+    } catch (error) { throw new Error('Could not create role ' + role.name + ': ' + error.message); }
   }
   for (const role of plan.updateRoles) {
-    try { const item = await guild.roles.fetch(role.id); if (item) { await item.edit({ color: role.color, reason: 'Meta Code JSON setup sync' }); updated.push('role ' + role.name); } }
-    catch (error) { throw new Error('Could not update role ' + role.name + ': ' + error.message); }
+    try {
+      const item = await guild.roles.fetch(role.id);
+      if (item) {
+        const changes = {};
+        if (role.color !== undefined) changes.color = role.color;
+        if (role.permissions !== undefined) changes.permissions = role.permissions;
+        await item.edit(changes, 'Meta Code JSON setup sync');
+        updated.push('role ' + role.name);
+      }
+    } catch (error) { throw new Error('Could not update role ' + role.name + ': ' + error.message); }
   }
   await guild.roles.fetch();
   for (const definition of template.categories) {
@@ -408,6 +460,7 @@ export async function previewServerTemplate(guild, template) {
   return {
     fingerprint,
     summary: {
+      renameServer: plan.renameServer,
       createRoles: plan.createRoles,
       updateRoles: plan.updateRoles,
       deleteRoles: plan.deleteRoles,
