@@ -3811,6 +3811,20 @@ function BotControlPage() {
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not send the message.'); }
     finally { setSendingMessage(false); }
   };
+  const publishSetupTemplate = async () => {
+    let template;
+    try { template = JSON.parse(templateText); } catch (error) { setStatus('Invalid JSON: ' + (error instanceof Error ? error.message : 'check the template')); return; }
+    if (!Array.isArray(template.roles) || !Array.isArray(template.categories)) { setStatus('JSON must contain roles and categories arrays.'); return; }
+    if (!window.confirm('Publish this setup to Discord? Existing channels and messages will not be deleted.')) return;
+    setBusy(true); setStatus('Publishing setup to Discord…');
+    try {
+      const response = await fetch('/api/auth/admin/bot-control/publish-template', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guildId, template }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Could not publish setup.');
+      setStatus(data.message || 'Template queued for Discord.');
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not publish setup.'); }
+    finally { setBusy(false); }
+  };
   const saveSettings = async () => {
     setStatus('Saving bot settings…');
     let template = templateText;
@@ -3945,6 +3959,13 @@ function BotControlPage() {
           </section>
           {editorOpen && <>
             <section id="bot-settings-editor" className="admin-publishing-guide">
+              <h2>Publish server setup JSON</h2>
+              <p>Paste a roles/categories template and publish it to Discord. Missing roles, categories, and channels are created; matching role colours and category privacy are updated. Existing channels and messages are preserved.</p>
+              <textarea value={templateText} onChange={event => setTemplateText(event.target.value)} rows={18} spellCheck={false} style={{ ...fieldStyle, fontFamily: 'monospace' }} aria-label="Discord setup JSON" />
+              <button type="button" className="button-primary" onClick={() => { void publishSetupTemplate(); }} disabled={busy}>{busy ? 'Publishing…' : 'Publish JSON to Discord'}</button>
+              <button type="button" className="button-secondary" onClick={() => setTemplateText(defaultTemplate)} disabled={busy}>Reset template</button>
+            </section>
+            <section className="admin-publishing-guide">
               <h2>Bot settings editor</h2>
               <p>The editor is open. Change any fields below, then choose Save all settings.</p>
               <h3>Command controls</h3>
@@ -4094,12 +4115,6 @@ function BotControlPage() {
                 <label style={{ display: 'block', marginTop: 10 }}>Description<input maxLength={300} value={partnerDescription} onChange={event => setPartnerDescription(event.target.value)} style={fieldStyle} /></label>
                 <button type="submit" className="button-primary" disabled={busy} style={{ marginTop: 12 }}>Add approved partner</button>
               </form>
-            </section>
-            <section className="admin-publishing-guide">
-              <h2>Server setup template editor</h2>
-              <p>Edit the JSON that <code>/setup-server</code> uses. This setup now only creates missing roles, categories, and channels; it does not delete existing channels or message history.</p>
-              <textarea value={templateText} onChange={event => setTemplateText(event.target.value)} rows={20} spellCheck={false} style={{ ...fieldStyle, fontFamily: 'monospace' }} />
-              <button type="button" className="button-secondary" onClick={() => setTemplateText(defaultTemplate)} style={{ marginTop: 10 }}>Reset editor to built-in template</button>
             </section>
           </>}
           <section className="admin-publishing-guide">

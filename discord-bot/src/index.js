@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { ticketCommand } from './lib/ticket-commands.js';
 import { serverSetupCommand } from './lib/server-setup.js';
 import { handleTicketCommand, handleTicketButton, handleTicketPanelCommand } from './lib/tickets.js';
-import { handleServerSetup, handleServerSetupButton } from './lib/server-setup.js';
+import { applyServerTemplate, handleServerSetup, handleServerSetupButton } from './lib/server-setup.js';
 import { db, getSetting } from './lib/database.js';
 import { moderationCommands, handleModerationCommand } from './lib/moderation.js';
 import { autoPartnerCommands, handleAutoPartnerCommand, runAutoPartnerScheduler } from './lib/autopartner.js';
@@ -434,6 +434,31 @@ client.on(Events.InteractionCreate, async interaction => {
  }
 });
 handleCommunityEvents(client);
+let processingWebsiteSetups = false;
+async function processWebsiteSetups() {
+ if (processingWebsiteSetups || !client.isReady()) return;
+ processingWebsiteSetups = true;
+ try {
+  const pending = db.prepare("SELECT * FROM bot_setup_outbox WHERE status = 'pending' ORDER BY id LIMIT 2").all();
+  for (const item of pending) {
+   try {
+    const homeGuildId = String(process.env.META_HOME_GUILD_ID || process.env.DISCORD_GUILD_ID || '').trim();
+    if (!homeGuildId || item.guild_id !== homeGuildId) throw new Error('This job is not for the configured Meta home server.');
+    const guild = await client.guilds.fetch(homeGuildId);
+    const template = JSON.parse(item.template_json);
+    const result = await applyServerTemplate(guild, template);
+    db.prepare("UPDATE bot_setup_outbox SET status = 'applied', result_json = ?, error = NULL, completed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'").run(JSON.stringify(result), item.id);
+    console.log('Website setup template applied:', item.id, 'created', result.created.length, 'updated', result.updated.length, 'errors', result.errors.length);
+   } catch (error) {
+    db.prepare("UPDATE bot_setup_outbox SET status = 'failed', error = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'").run(String(error?.message || 'Setup failed').slice(0, 1000), item.id);
+    console.error('Website setup publish failed:', error?.message || error);
+   }
+  }
+ } catch (error) { console.error('Website setup queue check failed:', error?.message || error); }
+ finally { processingWebsiteSetups = false; }
+}
+setInterval(() => { void processWebsiteSetups(); }, 2000).unref();
+
 let processingWebsiteMessages = false;
 async function processWebsiteMessages() {
  if (processingWebsiteMessages || !client.isReady()) return;
