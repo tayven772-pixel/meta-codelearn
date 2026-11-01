@@ -64,6 +64,10 @@ export function validateServerTemplate(template) {
   if (!template || typeof template !== 'object' || !Array.isArray(template.roles) || !Array.isArray(template.categories)) {
     throw new Error('Template must contain roles and categories arrays.');
   }
+  if (template.serverName !== undefined &&
+      (typeof template.serverName !== 'string' || template.serverName.trim().length < 2 || template.serverName.trim().length > 100)) {
+    throw new Error('serverName must be 2–100 characters when provided. Omit it to keep the current server name.');
+  }
   if (template.roles.length > 40 || template.categories.length > 30 ||
       template.roles.some(role => !role || typeof role.name !== 'string' || !role.name.trim() || role.name.length > 100 ||
         (role.color !== undefined && (!Number.isInteger(role.color) || role.color < 0 || role.color > 0xFFFFFF))) ||
@@ -261,6 +265,13 @@ export async function previewServerTemplate(guild, template) {
       !botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
     throw new Error('Meta needs Manage Channels and Manage Roles permissions before this template can be published.');
   }
+  const requestedServerName = typeof template.serverName === 'string' ? template.serverName.trim() : '';
+  const serverNameChange = requestedServerName && requestedServerName !== guild.name
+    ? { current: guild.name, desired: requestedServerName }
+    : null;
+  if (serverNameChange && !botMember.permissions.has(PermissionFlagsBits.ManageGuild)) {
+    throw new Error('Meta needs Manage Server permission to rename this Discord server.');
+  }
   const botHighest = botMember.roles.highest.position;
   const blockedDesiredRoles = template.roles.filter(definition => {
     const role = guild.roles.cache.find(item => item.name.toLowerCase() === definition.name.trim().toLowerCase());
@@ -294,7 +305,8 @@ export async function previewServerTemplate(guild, template) {
     deleteChannels: deleteChannels.map(channel => ({ id: channel.id, name: channel.name, type: channel.type })),
     deleteCategories: deleteCategories.map(channel => ({ id: channel.id, name: channel.name })),
     deleteRoles: deleteRoles.map(role => ({ id: role.id, name: role.name })),
-    protectedRoles: protectedRoles.map(role => role.name)
+    protectedRoles: protectedRoles.map(role => role.name),
+    serverNameChange
   };
 }
 
@@ -358,7 +370,8 @@ export async function applyServerTemplate(guild, template) {
         ...privateAccessRoleNames
           .map(name => guild.roles.cache.find(role => role.name.toLowerCase() === name))
           .filter(Boolean)
-          .map(role => ({ id: role.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }))
+          .map(role => ({ id: role.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] })),
+        { id: botMember.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] }
       ] : [];
       await category.permissionOverwrites.set(overwrites, 'Published Meta Code server template');
       updated.push('category permissions ' + category.name);
@@ -385,6 +398,17 @@ export async function applyServerTemplate(guild, template) {
       }
     } catch (error) {
       errors.push('Category ' + group.name + ': ' + error.message);
+    }
+  }
+
+  // Apply the requested server name before destructive cleanup. If Discord rejects
+  // the rename, the safety gate below prevents channel/category/role deletions.
+  if (!errors.length && plan.serverNameChange) {
+    try {
+      await guild.setName(plan.serverNameChange.desired, 'Applied server name from Meta Code setup template');
+      updated.push('server name ' + plan.serverNameChange.desired);
+    } catch (error) {
+      errors.push('Server name: ' + error.message);
     }
   }
 
@@ -475,8 +499,9 @@ export async function handleServerSetup(interaction) {
       'Create roles: ' + plan.createRoles.length + '\n' +
       'Create categories: ' + plan.createCategories.length + '\n' +
       'Create channels: ' + plan.createChannels.length + '\n' +
+      (plan.serverNameChange ? 'Rename server: ' + plan.serverNameChange.current + ' → ' + plan.serverNameChange.desired + '\n' : 'Server name: unchanged\n') +
       'Delete channels: ' + plan.deleteChannels.length + '\n' +
-      'Delete categories: ' + plan.deleteCategories.length + '\n' +
+        'Delete categories: ' + plan.deleteCategories.length + '\n' +
       'Delete roles: ' + plan.deleteRoles.length + '\n' +
       'Protected roles (cannot be deleted by Meta): ' + plan.protectedRoles.length + '\n\n' +
       'This command is preview-only. Use the owner dashboard to publish the template after reviewing the destructive changes.'
