@@ -87,7 +87,9 @@ async function postPartner(client, guildId, partner) {
   if (!channel || !channel.isTextBased() || !channel.send) throw new Error('The configured partner channel is unavailable. Run /autopartner-setup again.');
   const message = await channel.send({ embeds: [renderEmbed(partner, guildId)], allowedMentions: { parse: [] } });
   setSetting(guildId, 'autopartner_last_posted_at', String(Date.now()));
-  setSetting(guildId, 'autopartner_last_partner_id', String(partner.id));
+  if (partner.id !== null && partner.id !== undefined) {
+    setSetting(guildId, 'autopartner_last_partner_id', String(partner.id));
+  }
   return message;
 }
 
@@ -139,6 +141,17 @@ export async function handleAutoPartnerCommand(interaction) {
       if (!validHost || parsed.protocol !== 'https:' || !inviteCode || (host.includes('discord.com') && segments[0] !== 'invite')) throw new Error('invalid');
     } catch {
       await interaction.reply({ content: 'Provide a valid HTTPS Discord invite, such as https://discord.gg/example.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    const priorInvite = db.prepare('SELECT id, status, member_count FROM autopartner_submissions WHERE guild_id = ? AND invite_code = ?').get(interaction.guildId, inviteCode);
+    if (priorInvite) {
+      const minimum = Number(getSetting(interaction.guildId, 'autopartner_min_members') || 100);
+      const message = priorInvite.status === 'posted'
+        ? 'That invite has already been published as a partner.'
+        : priorInvite.status === 'eligible'
+          ? 'That invite already passed the member-count check and is waiting for its scheduled post.'
+          : 'That invite is already being checked. Latest approximate count: ' + Number(priorInvite.member_count || 0).toLocaleString() + ' / ' + minimum.toLocaleString() + ' members.';
+      await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
       return true;
     }
     const existingUserSubmission = db.prepare("SELECT id FROM autopartner_submissions WHERE guild_id = ? AND user_id = ? AND status IN ('pending','eligible')").get(interaction.guildId, interaction.user.id);
@@ -329,7 +342,7 @@ async function verifyPendingSubmissions(client, guildId) {
 
 export async function runAutoPartnerScheduler(client) {
   const guildId = String(process.env.META_HOME_GUILD_ID || process.env.DISCORD_GUILD_ID || '').trim();
-  if (!/^\\d{17,20}$/.test(guildId)) return;
+  if (!/^\d{17,20}$/.test(guildId)) return;
   if (getSetting(guildId, 'autopartner_enabled') !== 'true') return;
 
   const channelId = getSetting(guildId, 'autopartner_channel_id');
