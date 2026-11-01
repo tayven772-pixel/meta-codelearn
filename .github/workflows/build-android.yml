@@ -2,16 +2,6 @@ name: Build Meta Android APK
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'public/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'capacitor.config.ts'
-      - '.github/workflows/build-android.yml'
-
 permissions:
   contents: write
 
