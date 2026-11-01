@@ -310,7 +310,16 @@ export async function handleCommunityEvents(client) {
       const channel = await member.guild.channels.fetch(channelId).catch(() => null);
       const template = getSetting(member.guild.id, 'community_welcome_message') || 'Welcome {user} to {server}! You are member #{membercount}.';
       const message = template.replaceAll('{user}', member.toString()).replaceAll('{server}', member.guild.name).replaceAll('{membercount}', String(member.guild.memberCount));
-      if (channel?.isTextBased()) await channel.send({ content: message, allowedMentions: { users: [member.id] } }).catch(() => {});
+      if (channel?.isTextBased()) {
+        const avatarUrl = member.displayAvatarURL({ size: 256, extension: 'png' });
+        const welcomeEmbed = new EmbedBuilder().setColor(0x42B883)
+          .setAuthor({ name: 'Welcome ' + member.user.username, iconURL: avatarUrl })
+          .setDescription(message)
+          .setFooter({ text: member.guild.name + ' • Member #' + member.guild.memberCount })
+          .setTimestamp();
+        if (getSetting(member.guild.id, 'community_welcome_avatar') !== 'false') welcomeEmbed.setThumbnail(avatarUrl);
+        await channel.send({ embeds: [welcomeEmbed], allowedMentions: { users: [member.id] } }).catch(error => console.error('Welcome message failed:', error.message));
+      }
     }
     await sendLog(member.guild, new EmbedBuilder().setColor(0x42B883).setTitle('Member joined').setDescription(`${member.user.tag} (${member.id})`).setTimestamp());
   });
