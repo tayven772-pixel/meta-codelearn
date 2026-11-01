@@ -3972,12 +3972,20 @@ function BotControlPage() {
       const parsed = JSON.parse(template);
       if (!Array.isArray(parsed.roles) || !Array.isArray(parsed.categories) ||
           parsed.roles.length > 40 || parsed.categories.length > 30 ||
-          parsed.roles.some((role: {name?: unknown}) => typeof role?.name !== 'string' || !role.name.trim() || role.name.length > 100) ||
-          parsed.categories.some((group: {name?: unknown; channels?: unknown}) => typeof group?.name !== 'string' || !group.name.trim() ||
+          parsed.roles.some((role: {name?: unknown; color?: unknown; hoist?: unknown; permissions?: unknown}) =>
+            typeof role?.name !== 'string' || !role.name.trim() || role.name.length > 100 ||
+            (role.hoist !== undefined && typeof role.hoist !== 'boolean') ||
+            (role.permissions !== undefined && (!Array.isArray(role.permissions) || role.permissions.some((permission: unknown) => typeof permission !== 'string'))) ||
+            (role.color !== undefined && !(Number.isInteger(role.color) || (typeof role.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(role.color))))) ||
+          parsed.categories.some((group: {name?: unknown; channels?: unknown; allowed_roles?: unknown}) => typeof group?.name !== 'string' || !group.name.trim() ||
+            (group.allowed_roles !== undefined && (!Array.isArray(group.allowed_roles) || group.allowed_roles.some((name: unknown) => typeof name !== 'string'))) ||
             !Array.isArray(group.channels) || group.channels.length > 50 ||
-            group.channels.some((channel: unknown) => !Array.isArray(channel) || !['text','voice'].includes(channel[0] as string) ||
-              typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
-        throw new Error('Use roles and categories arrays. Each channel must be ["text" or "voice", "channel-name"]. Limits: 40 roles, 30 categories, 50 channels each.');
+            group.channels.some((channel: unknown) => {
+              const type = Array.isArray(channel) ? channel[0] : (channel as {type?: unknown})?.type;
+              const name = Array.isArray(channel) ? channel[1] : (channel as {name?: unknown})?.name;
+              return !['text','voice'].includes(type as string) || typeof name !== 'string' || !name.trim() || name.length > 100;
+            }))) {
+        throw new Error('Use roles and categories arrays. Channels may be ["text" or "voice", "name"] or objects with name/type. Limits: 40 roles, 30 categories, 50 channels each.');
       }
     } catch (error) { setStatus('Setup template JSON is invalid: ' + (error instanceof Error ? error.message : 'check the JSON')); return; }
     const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_min_members','autopartner_template','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help','ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','community_welcome_channel_id','community_welcome_message','community_welcome_avatar','community_autorole_id','community_log_channel_id','community_xp_enabled','staff_application_review_channel_id','staff_application_review_role_id','staff_application_approved_role_id','staff_application_questions']);
@@ -4100,7 +4108,7 @@ function BotControlPage() {
           {editorOpen && <>
             <section id="bot-settings-editor" className="admin-publishing-guide">
               <h2>Publish server setup JSON</h2>
-              <p>This JSON configures the Discord server name, layout, and the sections/settings shown in this control panel. Set the top-level serverName field to rename the server (2–100 characters), or omit it to keep the current name. Renaming requires Meta to have Manage Server permission. Publishing replaces the server layout: unlisted channels, categories, and removable roles are deleted after the desired layout has been created.</p>              <p>The JSON editor always stays visible so you can restore dashboard sections if your template hides them.</p>
+              <p>This JSON accepts the rich community schema (branding, hex role colors, role permissions, object-style channels, per-channel read-only flags, category allow-lists, Discord permissions, and bot_settings) as well as the older format. Use branding.server_name or top-level serverName to rename the server. Renaming requires Meta to have Manage Server permission. Publishing replaces the server layout: unlisted channels, categories, and removable roles are deleted after the desired layout has been created.</p>              <p>The JSON editor always stays visible so you can restore dashboard sections if your template hides them.</p>
               <p><strong>Warning:</strong> deleting a channel permanently removes its message history and threads. Meta cannot delete @everyone, managed bot/integration roles, or roles at/above its highest role.</p>
               <textarea value={templateText} onChange={event => setTemplateText(event.target.value)} rows={18} spellCheck={false} style={{ ...fieldStyle, fontFamily: 'monospace' }} aria-label="Discord setup JSON" />
               <button type="button" className="button-primary" onClick={() => { void publishSetupTemplate(); }} disabled={busy}>{busy ? 'Publishing…' : 'Publish JSON to Discord'}</button>
