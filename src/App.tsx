@@ -4267,7 +4267,7 @@ function BotControlPage() {
                     <button type="button" className="button-secondary" onClick={() => removePartner(partner.id)} disabled={busy}>Remove partner</button>
                   </div>
                 </div>)}
-                {!partners.length && <p>No approved partners yet.</p>}
+                {!partners.length && <p>No manual backup partners are configured. Qualifying public submissions can still enter the rotation automatically.</p>}
               </div>
               <form onSubmit={addPartner} style={{ marginTop: 18 }}>
                 <label style={{ display: 'block' }}>Backup partner name<input required maxLength={80} value={partnerName} onChange={event => setPartnerName(event.target.value)} style={fieldStyle} /></label>
