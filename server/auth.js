@@ -510,6 +510,7 @@ function validateBotSetupTemplate(template) {
         (role.color !== undefined && (!Number.isInteger(role.color) || role.color < 0 || role.color > 0xFFFFFF))) ||
       template.categories.some(group => !group || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 100 ||
         (group.private !== undefined && typeof group.private !== 'boolean') ||
+        (group.private !== undefined && typeof group.private !== 'boolean') ||
         !Array.isArray(group.channels) || group.channels.length > 50 ||
         group.channels.some(channel => !Array.isArray(channel) || !['text','voice'].includes(channel[0]) ||
           typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
@@ -550,6 +551,14 @@ function validateBotSetupTemplate(template) {
 
   const applications = control.staffApplications ?? {};
   if (applications.approvedRole !== undefined && (typeof applications.approvedRole !== 'string' || applications.approvedRole.length > 100)) return 'staffApplications.approvedRole must be 100 characters or fewer.';
+  const definedRoleNames = new Set(template.roles.map(role => role.name.trim().toLowerCase()));
+  if (applications.reviewRole && !definedRoleNames.has(String(applications.reviewRole).trim().toLowerCase())) return 'The staff application reviewer role must also be listed in the JSON roles array.';
+  if (applications.approvedRole && !definedRoleNames.has(String(applications.approvedRole).trim().toLowerCase())) return 'The staff application approvedRole must also be listed in the JSON roles array.';
+  const privateGroups = template.categories.filter(group => group.private === true);
+  if (privateGroups.length) {
+    const roleNames = new Set(['Founder','Administrator','Moderator','Support Team',String(applications.reviewRole || '')].map(name => name.trim().toLowerCase()).filter(Boolean));
+    if (!template.roles.some(role => roleNames.has(role.name.trim().toLowerCase()))) return 'Private categories need at least one staff role in the JSON roles array.';
+  }
   if (applications.questions !== undefined &&
       (!Array.isArray(applications.questions) || applications.questions.length < 1 || applications.questions.length > 5 ||
        applications.questions.some(question => typeof question !== 'string' || !question.trim() || question.length > 45))) {
@@ -569,6 +578,11 @@ function validateBotSetupTemplate(template) {
       return 'botControl channel and role names must be strings of 100 characters or fewer.';
     }
   }
+  const normalize = value => value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'new-channel';
+  const hasTextChannel = name => template.categories.some(group => group.channels.some(([kind, rawName]) => kind === 'text' && normalize(rawName) === normalize(name)));
+  if (control.welcome?.channel && !hasTextChannel(control.welcome.channel)) return 'botControl.welcome.channel must reference a text channel in the JSON categories.';
+  if (control.staffApplications?.reviewChannel && !hasTextChannel(control.staffApplications.reviewChannel)) return 'botControl.staffApplications.reviewChannel must reference a text channel in the JSON categories.';
+  if (control.autopartner?.channel && !hasTextChannel(control.autopartner.channel)) return 'botControl.autopartner.channel must reference a text channel in the JSON categories.';
   return null;
 }
 
