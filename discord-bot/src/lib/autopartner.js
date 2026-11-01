@@ -41,7 +41,7 @@ export const autoPartnerCommands = [
     .addIntegerOption(o => o.setName('interval_hours').setDescription('Hours between posts (6–168)').setMinValue(6).setMaxValue(168).setRequired(true))
     .addIntegerOption(o => o.setName('minimum_members').setDescription('Minimum approximate members for automatic partner eligibility').setMinValue(1).setMaxValue(10000000).setRequired(false))
     .addBooleanOption(o => o.setName('enabled').setDescription('Enable automatic posting').setRequired(true)),
-  new SlashCommandBuilder().setName('partner-add').setDescription('Add an approved partner server')
+  new SlashCommandBuilder().setName('partner-add').setDescription('Add a manual backup partner server')
     .setDefaultMemberPermissions(admin)
     .addStringOption(o => o.setName('name').setDescription('Unique partner name').setMaxLength(60).setRequired(true))
     .addStringOption(o => o.setName('invite').setDescription('Discord invite URL').setMaxLength(200).setRequired(true))
@@ -234,7 +234,7 @@ export async function handleAutoPartnerCommand(interaction) {
       }
       throw error;
     }
-    await interaction.reply({ content: '✅ Added ' + partnerName + ' to the approved partner rotation. Use /partner-post to preview it in the configured channel.', flags: MessageFlags.Ephemeral });
+    await interaction.reply({ content: '✅ Added ' + partnerName + ' as a manual backup partner. Use /partner-post to preview it in the configured channel.', flags: MessageFlags.Ephemeral });
     return true;
   }
 
@@ -247,8 +247,8 @@ export async function handleAutoPartnerCommand(interaction) {
 
   if (name === 'partner-list') {
     const partners = getPartners(interaction.guildId);
-    const embed = new EmbedBuilder().setColor(0x42B883).setTitle('🤝 Approved partners')
-      .setDescription(partners.length ? partners.map((p, i) => '**' + (i + 1) + '. ' + p.name + '**\n' + p.description.slice(0, 180) + '\n[Join partner server](' + p.invite_url + ')').join('\n\n').slice(0, 4000) : 'No partners yet. An administrator can add approved servers with /partner-add.')
+    const embed = new EmbedBuilder().setColor(0x42B883).setTitle('🤝 Partners in rotation')
+      .setDescription(partners.length ? partners.map((p, i) => '**' + (i + 1) + '. ' + p.name + '**\n' + p.description.slice(0, 180) + '\n[Join partner server](' + p.invite_url + ')').join('\n\n').slice(0, 4000) : 'No partners yet. Members can submit with /partner-submit for automatic member-count verification.')
       .setFooter({ text: partners.length + ' active partner(s)' });
     await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
     return true;
@@ -264,7 +264,7 @@ export async function handleAutoPartnerCommand(interaction) {
       .addFields(
         { name: 'Status', value: enabled ? 'Enabled' : 'Disabled', inline: true },
         { name: 'Interval', value: 'Every ' + hours + ' hour(s)', inline: true },
-        { name: 'Approved partners', value: String(getPartners(interaction.guildId).length), inline: true },
+        { name: 'Partners in rotation', value: String(getPartners(interaction.guildId).length), inline: true },
         { name: 'Minimum members', value: Number(getSetting(interaction.guildId, 'autopartner_min_members') || 100).toLocaleString(), inline: true },
         { name: 'Posting channel', value: channelId ? '<#' + channelId + '>' : 'Not configured', inline: true },
         { name: 'Last post', value: last ? '<t:' + Math.floor(last / 1000) + ':R>' : 'Never', inline: true },
@@ -289,7 +289,7 @@ export async function handleAutoPartnerCommand(interaction) {
     const requested = interaction.options.getString('name')?.trim();
     const partners = getPartners(interaction.guildId);
     if (!partners.length) {
-      await interaction.reply({ content: 'No approved partners yet. Add one with /partner-add first.', flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: 'No partners in the rotation yet. Submit a qualifying server with /partner-submit or add a manual backup with /partner-add.', flags: MessageFlags.Ephemeral });
       return true;
     }
     let partner;
