@@ -64,6 +64,7 @@ function parseTemplateColor(value, label = 'color') {
 
 function permissionBits(names, label) {
   if (names === undefined) return undefined;
+  if (typeof names === 'bigint') return names;
   if (!Array.isArray(names)) throw new Error(label + ' must be an array of Discord permission names.');
   if (names.every(name => typeof name === 'bigint')) return new PermissionsBitField(names).bitfield;
   const bits = [];
@@ -436,6 +437,9 @@ function applyBotControlSettings(guild, template) {
     setSetting('global', 'autopartner_enabled', String(partnership.enabled !== false));
     setSetting('global', 'autopartner_interval_hours', String(partnership.cooldown_hours ?? 24));
     setSetting('global', 'autopartner_approval_required', String(partnership.approval_required === true));
+    const reviewName = logging?.channel || markedChannel('logging');
+    const reviewChannel = reviewName ? findChannelByName(guild, reviewName, textTypes) : null;
+    setSetting('global', 'autopartner_review_channel_id', reviewChannel?.id || '');
   }
   const automod = botSettings.automod;
   if (automod) {
