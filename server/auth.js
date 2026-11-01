@@ -502,6 +502,95 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
     return res.status(400).json({ error: error.message || 'Could not save bot settings.' });
   }
 });
+function validateBotSetupTemplate(template) {
+  if (!template || typeof template !== 'object' || Array.isArray(template) ||
+      !Array.isArray(template.roles) || !Array.isArray(template.categories) ||
+      template.roles.length > 40 || template.categories.length > 30 ||
+      template.roles.some(role => !role || typeof role.name !== 'string' || !role.name.trim() || role.name.length > 100 ||
+        (role.color !== undefined && (!Number.isInteger(role.color) || role.color < 0 || role.color > 0xFFFFFF))) ||
+      template.categories.some(group => !group || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 100 ||
+        !Array.isArray(group.channels) || group.channels.length > 50 ||
+        group.channels.some(channel => !Array.isArray(channel) || !['text','voice'].includes(channel[0]) ||
+          typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
+    return 'Invalid setup JSON. Check roles, categories, and ["text" or "voice", "channel-name"] entries.';
+  }
+
+  const roleNames = template.roles.map(role => role.name.trim().toLowerCase());
+  const categoryNames = template.categories.map(group => group.name.trim().toLowerCase());
+  if (new Set(roleNames).size !== roleNames.length) return 'Role names must be unique (case-insensitive).';
+  if (new Set(categoryNames).size !== categoryNames.length) return 'Category names must be unique (case-insensitive).';
+  for (const group of template.categories) {
+    const keys = group.channels.map(([kind, name]) => kind + ':' + name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, ''));
+    if (new Set(keys).size !== keys.length) return 'Category "' + group.name + '" contains duplicate channel names of the same type.';
+  }
+
+  const control = template.botControl ?? {};
+  if (!control || typeof control !== 'object' || Array.isArray(control)) return 'botControl must be an object.';
+  for (const [key, section] of Object.entries({
+    dashboard: control.dashboard, welcome: control.welcome,
+    staffApplications: control.staffApplications, autopartner: control.autopartner
+  })) {
+    if (section !== undefined && (!section || typeof section !== 'object' || Array.isArray(section))) {
+      return 'botControl.' + key + ' must be an object.';
+    }
+  }
+  const dashboard = control.dashboard ?? {};
+  const validSections = new Set(['serverSetup','commands','responses','tickets','messages','community','staffApplications','autopartner']);
+  if (dashboard.sections !== undefined &&
+      (!Array.isArray(dashboard.sections) || dashboard.sections.length > validSections.size || dashboard.sections.some(section => !validSections.has(section)))) {
+    return 'botControl.dashboard.sections contains an unknown dashboard section.';
+  }
+  if (dashboard.title !== undefined && (typeof dashboard.title !== 'string' || dashboard.title.length > 80)) return 'Dashboard title must be 80 characters or fewer.';
+  if (dashboard.description !== undefined && (typeof dashboard.description !== 'string' || dashboard.description.length > 240)) return 'Dashboard description must be 240 characters or fewer.';
+
+  const welcome = control.welcome ?? {};
+  if (welcome.message !== undefined && (typeof welcome.message !== 'string' || welcome.message.length > 1500)) return 'Welcome message must be 1500 characters or fewer.';
+  if (welcome.showAvatar !== undefined && typeof welcome.showAvatar !== 'boolean') return 'welcome.showAvatar must be true or false.';
+
+  const applications = control.staffApplications ?? {};
+  if (applications.approvedRole !== undefined && (typeof applications.approvedRole !== 'string' || applications.approvedRole.length > 100)) return 'staffApplications.approvedRole must be 100 characters or fewer.';
+  if (applications.questions !== undefined &&
+      (!Array.isArray(applications.questions) || applications.questions.length < 1 || applications.questions.length > 5 ||
+       applications.questions.some(question => typeof question !== 'string' || !question.trim() || question.length > 45))) {
+    return 'Staff application questions must contain 1–5 non-empty questions, each 45 characters or fewer.';
+  }
+
+  const partner = control.autopartner ?? {};
+  if (partner.enabled !== undefined && typeof partner.enabled !== 'boolean') return 'autopartner.enabled must be true or false.';
+  if (partner.intervalHours !== undefined && (!Number.isInteger(partner.intervalHours) || partner.intervalHours < 6 || partner.intervalHours > 168)) return 'autopartner.intervalHours must be 6–168.';
+  if (partner.minimumMembers !== undefined && (!Number.isInteger(partner.minimumMembers) || partner.minimumMembers < 1 || partner.minimumMembers > 10000000)) return 'autopartner.minimumMembers must be between 1 and 10,000,000.';
+
+  for (const [section, key] of [
+    [welcome, 'channel'], [applications, 'reviewChannel'], [applications, 'reviewRole'],
+    [applications, 'approvedRole'], [partner, 'channel']
+  ]) {
+    if (section[key] !== undefined && (typeof section[key] !== 'string' || section[key].length > 100)) {
+      return 'botControl channel and role names must be strings of 100 characters or fewer.';
+    }
+  }
+  return null;
+}
+
+app.post('/api/auth/admin/bot-control/preview-template', async (req, res) => {
+  if (!requireBotOwner(req, res)) return;
+  const guildId = String(req.body?.guildId || getHomeGuildId()).trim();
+  const template = req.body?.template;
+  if (!validGuildId(guildId)) return res.status(400).json({ error: 'The Meta home server ID is invalid.' });
+  if (!(await requireOwnedGuild(req, res, guildId))) return;
+  const validationError = validateBotSetupTemplate(template);
+  if (validationError) return res.status(400).json({ error: validationError });
+  const templateJson = JSON.stringify(template);
+  if (templateJson.length > 30000) return res.status(413).json({ error: 'Setup JSON is too large (30 KB maximum).' });
+  try {
+    const result = getBotDb().prepare(
+      "INSERT INTO bot_setup_outbox (guild_id, template_json, preview_only) VALUES (?, ?, 1)"
+    ).run(guildId, templateJson);
+    return res.status(202).json({ queued: true, jobId: Number(result.lastInsertRowid), message: 'Non-destructive preview queued.' });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Could not create a server setup preview.' });
+  }
+});
+
 app.post('/api/auth/admin/bot-control/publish-template', async (req, res) => {
   if (!requireBotOwner(req, res)) return;
   if (req.body?.confirmReplace !== true) {
@@ -511,21 +600,13 @@ app.post('/api/auth/admin/bot-control/publish-template', async (req, res) => {
   const template = req.body?.template;
   if (!validGuildId(guildId)) return res.status(400).json({ error: 'The Meta home server ID is invalid.' });
   if (!(await requireOwnedGuild(req, res, guildId))) return;
-  if (!template || !Array.isArray(template.roles) || !Array.isArray(template.categories) ||
-      template.roles.length > 40 || template.categories.length > 30 ||
-      template.roles.some(role => !role || typeof role.name !== 'string' || !role.name.trim() || role.name.length > 100 ||
-        (role.color !== undefined && (!Number.isInteger(role.color) || role.color < 0 || role.color > 0xFFFFFF))) ||
-      template.categories.some(group => !group || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 100 ||
-        !Array.isArray(group.channels) || group.channels.length > 50 ||
-        group.channels.some(channel => !Array.isArray(channel) || !['text','voice'].includes(channel[0]) ||
-          typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
-    return res.status(400).json({ error: 'Invalid setup JSON. Check roles, categories, and ["text" or "voice", "channel-name"] channel entries.' });
-  }
+  const validationError = validateBotSetupTemplate(template);
+  if (validationError) return res.status(400).json({ error: validationError });
   const templateJson = JSON.stringify(template);
   if (templateJson.length > 30000) return res.status(413).json({ error: 'Setup JSON is too large (30 KB maximum).' });
   try {
     getBotDb().prepare("INSERT INTO settings (guild_id, setting_key, setting_value, updated_at) VALUES ('global','server_setup_template',?,CURRENT_TIMESTAMP) ON CONFLICT(guild_id,setting_key) DO UPDATE SET setting_value=excluded.setting_value, updated_at=CURRENT_TIMESTAMP").run(templateJson);
-    const result = getBotDb().prepare("INSERT INTO bot_setup_outbox (guild_id, template_json) VALUES (?, ?)").run(guildId, templateJson);
+    const result = getBotDb().prepare("INSERT INTO bot_setup_outbox (guild_id, template_json, preview_only) VALUES (?, ?, 0)").run(guildId, templateJson);
     return res.status(202).json({ queued: true, jobId: Number(result.lastInsertRowid), message: 'Template published. Meta is applying it to Discord now.' });
   } catch (error) { return res.status(500).json({ error: error.message || 'Could not publish setup template.' }); }
 });
