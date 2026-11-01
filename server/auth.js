@@ -628,8 +628,11 @@ function validateBotSetupTemplate(template) {
       return 'botControl channel and role names must be strings of 100 characters or fewer.';
     }
   }
-  const normalize = value => value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'new-channel';
-  const hasTextChannel = name => template.categories.some(group => group.channels.some(([kind, rawName]) => kind === 'text' && normalize(rawName) === normalize(name)));
+  const normalizeChannel = value => String(value).trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'new-channel';
+  const hasTextChannel = name => template.categories.some(group => group.channels.some(channel =>
+    (Array.isArray(channel) ? channel[0] : channel.type) === 'text' &&
+    normalizeChannel(Array.isArray(channel) ? channel[1] : channel.name) === normalizeChannel(name)
+  ));
   if (control.welcome?.channel && !hasTextChannel(control.welcome.channel)) return 'botControl.welcome.channel must reference a text channel in the JSON categories.';
   if (control.staffApplications?.reviewChannel && !hasTextChannel(control.staffApplications.reviewChannel)) return 'botControl.staffApplications.reviewChannel must reference a text channel in the JSON categories.';
   if (control.autopartner?.channel && !hasTextChannel(control.autopartner.channel)) return 'botControl.autopartner.channel must reference a text channel in the JSON categories.';
@@ -681,14 +684,6 @@ function validateBotSetupTemplate(template) {
       (typeof botSettings.autorole.role !== 'string' || !roleNameSet.has(botSettings.autorole.role.trim().toLowerCase()))) {
     return 'bot_settings.autorole.role must reference a role in the roles array.';
   }
-  const normalizeChannel = value => String(value).trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'new-channel';
-  const channelNames = new Set(template.categories.flatMap(group => group.channels.map(channel =>
-    normalizeChannel(Array.isArray(channel) ? channel[1] : channel.name)
-  )));
-  const hasTextChannel = name => template.categories.some(group => group.channels.some(channel =>
-    (Array.isArray(channel) ? channel[0] : channel.type) === 'text' &&
-    normalizeChannel(Array.isArray(channel) ? channel[1] : channel.name) === normalizeChannel(name)
-  ));
   if (botSettings.welcome?.channel && !hasTextChannel(botSettings.welcome.channel)) return 'bot_settings.welcome.channel must reference a text channel in the categories.';
   if (botSettings.logging?.channel && !hasTextChannel(botSettings.logging.channel)) return 'bot_settings.logging.channel must reference a text channel in the categories.';
   if (botSettings.tickets?.panel_channel && !hasTextChannel(botSettings.tickets.panel_channel)) return 'bot_settings.tickets.panel_channel must reference a text channel in the categories.';
