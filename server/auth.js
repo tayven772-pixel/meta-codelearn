@@ -500,6 +500,9 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
 });
 app.post('/api/auth/admin/bot-control/publish-template', async (req, res) => {
   if (!requireBotOwner(req, res)) return;
+  if (req.body?.confirmReplace !== true) {
+    return res.status(400).json({ error: 'Explicit replacement confirmation is required before Discord channels, categories or roles can be removed.' });
+  }
   const guildId = String(req.body?.guildId || getHomeGuildId()).trim();
   const template = req.body?.template;
   if (!validGuildId(guildId)) return res.status(400).json({ error: 'The Meta home server ID is invalid.' });
