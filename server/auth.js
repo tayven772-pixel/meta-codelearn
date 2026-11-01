@@ -295,6 +295,7 @@ function getBotDb() {
       invite_url TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       created_by TEXT NOT NULL DEFAULT 'website',
+      member_count INTEGER,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE (guild_id, name)
     );
@@ -303,6 +304,7 @@ function getBotDb() {
 
   try { connection.exec("ALTER TABLE bot_setup_outbox ADD COLUMN action TEXT NOT NULL DEFAULT 'preview'"); } catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
   try { connection.exec('ALTER TABLE bot_setup_outbox ADD COLUMN confirmation_hash TEXT'); } catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
+  try { connection.exec('ALTER TABLE autopartner_partners ADD COLUMN member_count INTEGER'); } catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
   botDb = connection;
   return botDb;
 }
@@ -399,7 +401,7 @@ app.get('/api/auth/admin/bot-control/settings', async (req, res) => {
   if (!validGuildId(guildId)) return res.status(400).json({ error: 'Select a valid Discord server.' });
   if (!(await requireOwnedGuild(req, res, guildId))) return;
   const settings = botSettingsForGuild('global');
-  const partners = getBotDb().prepare('SELECT id, name, invite_url, description, created_at FROM autopartner_partners WHERE guild_id = ? ORDER BY name COLLATE NOCASE').all(guildId);
+  const partners = getBotDb().prepare('SELECT id, name, invite_url, description, member_count, created_at FROM autopartner_partners WHERE guild_id = ? ORDER BY name COLLATE NOCASE').all(guildId);
   return res.json({ guildId, settings, commands: botCommandNames, partners });
 });
 app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
@@ -589,7 +591,7 @@ app.post('/api/auth/admin/bot-control/partners', async (req, res) => {
   }
   try {
     const result = getBotDb().prepare('INSERT INTO autopartner_partners (guild_id, name, invite_url, description, created_by) VALUES (?, ?, ?, ?, ?)').run(guildId, name, inviteUrl, description, 'website');
-    return res.status(201).json({ partner: getBotDb().prepare('SELECT id, name, invite_url, description, created_at FROM autopartner_partners WHERE id = ?').get(result.lastInsertRowid) });
+    return res.status(201).json({ partner: getBotDb().prepare('SELECT id, name, invite_url, description, member_count, created_at FROM autopartner_partners WHERE id = ?').get(result.lastInsertRowid) });
   } catch (error) {
     return res.status(409).json({ error: String(error.message).includes('UNIQUE') ? 'A partner with that name already exists.' : 'Could not save partner.' });
   }
