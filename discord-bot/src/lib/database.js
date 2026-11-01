@@ -93,6 +93,7 @@ db.exec(`
 
 try { db.exec("ALTER TABLE bot_setup_outbox ADD COLUMN action TEXT NOT NULL DEFAULT 'preview'"); } catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
 try { db.exec('ALTER TABLE bot_setup_outbox ADD COLUMN confirmation_hash TEXT'); } catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
+try { db.exec('ALTER TABLE tickets ADD COLUMN delete_at INTEGER'); } catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
 
 const getSettingStatement = db.prepare(
   'SELECT setting_value FROM settings WHERE guild_id = ? AND setting_key = ?'
