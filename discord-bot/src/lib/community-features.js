@@ -93,6 +93,7 @@ async function sendLog(guild, embed, eventName) {
   if (!id) return;
   const channel = await guild.channels.fetch(id).catch(() => null);
   if (channel?.isTextBased() && channel.send) {
+    if (!embed.data.footer) embed.setFooter({ text: embedFooter(guild.id) });
     await channel.send({ embeds: [embed], allowedMentions: { parse: [] } }).catch(() => {});
   }
 }
@@ -378,7 +379,7 @@ export async function handleCommunityEvents(client) {
       prior.times = prior.times.filter(time => now - time < 8_000);
       prior.times.push(now);
       const mentionLimit = Math.max(1, Math.min(50, Number(getSetting(guildId, 'automod_mention_limit') || 5)));
-      const mentionCount = message.mentions.users.size + message.mentions.roles.size;
+      const mentionCount = message.mentions.users.size + message.mentions.roles.size + (message.mentions.everyone ? 1 : 0);
       const tooManyMentions = mentionCount > mentionLimit;
       const spam = getSetting(guildId, 'automod_anti_spam') === 'true' && prior.times.length > 5;
       const cleanText = typeof message.content === 'string' ? message.content.trim().toLowerCase() : '';
