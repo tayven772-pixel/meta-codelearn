@@ -52,8 +52,8 @@ const isStaff = (interaction, roleId) =>
     (roleId && interaction.member?.roles?.cache?.has(roleId))
   );
 
-async function replyPrivate(interaction, content) {
-  const payload = { content, flags: MessageFlags.Ephemeral };
+async function replyPrivate(interaction, content, components = []) {
+  const payload = { content, flags: MessageFlags.Ephemeral, ...(components.length ? { components } : {}) };
   if (interaction.deferred || interaction.replied) {
     return interaction.followUp(payload);
   }
@@ -64,6 +64,202 @@ async function findTicket(db, channelId, guildId) {
   return db.prepare(
     'SELECT * FROM tickets WHERE channel_id = ? AND guild_id = ?'
   ).get(channelId, guildId);
+}
+
+function findTicketById(db, ticketId, guildId) {
+  return db.prepare('SELECT * FROM tickets WHERE id = ? AND guild_id = ?').get(ticketId, guildId);
+}
+
+function ticketCloseDelaySeconds(guildId) {
+  const value = Number(configured(guildId, 'ticket_close_delay_seconds') || 5);
+  return Number.isInteger(value) && value >= 1 && value <= 300 ? value : 5;
+}
+
+function ticketCloseRow(ticketId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('ticket_close_' + ticketId)
+      .setLabel('Close ticket').setStyle(ButtonStyle.Danger)
+  );
+}
+
+function ticketCloseConfirmationRow(ticketId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('ticket_close_confirm_' + ticketId)
+      .setLabel('Confirm close').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId('ticket_close_cancel_' + ticketId)
+      .setLabel('Cancel').setStyle(ButtonStyle.Secondary)
+  );
+}
+
+async function archiveTicketTranscript(guild, channel, ticket, closedBy) {
+  const logChannelId = configured(guild.id, 'ticket_log_channel_id');
+  const logChannel = logChannelId ? await guild.channels.fetch(logChannelId).catch(() => null) : null;
+  if (!logChannel || !logChannel.isTextBased() || typeof logChannel.send !== 'function') {
+    throw new Error('The configured ticket log channel is unavailable; the ticket was not deleted.');
+  }
+  const messages = [];
+  let before;
+  for (let page = 0; page < 20; page++) {
+    const batch = await channel.messages.fetch({ limit: 100, ...(before ? { before } : {}) });
+    if (!batch.size) break;
+    messages.push(...batch.values());
+    before = batch.last().id;
+    if (batch.size < 100) break;
+  }
+  const transcript = messages.sort((a, b) => a.createdTimestamp - b.createdTimestamp)
+    .map(message => '[' + new Date(message.createdTimestamp).toISOString() + '] ' +
+      message.author.tag + ': ' + (message.content || '[No text content]'))
+    .join('\n');
+  const file = new AttachmentBuilder(Buffer.from(transcript || 'No messages to include.', 'utf8'),
+    { name: 'ticket-' + ticket.id + '-transcript.txt' });
+  await logChannel.send({
+    content: 'ID: #' + ticket.id + ' · Ticket closed by <@' + closedBy.id +
+      '> · Archived from <#' + channel.id + '>. Reopen with /ticket reopen id:' + ticket.id,
+    files: [file],
+    allowedMentions: { users: [closedBy.id] }
+  });
+}
+
+export async function runPendingTicketDeletions(client) {
+  const due = db.prepare("SELECT id, guild_id, channel_id FROM tickets WHERE status = 'closed' AND delete_at IS NOT NULL AND delete_at <= ?")
+    .all(Date.now());
+  for (const ticket of due) {
+    const guild = client.guilds.cache.get(ticket.guild_id);
+    const channel = guild ? await guild.channels.fetch(ticket.channel_id).catch(() => null) : null;
+    if (channel) {
+      try { await channel.delete('Confirmed support ticket closure'); }
+      catch (error) {
+        console.error('Could not delete closed ticket #' + ticket.id + ':', error.message);
+        continue;
+      }
+    }
+    db.prepare('UPDATE tickets SET delete_at = NULL WHERE id = ? AND status = ?')
+      .run(ticket.id, 'closed');
+    console.log('Closed ticket #' + ticket.id + ' channel deletion completed.');
+  }
+}
+
+
+async function reopenTicketById(interaction, database, guild, guildId, staffRoleId) {
+  if (!isStaff(interaction, staffRoleId)) return replyPrivate(interaction, 'Only ticket staff can reopen tickets.');
+  const ticketId = interaction.options.getInteger('id', true);
+  const ticket = findTicketById(database, ticketId, guildId);
+  if (!ticket) return replyPrivate(interaction, 'Ticket #' + ticketId + ' was not found in this server.');
+  if (ticket.status === 'open') return replyPrivate(interaction, 'Ticket #' + ticketId + ' is already open.');
+
+  const categoryId = configured(guildId, 'ticket_category_id');
+  const staffRole = staffRoleId ? await guild.roles.fetch(staffRoleId).catch(() => null) : null;
+  const category = categoryId ? await guild.channels.fetch(categoryId).catch(() => null) : null;
+  if (!category || category.type !== ChannelType.GuildCategory || !staffRole) {
+    return replyPrivate(interaction, 'Ticket category or staff role is no longer configured. Ask an administrator to run /ticket setup.');
+  }
+  if (!(await ensureStaffRolePingable(guild, staffRole))) {
+    return replyPrivate(interaction, 'Meta cannot notify the configured staff role. Make it mentionable or grant Meta Manage Roles with the staff role below its highest role.');
+  }
+  const member = await guild.members.fetch(ticket.user_id).catch(() => null);
+  if (!member) return replyPrivate(interaction, 'The original ticket creator is no longer in this server. They must rejoin before this ticket can be reopened.');
+
+  let channel = await guild.channels.fetch(ticket.channel_id).catch(() => null);
+  if (!channel) {
+    const safeName = member.user.username.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').slice(0, 28) || 'member';
+    const categorySlug = ticket.category.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 18) || 'support';
+    channel = await guild.channels.create({
+      name: ('ticket-' + categorySlug + '-' + safeName).slice(0, 95),
+      type: ChannelType.GuildText,
+      parent: category.id,
+      topic: 'Ticket #' + ticket.id + ' · Reopened for ' + member.user.tag,
+      permissionOverwrites: [
+        { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
+        { id: member.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles] },
+        { id: staffRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+        { id: interaction.client.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageMessages, PermissionFlagsBits.AttachFiles] }
+      ],
+      reason: 'Reopen support ticket #' + ticket.id
+    });
+  } else {
+    await channel.permissionOverwrites.edit(ticket.user_id, {
+      ViewChannel: true, SendMessages: true, ReadMessageHistory: true, AttachFiles: true
+    });
+  }
+
+  database.prepare("UPDATE tickets SET status = 'open', channel_id = ?, closed_at = NULL, delete_at = NULL WHERE id = ?")
+    .run(channel.id, ticket.id);
+  await channel.send({
+    content: '<@' + ticket.user_id + '> <@&' + staffRole.id + '>',
+    embeds: [new EmbedBuilder().setColor(0x5865F2).setTitle('Support Ticket #' + ticket.id + ' Reopened')
+      .setDescription('This support ticket has been reopened. The original ticket creator has been given access again.')
+      .addFields({ name: 'Category', value: ticket.category, inline: true }, { name: 'Opened by', value: member.user.tag, inline: true })],
+    components: [ticketCloseRow(ticket.id)],
+    allowedMentions: { users: [ticket.user_id], roles: [staffRole.id] }
+  });
+  const logId = configured(guildId, 'ticket_log_channel_id');
+  const logChannel = logId ? await guild.channels.fetch(logId).catch(() => null) : null;
+  if (logChannel?.isTextBased()) {
+    await logChannel.send({
+      content: 'ID: #' + ticket.id + ' · Ticket reopened by <@' + interaction.user.id +
+        '>. Original creator: <@' + ticket.user_id + '> · New channel: <#' + channel.id + '>.',
+      allowedMentions: { users: [interaction.user.id, ticket.user_id] }
+    });
+  }
+  return replyPrivate(interaction, 'Ticket #' + ticket.id + ' reopened: <#' + channel.id + '>. The original creator has been added back.');
+}
+
+async function handleTicketControlButton(interaction, database) {
+  const customId = interaction.customId || '';
+  const confirmMatch = customId.match(/^ticket_close_(confirm|cancel)_(\\d+)$/);
+  const startMatch = customId.match(/^ticket_close_(\\d+)$/);
+  if (!confirmMatch && !startMatch) return false;
+  const ticketId = Number(confirmMatch ? confirmMatch[2] : startMatch[1]);
+  const ticket = findTicketById(database, ticketId, interaction.guildId);
+  if (!ticket || ticket.channel_id !== interaction.channelId) {
+    await replyPrivate(interaction, 'This ticket button is no longer valid.');
+    return true;
+  }
+  const staffRoleId = configured(interaction.guildId, 'ticket_staff_role_id');
+  if (ticket.user_id !== interaction.user.id && !isStaff(interaction, staffRoleId)) {
+    await replyPrivate(interaction, 'Only the ticket creator or ticket staff can close this ticket.');
+    return true;
+  }
+  if (startMatch) {
+    if (ticket.status !== 'open') {
+      await replyPrivate(interaction, 'This ticket is already closing or closed.');
+      return true;
+    }
+    await interaction.reply({
+      content: 'Are you sure you want to close ticket #' + ticket.id +
+        '? The conversation will be archived, then this channel will be deleted.',
+      components: [ticketCloseConfirmationRow(ticket.id)],
+      flags: MessageFlags.Ephemeral
+    });
+    return true;
+  }
+  if (confirmMatch[1] === 'cancel') {
+    await interaction.update({ content: 'Ticket closure cancelled. The ticket is still open.', components: [] });
+    return true;
+  }
+  if (ticket.status !== 'open') {
+    await interaction.update({ content: 'This ticket is already closing or closed.', components: [] });
+    return true;
+  }
+  await interaction.update({ content: 'Archiving ticket #' + ticket.id + ' before deletion…', components: [] });
+  try {
+    await archiveTicketTranscript(interaction.guild, interaction.channel, ticket, interaction.user);
+  } catch (error) {
+    console.error('Ticket archive failed:', error.message);
+    await interaction.editReply({
+      content: 'I could not archive this ticket, so I did not delete the channel. Check the configured ticket log channel and try again.',
+      components: []
+    }).catch(() => {});
+    return true;
+  }
+  const delaySeconds = ticketCloseDelaySeconds(interaction.guildId);
+  database.prepare("UPDATE tickets SET status = 'closed', closed_at = CURRENT_TIMESTAMP, delete_at = ? WHERE id = ?")
+    .run(Date.now() + delaySeconds * 1000, ticket.id);
+  await interaction.editReply({
+    content: 'Ticket #' + ticket.id + ' is closed. This channel will be deleted in ' +
+      delaySeconds + ' seconds. Reopen it with /ticket reopen id:' + ticket.id + '.'
+  });
+  return true;
 }
 
 export async function handleTicketCommand(interaction, db) {
@@ -110,6 +306,10 @@ export async function handleTicketCommand(interaction, db) {
     return handleTicketPanelCommand(interaction);
   }
 
+  if (sub === 'reopen') {
+    return reopenTicketById(interaction, db, guild, guildId, staffRoleId);
+  }
+
   const ticket = await findTicket(db, interaction.channelId, guildId);
   if (!ticket) {
     return replyPrivate(interaction, 'This command must be used inside an existing ticket channel.');
@@ -152,38 +352,13 @@ export async function handleTicketCommand(interaction, db) {
   }
 
   if (sub === 'close') {
-    if (!memberOwnsTicket && !staff) {
-      return replyPrivate(interaction, 'Only the ticket creator or ticket staff can close this ticket.');
-    }
+    if (!memberOwnsTicket && !staff) return replyPrivate(interaction, 'Only the ticket creator or ticket staff can close this ticket.');
     if (ticket.status === 'closed') return replyPrivate(interaction, 'This ticket is already closed.');
-
-    db.prepare("UPDATE tickets SET status = 'closed', closed_at = CURRENT_TIMESTAMP WHERE id = ?")
-      .run(ticket.id);
-
-    await interaction.channel.permissionOverwrites.edit(ticket.user_id, {
-      SendMessages: false
-    });
-
-    await interaction.channel.send(`🔒 Ticket closed by ${interaction.user}. Staff can use /ticket reopen to reopen it.`);
-    return replyPrivate(interaction, 'Ticket closed.');
+    return replyPrivate(interaction,
+      'Confirm closing ticket #' + ticket.id + '? The conversation will be archived, then this channel will be deleted.',
+      [ticketCloseConfirmationRow(ticket.id)]);
   }
 
-  if (sub === 'reopen') {
-    if (!staff) return replyPrivate(interaction, 'Only ticket staff can reopen tickets.');
-    if (ticket.status === 'open') return replyPrivate(interaction, 'This ticket is already open.');
-
-    db.prepare("UPDATE tickets SET status = 'open', closed_at = NULL WHERE id = ?")
-      .run(ticket.id);
-
-    await interaction.channel.permissionOverwrites.edit(ticket.user_id, {
-      ViewChannel: true,
-      SendMessages: true,
-      ReadMessageHistory: true
-    });
-
-    await interaction.channel.send(`🔓 Ticket reopened by ${interaction.user}.`);
-    return replyPrivate(interaction, 'Ticket reopened.');
-  }
 
   if (sub === 'transcript') {
     if (!staff) return replyPrivate(interaction, 'Only ticket staff can create transcripts.');
@@ -276,6 +451,7 @@ function showTicketForm(interaction, categoryName, categoryIndex, guildId) {
 }
 
 export async function handleTicketButton(interaction, db) {
+  if (interaction.isButton?.() && await handleTicketControlButton(interaction, db)) return true;
   const isLegacyButton = interaction.customId === 'ticket_create';
   const isCategoryButton = interaction.customId.startsWith('ticket_category_button_');
   const isCategorySelect = interaction.customId === 'ticket_category_select';
@@ -399,6 +575,7 @@ export async function handleTicketButton(interaction, db) {
     const answerText = answers.map((item, index) => '**' + (index + 1) + '. ' + item.question + '**\n' + item.answer).join('\n\n');
     await channel.send({
       content: '<@' + interaction.user.id + '> <@&' + staffRole.id + '>',
+      components: [ticketCloseRow(Number(insert.lastInsertRowid))],
       embeds: [new EmbedBuilder()
         .setColor(0x5865F2)
         .setTitle('Support Ticket #' + insert.lastInsertRowid)
@@ -417,7 +594,7 @@ export async function handleTicketButton(interaction, db) {
     const logChannel = logChannelId ? await guild.channels.fetch(logChannelId).catch(() => null) : null;
     if (logChannel?.isTextBased()) {
       await logChannel.send({
-        content: '<@&' + staffRole.id + '> · 🎫 Ticket #' + insert.lastInsertRowid +
+        content: 'ID: #' + insert.lastInsertRowid + ' · <@&' + staffRole.id + '> · 🎫 Ticket #' + insert.lastInsertRowid +
           ' (' + selectedCategory + ') opened by <@' + interaction.user.id + '> in <#' + channel.id + '>. Please respond when available.',
         allowedMentions: {
           roles: [staffRole.id],
