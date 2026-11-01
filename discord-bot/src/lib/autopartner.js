@@ -126,6 +126,57 @@ async function postPartner(client, guildId, partner) {
   return message;
 }
 
+export async function handleAutoPartnerInteraction(interaction) {
+  if (!interaction.isButton() || !interaction.customId.startsWith('partner_review:')) return false;
+  if (!interaction.inGuild()) {
+    await interaction.reply({ content: 'Review partner submissions inside the server.', flags: MessageFlags.Ephemeral });
+    return true;
+  }
+  const [, decision, rawId] = interaction.customId.split(':');
+  const submissionId = Number(rawId);
+  if (!['approve', 'reject'].includes(decision) || !Number.isSafeInteger(submissionId) || submissionId < 1) {
+    await interaction.reply({ content: 'This partner review action is invalid.', flags: MessageFlags.Ephemeral });
+    return true;
+  }
+  const reviewerRole = getSetting(interaction.guildId, 'staff_application_review_role_id');
+  const authorized = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
+    Boolean(reviewerRole && interaction.member?.roles?.cache?.has(reviewerRole));
+  if (!authorized) {
+    await interaction.reply({ content: 'Only administrators or the configured review staff can approve partner submissions.', flags: MessageFlags.Ephemeral });
+    return true;
+  }
+  const submission = db.prepare('SELECT * FROM autopartner_submissions WHERE id = ? AND guild_id = ?').get(submissionId, interaction.guildId);
+  if (!submission || submission.status !== 'eligible' || submission.approval_status !== 'pending') {
+    await interaction.reply({ content: 'This partner submission is no longer awaiting approval.', flags: MessageFlags.Ephemeral });
+    return true;
+  }
+  const approved = decision === 'approve';
+  const changed = db.prepare('UPDATE autopartner_submissions SET approval_status = ?, status = ? WHERE id = ? AND guild_id = ? AND approval_status = ?')
+    .run(approved ? 'approved' : 'rejected', approved ? 'eligible' : 'expired', submissionId, interaction.guildId, 'pending');
+  if (!changed.changes) {
+    await interaction.reply({ content: 'Another staff member already reviewed this partner submission.', flags: MessageFlags.Ephemeral });
+    return true;
+  }
+  if (approved) {
+    db.prepare(`
+      INSERT INTO autopartner_partners (guild_id, name, invite_url, description, created_by)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(guild_id, name) DO UPDATE SET invite_url=excluded.invite_url, description=excluded.description
+    `).run(interaction.guildId, submission.name, submission.invite_url, submission.description, submission.user_id);
+  }
+  const original = interaction.message.embeds[0];
+  const embed = original ? EmbedBuilder.from(original)
+    .setColor(approved ? 0x2ECC71 : 0xE74C3C)
+    .setFooter({ text: 'Partner submission ' + (approved ? 'approved' : 'rejected') + ' by ' + interaction.user.tag }) : null;
+  await interaction.update({ embeds: embed ? [embed] : interaction.message.embeds, components: [] });
+  await interaction.followUp({
+    content: approved ? 'Partner submission approved and added to the posting rotation.' : 'Partner submission rejected.',
+    flags: MessageFlags.Ephemeral
+  });
+  if (approved) await runAutoPartnerScheduler(interaction.client);
+  return true;
+}
+
 export async function handleAutoPartnerCommand(interaction) {
   const name = interaction.commandName;
   if (!name.startsWith('partner-') && name !== 'autopartner-setup') return false;
