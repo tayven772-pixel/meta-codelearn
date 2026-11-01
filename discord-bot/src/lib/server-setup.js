@@ -96,7 +96,7 @@ export function validateServerTemplate(template) {
       template.roles.some(role => !role || typeof role.name !== 'string' || !role.name.trim() || role.name.length > 100 ||
         (role.color !== undefined && (!Number.isInteger(role.color) || role.color < 0 || role.color > 0xFFFFFF))) ||
       template.categories.some(group => !group || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 100 ||
-        !Array.isArray(group.channels) || group.channels.length > 50 ||
+        !Array.isArray(group.channels) || group.channels.length > 50 || (group.private !== undefined && typeof group.private !== 'boolean') ||
         group.channels.some(channel => !Array.isArray(channel) || !['text','voice'].includes(channel[0]) ||
           typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
     throw new Error('Invalid template structure or values.');
@@ -110,7 +110,7 @@ export function validateServerTemplate(template) {
   if (new Set(categoryNames).size !== categoryNames.length) throw new Error('Category names must be unique.');
   const channelKeys = [];
   for (const group of template.categories) for (const [kind, rawName] of group.channels) {
-    channelKeys.push(kind + ':' + normalizeChannelName(rawName));
+    channelKeys.push(normalizeChannelName(rawName));
   }
   if (new Set(channelKeys).size !== channelKeys.length) throw new Error('Channel names must be unique for each channel type after normalization.');
   const panel = template.controlPanel;
@@ -159,6 +159,9 @@ export function validateServerTemplate(template) {
     channelDefinitions.set(normalizeChannelName(name), kind);
   }
   const categoryNamesForSettings = new Set(template.categories.map(group => normalizeChannelName(group.name)));
+  if (categoryNamesForSettings.size !== channelKeys.length + categoryNamesForSettings.size || [...categoryNamesForSettings].some(name => channelKeys.includes(name))) {
+    throw new Error('Category names must not also be used as channel names.');
+  }
   const roleNamesForSettings = new Set(template.roles.map(role => role.name.trim().toLowerCase()));
   const staffRole = settings?.applications?.staffRole;
   if (staffRole && !roleNamesForSettings.has(staffRole.trim().toLowerCase())) throw new Error('settings.applications.staffRole must reference a role name in roles.');
