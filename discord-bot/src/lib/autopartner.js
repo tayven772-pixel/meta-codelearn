@@ -212,16 +212,23 @@ export async function handleAutoPartnerCommand(interaction) {
       const minimum = Number(getSetting(interaction.guildId, 'autopartner_min_members') || 100);
       const normalizedInvite = 'https://discord.gg/' + invite.code;
       const status = memberCount >= minimum ? 'eligible' : 'pending';
-      const result = db.prepare(`
+      const approvalRequired = getSetting(interaction.guildId, 'autopartner_approval_required') === 'true';
+      const approvalStatus = approvalRequired ? 'pending' : 'approved';
+      db.prepare(`
         INSERT INTO autopartner_submissions
-          (guild_id, user_id, name, invite_url, invite_code, description, member_count, status, last_checked_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (guild_id, user_id, name, invite_url, invite_code, description, member_count, status, last_checked_at, approval_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(guild_id, invite_code) DO UPDATE SET
           user_id=excluded.user_id, name=excluded.name, description=excluded.description,
           member_count=excluded.member_count, status=CASE WHEN excluded.status='eligible' THEN 'eligible' ELSE autopartner_submissions.status END,
+          approval_status=CASE WHEN excluded.status='eligible' THEN excluded.approval_status ELSE autopartner_submissions.approval_status END,
           last_checked_at=excluded.last_checked_at
-      `).run(interaction.guildId, interaction.user.id, partnerName, normalizedInvite, invite.code, description, memberCount, status, Date.now());
-      if (status === 'eligible') {
+      `).run(interaction.guildId, interaction.user.id, partnerName, normalizedInvite, invite.code, description, memberCount, status, Date.now(), approvalStatus);
+      const submission = db.prepare('SELECT * FROM autopartner_submissions WHERE guild_id = ? AND invite_code = ?').get(interaction.guildId, invite.code);
+      if (status === 'eligible' && approvalRequired) {
+        await requestPartnerApproval(interaction.client, interaction.guildId, submission);
+        await interaction.editReply('✅ **Member-count check passed.** Discord reports approximately ' + memberCount.toLocaleString() + ' members. Your submission is waiting for staff approval before it can be published.');
+      } else if (status === 'eligible') {
         db.prepare(`
           INSERT INTO autopartner_partners (guild_id, name, invite_url, description, created_by)
           VALUES (?, ?, ?, ?, ?)
@@ -230,7 +237,7 @@ export async function handleAutoPartnerCommand(interaction) {
         await interaction.editReply('✅ **Member-count check passed.** Discord reports approximately ' + memberCount.toLocaleString() + ' members (minimum ' + minimum.toLocaleString() + '). The server is now eligible for automatic posting; staff approval is not required.');
         await runAutoPartnerScheduler(interaction.client);
       } else {
-        await interaction.editReply('Thanks! Discord reports approximately ' + memberCount.toLocaleString() + ' members. The requirement is ' + minimum.toLocaleString() + '. Meta will automatically recheck this invite periodically and add it to the posting rotation when it qualifies. No staff approval is required.');
+        await interaction.editReply('Thanks! Discord reports approximately ' + memberCount.toLocaleString() + ' members. The requirement is ' + minimum.toLocaleString() + '. Meta will automatically recheck this invite periodically and then ' + (approvalRequired ? 'send it to staff for approval.' : 'add it to the posting rotation without staff approval.'));
       }
     } catch (error) {
       if (String(error?.code || '').includes('CONSTRAINT')) {
