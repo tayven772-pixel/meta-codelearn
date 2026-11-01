@@ -200,23 +200,26 @@ export async function handleAutoPartnerCommand(interaction) {
 }
 
 export async function runAutoPartnerScheduler(client) {
-  const guilds = db.prepare("SELECT DISTINCT guild_id FROM settings WHERE setting_key = 'autopartner_enabled' AND setting_value = 'true'").all();
-  for (const row of guilds) {
-    const guildId = row.guild_id;
-    const channelId = getSetting(guildId, 'autopartner_channel_id');
-    const hours = Number(getSetting(guildId, 'autopartner_interval_hours') || 24);
-    if (!channelId || !Number.isFinite(hours) || hours < 6 || hours > 168) continue;
-    const last = Number(getSetting(guildId, 'autopartner_last_posted_at') || 0);
-    if (Date.now() - last < hours * 3600000) continue;
-    const partners = getPartners(guildId);
-    if (!partners.length) continue;
-    const lastId = Number(getSetting(guildId, 'autopartner_last_partner_id') || 0);
-    const partner = partners.find(p => p.id !== lastId) || partners[0];
-    try {
-      await postPartner(client, guildId, partner);
-      console.log('Autopartner posted ' + partner.name + ' for guild ' + guildId);
-    } catch (error) {
-      console.error('Autopartner failed for guild ' + guildId + ':', error.message);
-    }
+  // The website stores owner-managed bot settings under the global key, while
+  // approved partner records remain scoped to the configured Meta home server.
+  // Resolve the global setting to that server before looking up its partners.
+  const guildId = String(process.env.META_HOME_GUILD_ID || process.env.DISCORD_GUILD_ID || '').trim();
+  if (!/^\d{17,20}$/.test(guildId)) return;
+  if (getSetting(guildId, 'autopartner_enabled') !== 'true') return;
+
+  const channelId = getSetting(guildId, 'autopartner_channel_id');
+  const hours = Number(getSetting(guildId, 'autopartner_interval_hours') || 24);
+  if (!channelId || !Number.isFinite(hours) || hours < 6 || hours > 168) return;
+  const last = Number(getSetting(guildId, 'autopartner_last_posted_at') || 0);
+  if (Date.now() - last < hours * 3600000) return;
+  const partners = getPartners(guildId);
+  if (!partners.length) return;
+  const lastId = Number(getSetting(guildId, 'autopartner_last_partner_id') || 0);
+  const partner = partners.find(item => item.id !== lastId) || partners[0];
+  try {
+    await postPartner(client, guildId, partner);
+    console.log('Autopartner posted ' + partner.name + ' for Meta home server ' + guildId);
+  } catch (error) {
+    console.error('Autopartner failed for Meta home server ' + guildId + ':', error.message);
   }
 }
