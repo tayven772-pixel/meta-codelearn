@@ -521,7 +521,7 @@ function validateBotSetupTemplate(template) {
           return !['text','voice'].includes(type) || typeof name !== 'string' || !name.trim() || name.length > 100 ||
             (!Array.isArray(channel) && (!channel || typeof channel !== 'object' || (channel.read_only !== undefined && typeof channel.read_only !== 'boolean') ||
               (channel.bot_panel !== undefined && !['tickets','logging'].includes(channel.bot_panel))));
-        })) {
+        }))) {
     return 'Invalid setup JSON. Check roles, categories, and text/voice channel definitions.';
   }
   const branding = template.branding ?? {};
