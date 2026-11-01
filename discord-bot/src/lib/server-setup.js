@@ -109,7 +109,8 @@ export function validateServerTemplate(template) {
   if (welcome.message !== undefined && (typeof welcome.message !== 'string' || welcome.message.length > 1500)) throw new Error('Welcome message must be 1500 characters or fewer.');
   if (welcome.showAvatar !== undefined && typeof welcome.showAvatar !== 'boolean') throw new Error('welcome.showAvatar must be true or false.');
 
-  const applications = { ...defaultBotControl.staffApplications, ...(control.staffApplications ?? {}) };
+  const configuredApplications = control.staffApplications ?? {};
+  const applications = { ...defaultBotControl.staffApplications, ...configuredApplications };
   if (applications.approvedRole !== undefined &&
       (typeof applications.approvedRole !== 'string' || applications.approvedRole.length > 100)) {
     throw new Error('staffApplications.approvedRole must be a role name of 100 characters or fewer.');
@@ -120,10 +121,10 @@ export function validateServerTemplate(template) {
     throw new Error('Staff application questions must contain 1–5 non-empty questions, each 45 characters or fewer.');
   }
   const definedRoleNames = new Set(template.roles.map(role => role.name.trim().toLowerCase()));
-  if (applications.reviewRole && !definedRoleNames.has(String(applications.reviewRole).trim().toLowerCase())) {
-    throw new Error('Staff application reviewer role "' + applications.reviewRole + '" must also be listed in the JSON roles array.');
+  if (configuredApplications.reviewRole && !definedRoleNames.has(String(configuredApplications.reviewRole).trim().toLowerCase())) {
+    throw new Error('Staff application reviewer role "' + configuredApplications.reviewRole + '" must also be listed in the JSON roles array.');
   }
-  if (applications.approvedRole && !definedRoleNames.has(String(applications.approvedRole).trim().toLowerCase())) {
+  if (configuredApplications.approvedRole && !definedRoleNames.has(String(configuredApplications.approvedRole).trim().toLowerCase())) {
     throw new Error('Staff application approvedRole must also be listed in the JSON roles array.');
   }
   const privateGroups = template.categories.filter(group => group.private === true);
