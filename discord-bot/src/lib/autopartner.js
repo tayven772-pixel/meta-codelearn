@@ -200,6 +200,7 @@ export async function handleAutoPartnerCommand(interaction) {
         { name: 'Status', value: enabled ? 'Enabled' : 'Disabled', inline: true },
         { name: 'Interval', value: 'Every ' + hours + ' hour(s)', inline: true },
         { name: 'Eligible partners', value: String(getPartners(interaction.guildId).length), inline: true },
+        { name: 'Minimum members', value: minimumMembers.toLocaleString(), inline: true },
         { name: 'Posting channel', value: channelId ? '<#' + channelId + '>' : 'Not configured', inline: true },
         { name: 'Last post', value: last ? '<t:' + Math.floor(last / 1000) + ':R>' : 'Never', inline: true },
         { name: 'Template', value: template.slice(0, 900), inline: false },
@@ -214,7 +215,7 @@ export async function handleAutoPartnerCommand(interaction) {
       await interaction.reply({ content: 'Template must include all three placeholders: {name}, {invite}, and {description}.', flags: MessageFlags.Ephemeral });
       return true;
     }
-    setSetting(interaction.guildId, 'autopartner_template', template);
+    setSetting('global', 'autopartner_template', template);
     await interaction.reply({ content: '✅ Partner advert template saved. The next post will use it.', flags: MessageFlags.Ephemeral });
     return true;
   }
@@ -223,7 +224,7 @@ export async function handleAutoPartnerCommand(interaction) {
     const requested = interaction.options.getString('name')?.trim();
     const partners = getPartners(interaction.guildId);
     if (!partners.length) {
-      await interaction.reply({ content: 'No approved partners yet. Add one with /partner-add first.', flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: 'No qualifying partners yet. Add one with /partner-add first.', flags: MessageFlags.Ephemeral });
       return true;
     }
     let partner;
@@ -239,10 +240,18 @@ export async function handleAutoPartnerCommand(interaction) {
     }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
-      const message = await postPartner(interaction.client, interaction.guildId, partner);
-      await interaction.editReply('Posted ' + partner.name + ' in <#' + message.channelId + '>.');
+      const invite = await interaction.client.fetchInvite(partner.invite_url, { withCounts: true });
+      const memberCount = Number(invite.approximateMemberCount);
+      const minimum = Number(getSetting(interaction.guildId, 'autopartner_min_members') || 100);
+      if (invite.guild?.id === interaction.guildId || !Number.isFinite(memberCount) || memberCount < minimum) {
+        await interaction.editReply('This invite does not currently meet the minimum of ' + minimum.toLocaleString() + ' members, so it was not posted.');
+        return true;
+      }
+      db.prepare('UPDATE autopartner_partners SET member_count = ? WHERE id = ?').run(memberCount, partner.id);
+      const message = await postPartner(interaction.client, interaction.guildId, { ...partner, member_count: memberCount });
+      await interaction.editReply('Posted ' + partner.name + ' (' + memberCount.toLocaleString() + ' approximate members) in <#' + message.channelId + '>.');
     } catch (error) {
-      await interaction.editReply('Could not post partner advert: ' + error.message);
+      await interaction.editReply('Could not verify or post partner advert: ' + error.message);
     }
     return true;
   }
