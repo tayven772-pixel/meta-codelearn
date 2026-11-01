@@ -338,6 +338,10 @@ export async function applyServerTemplate(guild, template, options = {}) {
     let category = guild.channels.cache.find(item => item.type === ChannelType.GuildCategory && item.name.toLowerCase() === definition.name.trim().toLowerCase());
     const staffRoleNames = new Set(['Founder','Administrator','Moderator','Support Team']);
     if (template.settings?.applications?.staffRole) staffRoleNames.add(template.settings.applications.staffRole);
+    for (const roleId of [getSetting('global', 'staff_applications_role_id'), getSetting('global', 'ticket_staff_role_id')]) {
+      const configuredRole = roleId ? guild.roles.cache.get(roleId) : null;
+      if (configuredRole) staffRoleNames.add(configuredRole.name);
+    }
     const overwrites = definition.private ? [
       { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
       ...[...staffRoleNames].map(name => guild.roles.cache.find(role => role.name.toLowerCase() === name.toLowerCase())).filter(Boolean)
