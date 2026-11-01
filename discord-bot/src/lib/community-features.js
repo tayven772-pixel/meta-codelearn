@@ -46,7 +46,7 @@ export const communityCommands = [
     .setDefaultMemberPermissions(manageGuild)
     .addStringOption(o => o.setName('prize').setDescription('What is being given away?').setMaxLength(180).setRequired(true))
     .addIntegerOption(o => o.setName('minutes').setDescription('Duration (5–10080 minutes)').setMinValue(5).setMaxValue(10080).setRequired(true))
-    .addIntegerOption(o => o.setName('winners').setDescription('Number of winners (1–10)').setMinValue(1).setMaxValue(10).setRequired(true)),
+    .addIntegerOption(o => o.setName('winners').setDescription('Number of winners (1–10)').setMinValue(1).setMaxValue(10).setRequired(false)),
   new SlashCommandBuilder().setName('giveaway-end').setDescription('End a giveaway early using its message ID')
     .setDefaultMemberPermissions(manageGuild)
     .addStringOption(o => o.setName('message_id').setDescription('Giveaway message ID').setRequired(true)),
@@ -67,11 +67,28 @@ function isAdmin(interaction) {
   return interaction.inGuild() && interaction.memberPermissions?.has(admin);
 }
 
+function embedColor(guildId, fallback = 0x42B883) {
+  const value = Number(getSetting(guildId, 'bot_embed_color'));
+  return Number.isInteger(value) && value >= 0 && value <= 0xFFFFFF ? value : fallback;
+}
+
+function embedFooter(guildId, fallback = 'Meta Code Community') {
+  return getSetting(guildId, 'bot_embed_footer') || fallback;
+}
+
 function logChannelId(guildId) {
   return getSetting(guildId, 'community_log_channel_id');
 }
 
-async function sendLog(guild, embed) {
+async function sendLog(guild, embed, eventName) {
+  if (getSetting(guild.id, 'community_log_enabled') === 'false') return;
+  const rawEvents = getSetting(guild.id, 'community_log_events');
+  if (rawEvents) {
+    try {
+      const events = JSON.parse(rawEvents);
+      if (Array.isArray(events) && events.length && eventName && !events.includes(eventName)) return;
+    } catch { /* retain the legacy all-events behavior if the setting is malformed */ }
+  }
   const id = logChannelId(guild.id);
   if (!id) return;
   const channel = await guild.channels.fetch(id).catch(() => null);
@@ -132,13 +149,17 @@ export async function handleCommunityCommand(interaction) {
   }
 
   if (name === 'level' || name === 'leaderboard') {
+    if (name === 'leaderboard' && getSetting(interaction.guildId, 'community_leaderboard_enabled') === 'false') {
+      await interaction.reply({ content: 'The activity leaderboard is disabled in this server.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
     const rows = db.prepare('SELECT user_id, xp, messages FROM community_xp WHERE guild_id = ? ORDER BY xp DESC LIMIT 10').all(interaction.guildId);
     if (name === 'level') {
       const user = interaction.options.getUser('user') || interaction.user;
       const row = db.prepare('SELECT xp, messages FROM community_xp WHERE guild_id = ? AND user_id = ?').get(interaction.guildId, user.id) || { xp: 0, messages: 0 };
       const level = Math.floor(Math.sqrt(row.xp / 100));
       const next = (level + 1) ** 2 * 100;
-      const embed = new EmbedBuilder().setColor(0x42B883).setTitle(`Activity profile: ${user.username}`)
+      const embed = new EmbedBuilder() .setColor(embedColor(interaction.guildId)).setTitle(`Activity profile: ${user.username}`)
         .addFields(
           { name: 'Level', value: String(level), inline: true },
           { name: 'XP', value: row.xp.toLocaleString(), inline: true },
@@ -148,22 +169,26 @@ export async function handleCommunityCommand(interaction) {
       await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     } else {
       const description = rows.length ? rows.map((r, i) => `**${i + 1}.** <@${r.user_id}> — level ${Math.floor(Math.sqrt(r.xp / 100))} (${r.xp.toLocaleString()} XP)`).join('\n') : 'No activity recorded yet. Send messages to start earning XP.';
-      await interaction.reply({ embeds: [new EmbedBuilder().setColor(0x42B883).setTitle('🏆 Community leaderboard').setDescription(description)], allowedMentions: { parse: [] } });
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(embedColor(interaction.guildId)).setTitle('🏆 Community leaderboard').setFooter({ text: embedFooter(interaction.guildId) }).setDescription(description)], allowedMentions: { parse: [] } });
     }
     return true;
   }
 
   if (name === 'giveaway') {
+    if (getSetting(interaction.guildId, 'community_giveaway_enabled') === 'false') {
+      await interaction.reply({ content: 'Giveaways are disabled in this server.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
     if (!interaction.memberPermissions?.has(manageGuild)) {
       await interaction.reply({ content: 'You need Manage Server permission.', flags: MessageFlags.Ephemeral });
       return true;
     }
     const prize = interaction.options.getString('prize', true).trim();
     const minutes = interaction.options.getInteger('minutes', true);
-    const winners = interaction.options.getInteger('winners', true);
+    const winners = interaction.options.getInteger('winners') ?? Math.max(1, Math.min(10, Number(getSetting(interaction.guildId, 'community_giveaway_default_winners') || 1)));
     const endsAt = Date.now() + minutes * 60_000;
     const message = await interaction.channel.send({
-      embeds: [new EmbedBuilder().setColor(0x42B883).setTitle('🎉 Giveaway').setDescription(`**Prize:** ${prize}\n**Winners:** ${winners}\n**Ends:** <t:${Math.floor(endsAt / 1000)}:R>\n\nReact with 🎉 to enter!`).setFooter({ text: 'Meta Support • Giveaway' })],
+      embeds: [new EmbedBuilder().setColor(embedColor(interaction.guildId)).setTitle('🎉 Giveaway').setDescription(`**Prize:** ${prize}\n**Winners:** ${winners}\n**Ends:** <t:${Math.floor(endsAt / 1000)}:R>\n\nReact with 🎉 to enter!`).setFooter({ text: embedFooter(interaction.guildId, 'Meta Code Community • Giveaway') })],
       allowedMentions: { parse: [] }
     });
     await message.react('🎉');
@@ -174,6 +199,10 @@ export async function handleCommunityCommand(interaction) {
   }
 
   if (name === 'giveaway-end') {
+    if (getSetting(interaction.guildId, 'community_giveaway_allow_early_end') === 'false') {
+      await interaction.reply({ content: 'Early giveaway endings are disabled by the server template.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
     if (!interaction.memberPermissions?.has(manageGuild)) {
       await interaction.reply({ content: 'You need Manage Server permission.', flags: MessageFlags.Ephemeral });
       return true;
@@ -191,6 +220,10 @@ export async function handleCommunityCommand(interaction) {
   }
 
   if (name === 'role-menu') {
+    if (getSetting(interaction.guildId, 'community_self_roles_enabled') === 'false') {
+      await interaction.reply({ content: 'Self-service roles are disabled in this server.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
     if (!interaction.memberPermissions?.has(manageRoles)) {
       await interaction.reply({ content: 'You need Manage Roles permission.', flags: MessageFlags.Ephemeral });
       return true;
@@ -201,8 +234,9 @@ export async function handleCommunityCommand(interaction) {
       await interaction.reply({ content: 'Every selectable role must be below my highest role and not managed by an integration.', flags: MessageFlags.Ephemeral });
       return true;
     }
+    const allowMultiple = getSetting(interaction.guildId, 'community_self_roles_allow_multiple') !== 'false';
     const menu = new StringSelectMenuBuilder().setCustomId('meta_self_roles').setPlaceholder('Choose or remove your roles')
-      .setMinValues(0).setMaxValues(roles.length)
+      .setMinValues(allowMultiple ? 0 : Math.min(1, roles.length)).setMaxValues(allowMultiple ? roles.length : Math.min(1, roles.length))
       .addOptions(roles.map(role => ({ label: role.name.slice(0, 100), value: role.id, description: 'Toggle ' + role.name })));
     await interaction.channel.send({
       embeds: [new EmbedBuilder().setColor(0x42B883).setTitle(interaction.options.getString('title', true)).setDescription('Select the roles you want. Selecting a role you already have will remove it.')],
@@ -279,6 +313,10 @@ export async function handleCommunityComponent(interaction) {
     await interaction.reply({ content: 'Use this menu inside a server.', flags: MessageFlags.Ephemeral });
     return true;
   }
+  if (getSetting(interaction.guildId, 'community_self_roles_enabled') === 'false') {
+    await interaction.reply({ content: 'Self-service roles are disabled in this server.', flags: MessageFlags.Ephemeral });
+    return true;
+  }
   const selected = new Set(interaction.values);
   const validRoles = interaction.component.options.map(option => option.value);
   const member = await interaction.guild.members.fetch(interaction.user.id);
@@ -306,49 +344,92 @@ export async function handleCommunityEvents(client) {
       if (role && !role.managed && role.position < botHighest) await member.roles.add(role, 'Configured Meta Support autorole').catch(error => console.error('Autorole failed:', error.message));
     }
     const channelId = getSetting(member.guild.id, 'community_welcome_channel_id');
-    if (channelId) {
+    if (channelId && getSetting(member.guild.id, 'community_welcome_enabled') !== 'false') {
       const channel = await member.guild.channels.fetch(channelId).catch(() => null);
       const template = getSetting(member.guild.id, 'community_welcome_message') || 'Welcome {user} to {server}! You are member #{membercount}.';
       const message = template.replaceAll('{user}', member.toString()).replaceAll('{server}', member.guild.name).replaceAll('{membercount}', String(member.guild.memberCount));
       if (channel?.isTextBased()) {
         const showAvatar = getSetting(member.guild.id, 'community_welcome_avatar') !== 'false';
         const welcome = new EmbedBuilder()
-          .setColor(0x42B883)
+          .setColor(embedColor(member.guild.id))
           .setTitle('Welcome to ' + member.guild.name)
           .setDescription(message)
           .setAuthor({ name: member.user.tag, ...(showAvatar ? { iconURL: member.user.displayAvatarURL({ size: 128 }) } : {}) })
+          .setFooter({ text: embedFooter(member.guild.id) })
           .setTimestamp();
         if (showAvatar) welcome.setThumbnail(member.user.displayAvatarURL({ size: 512 }));
         await channel.send({ embeds: [welcome], allowedMentions: { users: [member.id] } }).catch(error => console.error('Welcome message failed:', error.message));
       }
     }
-    await sendLog(member.guild, new EmbedBuilder().setColor(0x42B883).setTitle('Member joined').setDescription(`${member.user.tag} (${member.id})`).setTimestamp());
+    await sendLog(member.guild, new EmbedBuilder().setColor(embedColor(member.guild.id)).setTitle('Member joined').setDescription(`${member.user.tag} (${member.id})`).setTimestamp(), 'member_join');
   });
   client.on('guildMemberRemove', member => {
-    void sendLog(member.guild, new EmbedBuilder().setColor(0xD97757).setTitle('Member left').setDescription(`${member.user?.tag || member.id} (${member.id})`).setTimestamp());
+    void sendLog(member.guild, new EmbedBuilder().setColor(embedColor(member.guild.id, 0xD97757)).setTitle('Member left').setDescription(`${member.user?.tag || member.id} (${member.id})`).setTimestamp(), 'member_leave');
   });
-  client.on('messageCreate', message => {
+  const automodActivity = new Map();
+  client.on('messageCreate', async message => {
     if (!message.guild || message.author.bot) return;
-    if (getSetting(message.guild.id, 'community_xp_enabled') === 'false') return;
+    const guildId = message.guild.id;
     const now = Date.now();
-    const row = db.prepare('SELECT xp, last_message_at FROM community_xp WHERE guild_id = ? AND user_id = ?').get(message.guild.id, message.author.id);
-    if (row && now - row.last_message_at < 60_000) return;
-    const earned = 10 + Math.floor(Math.random() * 11);
+    const key = guildId + ':' + message.author.id;
+    const configEnabled = getSetting(guildId, 'automod_enabled') !== 'false';
+    if (configEnabled) {
+      const prior = automodActivity.get(key) || { times: [], lastText: '', lastTextAt: 0 };
+      prior.times = prior.times.filter(time => now - time < 8_000);
+      prior.times.push(now);
+      const mentionLimit = Math.max(1, Math.min(50, Number(getSetting(guildId, 'automod_mention_limit') || 5)));
+      const mentionCount = message.mentions.users.size + message.mentions.roles.size;
+      const tooManyMentions = mentionCount > mentionLimit;
+      const spam = getSetting(guildId, 'automod_anti_spam') === 'true' && prior.times.length > 5;
+      const cleanText = typeof message.content === 'string' ? message.content.trim().toLowerCase() : '';
+      const duplicate = getSetting(guildId, 'automod_duplicate_filter') === 'true' &&
+        cleanText.length > 0 && cleanText === prior.lastText && now - prior.lastTextAt < 30_000;
+      const invite = getSetting(guildId, 'automod_invite_filter') === 'true' &&
+        /(?:discord\.gg\/|discord(?:app)?\.com\/invite\/)/i.test(cleanText);
+      if (tooManyMentions || spam || duplicate || invite) {
+        await message.delete().catch(() => {});
+        if (tooManyMentions) await message.channel.send({ content: message.author.toString() + ', your message was removed because it exceeded the mention limit.' }).then(m => setTimeout(() => m.delete().catch(() => {}), 5000)).catch(() => {});
+        prior.lastTextAt = now;
+        automodActivity.set(key, prior);
+        return;
+      }
+      if (cleanText) {
+        prior.lastText = cleanText;
+        prior.lastTextAt = now;
+      }
+      automodActivity.set(key, prior);
+      if (automodActivity.size > 5000) {
+        for (const [activityKey, value] of automodActivity) if (now - (value.times.at(-1) || 0) > 60_000) automodActivity.delete(activityKey);
+      }
+    }
+
+    if (getSetting(guildId, 'community_xp_enabled') === 'false') return;
+    const row = db.prepare('SELECT xp, last_message_at FROM community_xp WHERE guild_id = ? AND user_id = ?').get(guildId, message.author.id);
+    const cooldownSeconds = Math.max(1, Math.min(3600, Number(getSetting(guildId, 'community_xp_cooldown_seconds') || 60)));
+    if (row && now - row.last_message_at < cooldownSeconds * 1000) return;
+    const configuredXp = Number(getSetting(guildId, 'community_xp_per_message') || 10);
+    const earned = Number.isInteger(configuredXp) && configuredXp >= 1 && configuredXp <= 1000 ? configuredXp : 10;
+    const previousLevel = Math.floor(Math.sqrt((row?.xp || 0) / 100));
     db.prepare(`INSERT INTO community_xp (guild_id, user_id, xp, messages, last_message_at)
       VALUES (?, ?, ?, 1, ?)
       ON CONFLICT(guild_id, user_id) DO UPDATE SET xp = xp + excluded.xp, messages = messages + 1, last_message_at = excluded.last_message_at`)
-      .run(message.guild.id, message.author.id, earned, now);
+      .run(guildId, message.author.id, earned, now);
+    const currentRow = db.prepare('SELECT xp FROM community_xp WHERE guild_id = ? AND user_id = ?').get(guildId, message.author.id);
+    const currentLevel = Math.floor(Math.sqrt(currentRow.xp / 100));
+    if (currentLevel > previousLevel && getSetting(guildId, 'community_level_up_messages') !== 'false') {
+      await message.channel.send({ content: '🎉 ' + message.author.toString() + ' reached level **' + currentLevel + '**!' }).catch(() => {});
+    }
   });
   client.on('messageDelete', message => {
     if (!message.guild || !message.author || message.author.bot) return;
-    void sendLog(message.guild, new EmbedBuilder().setColor(0xD97757).setTitle('Message deleted')
+    void sendLog(message.guild, new EmbedBuilder().setColor(embedColor(message.guild.id, 0xD97757)).setTitle('Message deleted')
       .setDescription(`Author: <@${message.author.id}>\nChannel: <#${message.channelId}>\nContent: ${(message.content || '[content unavailable]').slice(0, 2500)}`)
-      .setTimestamp());
+      .setTimestamp(), 'message_delete');
   });
   client.on('channelCreate', channel => {
-    if (channel.guild) void sendLog(channel.guild, new EmbedBuilder().setColor(0x42B883).setTitle('Channel created').setDescription(`${channel.name} (${channel.id})`).setTimestamp());
+    if (channel.guild) void sendLog(channel.guild, new EmbedBuilder().setColor(embedColor(channel.guild.id)).setTitle('Channel created').setDescription(`${channel.name} (${channel.id})`).setTimestamp(), 'channel_create');
   });
   client.on('channelDelete', channel => {
-    if (channel.guild) void sendLog(channel.guild, new EmbedBuilder().setColor(0xD97757).setTitle('Channel deleted').setDescription(`${channel.name} (${channel.id})`).setTimestamp());
+    if (channel.guild) void sendLog(channel.guild, new EmbedBuilder().setColor(embedColor(channel.guild.id, 0xD97757)).setTitle('Channel deleted').setDescription(`${channel.name} (${channel.id})`).setTimestamp(), 'channel_delete');
   });
 }
