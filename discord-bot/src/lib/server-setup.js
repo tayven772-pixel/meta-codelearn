@@ -226,6 +226,7 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
 }
 
 async function applyTemplateSettings(guild, template) {
+  setSetting('global', 'server_setup_template', JSON.stringify(template));
   const settings = template.settings || {};
   const findChannel = name => guild.channels.cache.find(channel => channel.name === normalizeChannelName(name));
   const welcome = settings.welcome;
