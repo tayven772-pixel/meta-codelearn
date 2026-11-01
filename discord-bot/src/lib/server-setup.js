@@ -192,7 +192,12 @@ function applyBotControlSettings(guild, template) {
 
   const reviewChannel = findChannelByName(guild, applications.reviewChannel, textTypes);
   setSetting('global', 'staff_application_review_channel_id', reviewChannel?.id || '');
-  const reviewRole = guild.roles.cache.find(role => role.name.toLowerCase() === String(applications.reviewRole).trim().toLowerCase());
+  const preferredReviewerNames = [applications.reviewRole, 'Support Team', 'Moderator', 'Administrator', 'Founder']
+    .filter(name => typeof name === 'string' && name.trim())
+    .map(name => name.trim().toLowerCase());
+  const reviewRole = preferredReviewerNames
+    .map(name => guild.roles.cache.find(role => role.name.toLowerCase() === name))
+    .find(Boolean);
   setSetting('global', 'staff_application_review_role_id', reviewRole?.id || '');
   const approvedRole = applications.approvedRole
     ? guild.roles.cache.find(role => role.name.toLowerCase() === String(applications.approvedRole).trim().toLowerCase())
