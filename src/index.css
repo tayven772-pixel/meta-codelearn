@@ -3260,8 +3260,8 @@ body {
 body::before,
 body::after {
   content: "❄";
-  position: fixed;
-  top: -36px;
+  position: absolute;
+  top: 0;
   left: 4%;
   z-index: 9998;
   pointer-events: none;
@@ -3336,3 +3336,126 @@ body::after {
 :root:not([data-theme='dark']) input::placeholder,
 :root[data-theme='light'] textarea::placeholder,
 :root:not([data-theme='dark']) textarea::placeholder { color: #4b4b4b; opacity: 1; }
+
+
+/* Christmas dark mode: use a full evergreen + cranberry palette throughout. */
+:root[data-theme='dark'] {
+  --background: 150 32% 7%;
+  --foreground: 0 0% 96%;
+  --card: 150 25% 11%;
+  --card-foreground: 0 0% 96%;
+  --card-border: 150 24% 22%;
+  --border: 150 24% 22%;
+  --input: 150 24% 22%;
+  --primary: 151 62% 35%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 52% 20%;
+  --secondary-foreground: 0 0% 96%;
+  --muted: 150 20% 15%;
+  --muted-foreground: 150 10% 72%;
+  --accent: 0 58% 38%;
+  --accent-foreground: 0 0% 100%;
+  --popover: 150 25% 11%;
+  --popover-foreground: 0 0% 96%;
+  --ring: 0 62% 52%;
+  --sidebar: 150 32% 7%;
+  --sidebar-foreground: 0 0% 96%;
+  --sidebar-border: 150 24% 22%;
+  --sidebar-primary: 0 62% 48%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 150 25% 15%;
+  --sidebar-accent-foreground: 0 0% 96%;
+  color-scheme: dark;
+}
+:root[data-theme='dark'] body {
+  color: #f4f4ed;
+  background:
+    radial-gradient(circle at 12px 12px, rgb(190 35 52 / .16) 1.5px, transparent 2px) 0 0 / 34px 34px,
+    linear-gradient(135deg, #071b12 0%, #102b1d 52%, #260d13 100%);
+}
+:root[data-theme='dark'] .topbar,
+:root[data-theme='dark'] .bottom-workspace-nav {
+  background: rgb(5 28 18 / .97);
+  border-color: #b52b3a;
+  color: #f8f5eb;
+}
+:root[data-theme='dark'] .topbar :where(.brand, .top-links, .top-progress, .account-name, .account-signin, .account-signout) {
+  color: #f8f5eb;
+}
+:root[data-theme='dark'] .brand-mark,
+:root[data-theme='dark'] .account-join,
+:root[data-theme='dark'] .button-primary {
+  background: #176b43;
+  color: #fff;
+}
+:root[data-theme='dark'] .button-secondary,
+:root[data-theme='dark'] .topbar .brand-mark,
+:root[data-theme='dark'] .topbar .account-join {
+  background: #b52b3a;
+  color: #fff;
+}
+:root[data-theme='dark'] .theme-toggle,
+:root[data-theme='dark'] .search-input,
+:root[data-theme='dark'] .filter-select {
+  background: #102b1d;
+  border-color: #376b4c;
+  color: #f5f3e9;
+}
+:root[data-theme='dark'] .hero,
+:root[data-theme='dark'] .atlas-card {
+  border-color: #b52b3a;
+  background: linear-gradient(120deg, #0c3825, #12452e 55%, #3b111b);
+}
+:root[data-theme='dark'] .hero h1,
+:root[data-theme='dark'] .section-heading h2,
+:root[data-theme='dark'] .auth-copy h1 {
+  color: #f7f3e8;
+}
+:root[data-theme='dark'] .hero h1 em,
+:root[data-theme='dark'] .auth-copy h1 em,
+:root[data-theme='dark'] .eyebrow,
+:root[data-theme='dark'] .section-kicker {
+  color: #ff7a86;
+}
+:root[data-theme='dark'] .language-card,
+:root[data-theme='dark'] .auth-note,
+:root[data-theme='dark'] .lesson-link,
+:root[data-theme='dark'] .play-card,
+:root[data-theme='dark'] .play-hub-card,
+:root[data-theme='dark'] .published-content-card,
+:root[data-theme='dark'] .progression-section,
+:root[data-theme='dark'] .project-list-section {
+  background: #102b1d;
+  border-color: #315b41;
+  color: #f4f4ed;
+}
+:root[data-theme='dark'] .pathway,
+:root[data-theme='dark'] .library-note,
+:root[data-theme='dark'] .play-note,
+:root[data-theme='dark'] .mini-code {
+  background: #173b28;
+  color: #e6f3e9;
+}
+:root[data-theme='dark'] .lesson-index,
+:root[data-theme='dark'] .progress-fill,
+:root[data-theme='dark'] .level-progress-fill {
+  background: #176b43;
+}
+:root[data-theme='dark'] .reward-count {
+  background: #451720;
+  color: #ff9aa4;
+}
+:root[data-theme='dark'] .holiday-banner {
+  background: linear-gradient(90deg, #071b12, #145b38 50%, #071b12);
+  color: #fff9e9;
+}
+:root[data-theme='dark'] .holiday-banner strong,
+:root[data-theme='dark'] .bottom-workspace-button.active {
+  color: #f4d37d;
+}
+:root[data-theme='dark'] .account-join:hover,
+:root[data-theme='dark'] .button-primary:hover { background: #0f5132; }
+:root[data-theme='dark'] .button-secondary:hover { background: #8f202e; }
+:root[data-theme='dark'] .app-shell::after {
+  background: linear-gradient(180deg, #f9fbfc 0%, #e9f1f4 68%, #dce8ed 100%);
+}
