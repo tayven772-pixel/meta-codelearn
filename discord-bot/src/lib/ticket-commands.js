@@ -59,7 +59,8 @@ export const ticketCommand = new SlashCommandBuilder()
   )
   .addSubcommand(sub =>
     sub.setName('reopen')
-      .setDescription('Reopen the current ticket')
+      .setDescription('Reopen a closed ticket by its ID from the ticket log')
+      .addIntegerOption(option => option.setName('id').setDescription('Ticket ID, e.g. 2').setMinValue(1).setRequired(true))
   )
   .addSubcommand(sub =>
     sub.setName('transcript')

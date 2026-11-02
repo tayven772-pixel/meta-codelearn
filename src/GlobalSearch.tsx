@@ -62,6 +62,9 @@ export default function GlobalSearch() {
   const goTo = (href: string) => {
     setOpen(false);
     setLocation(href);
+    // Wouter keeps the previous page's scroll offset during client-side navigation.
+    // Search results should always open the destination from the top.
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   };
 
   return (

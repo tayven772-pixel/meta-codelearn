@@ -81,6 +81,69 @@ The bot requests the **Server Members Intent** to support welcome messages and a
 
 Give the bot only the permissions it needs: View Channels, Send Messages, Embed Links, Read Message History, Add Reactions, Manage Roles (for autoroles and self-service roles), and Manage Channels only if you use channel-management tools. Keep its role below roles it must not assign.
 
+## Staff applications
+
+Configure a private text channel for application reviews, then run `/setup-applications` (or pass `staff_channel:#private-channel`). The panel opens a Discord modal with questions about the requested role, availability, experience, motivation, and a moderation scenario. Applications are stored in SQLite and sent to the configured review channel. Server managers/administrators, or the configured reviewer role, can accept or reject an application. Applicants receive a best-effort DM with the result. Keep the review channel private: the setup command refuses a channel visible to @everyone.
+
+The owner dashboard can configure the review channel ID, optional reviewer role ID, panel title/description, and whether new applications are accepted. JSON can also configure these values by role/channel name.
+
+## Automatic partner verification
+
+Members can submit a Discord invite using `/partner-add`. Meta checks the invite's **approximate server member count** with Discord before accepting it; this is not an online-player count. The minimum defaults to 100 and can be changed with `/autopartner-setup` or the owner dashboard. Qualifying submissions are posted without staff approval when the partner channel is configured. Meta checks the invite count again before scheduled or manual posts, so stale/expired invites or servers below the threshold are skipped. Submissions are rate-limited to three qualifying entries per user per 24 hours.
+
+## Welcome embeds
+
+Join messages are sent as an embed with the new member's avatar, welcome text, server name, member number, and timestamp. The owner dashboard and JSON template can toggle the avatar.
+
+## Publishing a complete server setup from JSON
+
+The owner-only `/bot-control` editor accepts a template with `roles`, `categories`, and optional `controlPanel` and `settings` objects. Example:
+
+```json
+{
+  "roles": [
+    { "name": "Founder", "color": 16042333 },
+    { "name": "Moderator", "color": 7391137 }
+  ],
+  "categories": [
+    {
+      "name": "GET STARTED",
+      "channels": [["text", "welcome"], ["text", "rules"]]
+    },
+    {
+      "name": "STAFF HQ",
+      "private": true,
+      "channels": [["text", "staff-applications"]]
+    }
+  ],
+  "controlPanel": {
+    "title": "Meta Code bot control",
+    "description": "Owner dashboard configured from JSON.",
+    "sections": ["setup", "commands", "responses", "applications"]
+  },
+  "settings": {
+    "welcome": {
+      "enabled": true,
+      "channel": "welcome",
+      "message": "Welcome {user} to {server}!",
+      "showAvatar": true
+    },
+    "applications": {
+      "enabled": true,
+      "staffChannel": "staff-applications",
+      "staffRole": "Moderator",
+      "panelTitle": "Meta Code | Staff Applications"
+    }
+  }
+}
+```
+
+Publish first produces a live preview; it does not change Discord. The preview lists planned creations, updates, channel moves/permission syncs, deletions, and protected objects. Confirming the preview applies the template and removes unlisted deletable roles, categories, and channels. Existing channel message history is permanently lost when a channel is deleted. Discord-managed roles, @everyone, administrator roles, roles at or above the bot's highest role, essential system channels, and channels/categories the bot cannot manage are protected. A server change after preview invalidates the confirmation and requires a fresh preview.
+
+`controlPanel.sections` controls which dashboard sections are shown; `title` and `description` update the dashboard heading. Supported sections: `setup`, `commands`, `responses`, `tickets`, `messages`, `community`, `autopartner`, and `applications`. The JSON settings blocks support `welcome`, `autopartner`, `applications`, and `tickets`. Names referenced by a setting must be present in the same template.
+
+The legacy `/setup-server` command remains non-destructive: it applies the saved template without deleting unlisted resources. Use the owner dashboard preview/confirm flow when you intend the server to match the JSON exactly.
+
 ## Run bot tests
 
-From this folder, run `npm test` to verify the daily challenge rotation, answer matching, and streak calculation.
+From this folder, run `npm test` to verify daily challenge rotation, answer matching, streak calculation, and the existing bot test suite.

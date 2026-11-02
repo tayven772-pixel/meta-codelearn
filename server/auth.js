@@ -282,6 +282,12 @@ function getBotDb() {
       error TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, sent_at TEXT
     );
     CREATE INDEX IF NOT EXISTS bot_message_outbox_pending ON bot_message_outbox(status, id);
+    CREATE TABLE IF NOT EXISTS bot_setup_outbox (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT NOT NULL, template_json TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','applied','failed')),
+      result_json TEXT, error TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, completed_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS bot_setup_outbox_pending ON bot_setup_outbox(status, id);
     CREATE TABLE IF NOT EXISTS autopartner_partners (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       guild_id TEXT NOT NULL,
@@ -289,11 +295,16 @@ function getBotDb() {
       invite_url TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       created_by TEXT NOT NULL DEFAULT 'website',
+      member_count INTEGER,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE (guild_id, name)
     );
     CREATE INDEX IF NOT EXISTS autopartner_partners_guild ON autopartner_partners(guild_id);
   `);
+
+  try { connection.exec("ALTER TABLE bot_setup_outbox ADD COLUMN action TEXT NOT NULL DEFAULT 'preview'"); } catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
+  try { connection.exec('ALTER TABLE bot_setup_outbox ADD COLUMN confirmation_hash TEXT'); } catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
+  try { connection.exec('ALTER TABLE autopartner_partners ADD COLUMN member_count INTEGER'); } catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
   botDb = connection;
   return botDb;
 }
@@ -310,6 +321,37 @@ function requireBotOwner(req, res) {
   // Use the verified Meta website owner account. Discord OAuth is not required.
   return requireAdmin(req, res);
 }
+
+function normalizeServerSetupTemplate(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('Setup JSON must be an object.');
+  }
+
+  const roles = Array.isArray(input.roles) ? input.roles.map(role => {
+    if (!role || typeof role !== 'object' || Array.isArray(role)) return role;
+    let color = role.color;
+    if (typeof color === 'string' && /^#?[0-9a-f]{6}$/i.test(color.trim())) {
+      color = Number.parseInt(color.trim().replace(/^#/, ''), 16);
+    }
+    return { ...role, color };
+  }) : input.roles;
+
+  const categories = Array.isArray(input.categories) ? input.categories.map(category => {
+    if (!category || typeof category !== 'object' || Array.isArray(category)) return category;
+    const channels = Array.isArray(category.channels) ? category.channels.map(channel => {
+      if (Array.isArray(channel)) return channel;
+      if (channel && typeof channel === 'object' && !Array.isArray(channel) &&
+          ['text', 'voice'].includes(channel.type) && typeof channel.name === 'string') {
+        return [channel.type, channel.name];
+      }
+      return channel;
+    }) : category.channels;
+    return { ...category, channels };
+  }) : input.categories;
+
+  return { ...input, roles, categories };
+}
+
 function validGuildId(value) {
   return typeof value === 'string' && /^\d{17,20}$/.test(value);
 }
@@ -390,7 +432,7 @@ app.get('/api/auth/admin/bot-control/settings', async (req, res) => {
   if (!validGuildId(guildId)) return res.status(400).json({ error: 'Select a valid Discord server.' });
   if (!(await requireOwnedGuild(req, res, guildId))) return;
   const settings = botSettingsForGuild('global');
-  const partners = getBotDb().prepare('SELECT id, name, invite_url, description, created_at FROM autopartner_partners WHERE guild_id = ? ORDER BY name COLLATE NOCASE').all(guildId);
+  const partners = getBotDb().prepare('SELECT id, name, invite_url, description, member_count, created_at FROM autopartner_partners WHERE guild_id = ? ORDER BY name COLLATE NOCASE').all(guildId);
   return res.json({ guildId, settings, commands: botCommandNames, partners });
 });
 app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
@@ -407,10 +449,11 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
   }
   if (!(await requireOwnedGuild(req, res, guildId))) return;
   const allowed = new Set([
-    'autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_template',
+    'autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_min_members','autopartner_template',
     'server_setup_template','bot_welcome_message','bot_rules_text','bot_status_text',
-    'community_welcome_channel_id','community_welcome_message','community_autorole_id','community_log_channel_id','community_xp_enabled',
-    'ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id',
+    'community_welcome_channel_id','community_welcome_message','community_welcome_avatar','community_autorole_id','community_log_channel_id','community_xp_enabled',
+    'staff_applications_enabled','staff_applications_channel_id','staff_applications_title','staff_applications_description','staff_applications_role_id',
+    'ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','ticket_close_delay_seconds',
     ...botCommandNames.map(name => `bot_command_enabled:${name}`),
     ...['meta','lessons','ping','help'].map(name => `bot_response:${name}`)
   ]);
@@ -422,7 +465,7 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
   const transaction = getBotDb().transaction(() => {
     for (const [key, rawValue] of Object.entries(values)) {
       if (!allowed.has(key)) throw new Error(`Unsupported setting: ${key}`);
-      const value = String(rawValue ?? '');
+      let value = String(rawValue ?? '');
       if (value.length > (key === 'server_setup_template' ? 30000 : key.endsWith('template') ? 1800 : ['bot_welcome_message','bot_rules_text','community_welcome_message'].includes(key) ? 4096 : 5000)) {
         throw new Error(`Setting ${key} is too long.`);
       }
@@ -430,6 +473,7 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
       if (['community_welcome_channel_id','community_autorole_id','community_log_channel_id'].includes(key) && value && !/^\d{17,20}$/.test(value)) throw new Error(key + ' must be a valid Discord ID (17–20 digits).');
       if (key === 'community_xp_enabled' && !['true','false'].includes(value)) throw new Error('Community XP enabled must be true or false.');
       if (key === 'ticket_panel_style' && !['dropdown','buttons'].includes(value)) throw new Error('Ticket panel style must be dropdown or buttons.');
+      if (key === 'ticket_close_delay_seconds' && (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > 300)) throw new Error('Ticket close delay must be between 1 and 300 seconds.');
       if (key === 'ticket_categories' && value) {
         const categories = JSON.parse(value);
         if (!Array.isArray(categories) || categories.length < 1 || categories.length > 25 ||
@@ -446,19 +490,28 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
       }
       if (key === 'autopartner_enabled' && !['true','false'].includes(value)) throw new Error('Autopartner enabled must be true or false.');
       if (key === 'autopartner_interval_hours' && (!/^\d+$/.test(value) || Number(value) < 6 || Number(value) > 168)) throw new Error('Autopartner interval must be 6–168 hours.');
+      if (key === 'autopartner_min_members' && (!/^\d+$/.test(value) || Number(value) < 10 || Number(value) > 1000000)) throw new Error('Autopartner minimum members must be 10–1,000,000.');
+      if (key === 'staff_applications_role_id' && value && !/^\d{17,20}$/.test(value)) throw new Error('Staff reviewer role ID must be a Discord ID.');
+      if (key === 'staff_applications_channel_id' && value && !/^\d{17,20}$/.test(value)) throw new Error('Staff application channel ID must be a Discord ID.');
+      if (key === 'staff_applications_enabled' && !['true','false'].includes(value)) throw new Error('Staff applications enabled must be true or false.');
+      if (key === 'community_welcome_avatar' && !['true','false'].includes(value)) throw new Error('Welcome avatar must be true or false.');
+      if (key === 'staff_applications_title' && value.length > 45) throw new Error('Staff application title must be 45 characters or fewer.');
+      if (key === 'staff_applications_description' && value.length > 1000) throw new Error('Staff application description must be 1,000 characters or fewer.');
       if (key === 'autopartner_channel_id' && value && !/^\d{17,20}$/.test(value)) throw new Error('Autopartner channel ID must be a Discord ID.');
       if (key.startsWith('bot_command_enabled:') && !['true','false'].includes(value)) throw new Error('Command toggles must be true or false.');
       if (key === 'server_setup_template' && value) {
-        const template = JSON.parse(value);
+        const template = normalizeServerSetupTemplate(JSON.parse(value));
         if (!Array.isArray(template.roles) || !Array.isArray(template.categories) ||
             template.roles.length > 40 || template.categories.length > 30 ||
-            template.roles.some(role => !role || typeof role.name !== 'string' || !role.name.trim() || role.name.length > 100) ||
+            template.roles.some(role => !role || typeof role.name !== 'string' || !role.name.trim() || role.name.length > 100 ||
+              (role.color !== undefined && (!Number.isInteger(role.color) || role.color < 0 || role.color > 0xFFFFFF))) ||
             template.categories.some(group => !group || typeof group.name !== 'string' || !group.name.trim() ||
               !Array.isArray(group.channels) || group.channels.length > 50 ||
               group.channels.some(channel => !Array.isArray(channel) || !['text','voice'].includes(channel[0]) ||
                 typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
-          throw new Error('Setup template needs valid roles and categories. Each channel must be ["text" or "voice", "channel-name"]. Limits: 40 roles, 30 categories, 50 channels per category.');
+          throw new Error('Setup template needs valid roles and categories. Channels may be ["text", "channel-name"] or {"type":"text","name":"channel-name"}. Limits: 40 roles, 30 categories, 50 channels per category.');
         }
+        value = JSON.stringify(template);
       }
       put.run('global', key, value);
     }
@@ -470,6 +523,87 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
     return res.status(400).json({ error: error.message || 'Could not save bot settings.' });
   }
 });
+app.post('/api/auth/admin/bot-control/publish-template', async (req, res) => {
+  if (!requireBotOwner(req, res)) return;
+  const guildId = String(req.body?.guildId || getHomeGuildId()).trim();
+  let template;
+  try {
+    template = normalizeServerSetupTemplate(req.body?.template);
+  } catch (error) {
+    return res.status(400).json({ error: error.message || 'Invalid setup JSON.' });
+  }
+  if (!validGuildId(guildId)) return res.status(400).json({ error: 'The Meta home server ID is invalid.' });
+  if (!(await requireOwnedGuild(req, res, guildId))) return;
+  if (!template || !Array.isArray(template.roles) || !Array.isArray(template.categories) ||
+      template.roles.length > 40 || template.categories.length > 30 ||
+      template.roles.some(role => !role || typeof role.name !== 'string' || !role.name.trim() || role.name.length > 100 ||
+        (role.color !== undefined && (!Number.isInteger(role.color) || role.color < 0 || role.color > 0xFFFFFF))) ||
+      template.categories.some(group => !group || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 100 ||
+        !Array.isArray(group.channels) || group.channels.length > 50 ||
+        group.channels.some(channel => !Array.isArray(channel) || !['text','voice'].includes(channel[0]) ||
+          typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
+    return res.status(400).json({ error: 'Invalid setup JSON. Check role names/colors and category channel entries.' });
+  }
+  const templateJson = JSON.stringify(template);
+  if (templateJson.length > 30000) return res.status(413).json({ error: 'Setup JSON is too large (30 KB maximum).' });
+  try {
+    const result = getBotDb().prepare("INSERT INTO bot_setup_outbox (guild_id, template_json, action) VALUES (?, ?, 'preview')").run(guildId, templateJson);
+    return res.status(202).json({ queued: true, jobId: Number(result.lastInsertRowid), message: 'Setup preview queued. No Discord changes have been made yet.' });
+  } catch (error) { return res.status(500).json({ error: error.message || 'Could not preview setup template.' }); }
+});
+
+app.get('/api/auth/admin/bot-control/setup-jobs/:id', (req, res) => {
+  if (!requireBotOwner(req, res)) return;
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid setup job ID.' });
+  const guildId = getHomeGuildId();
+  if (!validGuildId(guildId)) return res.status(503).json({ error: 'The bot home server is not configured.' });
+  try {
+    const job = getBotDb().prepare('SELECT id, action, status, result_json, error, created_at FROM bot_setup_outbox WHERE id = ? AND guild_id = ?').get(id, guildId);
+    if (!job) return res.status(404).json({ error: 'Setup job not found.' });
+    let result = null;
+    try { result = job.result_json ? JSON.parse(job.result_json) : null; } catch { /* malformed historical job result */ }
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json({ id: job.id, action: job.action, status: job.status, result, error: job.error, createdAt: job.created_at });
+  } catch (error) {
+    console.error('Setup job lookup failed:', error?.message || 'unknown error');
+    return res.status(500).json({ error: 'Could not read setup job status.' });
+  }
+});
+
+app.post('/api/auth/admin/bot-control/apply-template', (req, res) => {
+  if (!requireBotOwner(req, res)) return;
+  const previewJobId = Number(req.body?.previewJobId);
+  const guildId = getHomeGuildId();
+  if (!Number.isSafeInteger(previewJobId) || previewJobId < 1) return res.status(400).json({ error: 'A valid preview job is required.' });
+  if (!validGuildId(guildId)) return res.status(503).json({ error: 'The bot home server is not configured.' });
+  try {
+    const db = getBotDb();
+    const queueApply = db.transaction(() => {
+      const preview = db.prepare("SELECT * FROM bot_setup_outbox WHERE id = ? AND guild_id = ? AND action = 'preview' AND status = 'applied' AND error IS NULL").get(previewJobId, guildId);
+      if (!preview) throw new Error('This preview is not ready or has already been confirmed. Publish the JSON again.');
+      const age = Date.now() - new Date(preview.created_at.replace(' ', 'T') + 'Z').getTime();
+      if (!Number.isFinite(age) || age > 10 * 60 * 1000) throw new Error('This preview expired. Publish the JSON again to get a fresh deletion list.');
+      let result;
+      try { result = JSON.parse(preview.result_json || 'null'); } catch { result = null; }
+      if (!result || result.mode !== 'preview' || typeof result.fingerprint !== 'string') {
+        throw new Error('The preview result is invalid. Publish the JSON again.');
+      }
+      const marked = db.prepare("UPDATE bot_setup_outbox SET error = 'confirmed' WHERE id = ? AND error IS NULL").run(previewJobId);
+      if (!marked.changes) throw new Error('This preview was already confirmed.');
+      const queued = db.prepare("INSERT INTO bot_setup_outbox (guild_id, template_json, action, confirmation_hash) VALUES (?, ?, 'apply', ?)")
+        .run(guildId, preview.template_json, result.fingerprint);
+      return Number(queued.lastInsertRowid);
+    });
+    const jobId = queueApply();
+    return res.status(202).json({ queued: true, jobId, message: 'Confirmed. Meta is applying the reviewed setup.' });
+  } catch (error) {
+    const message = error?.message || 'Could not queue the confirmed setup.';
+    const status = /preview|confirmed|expired|already/.test(message) ? 409 : 500;
+    return res.status(status).json({ error: message });
+  }
+});
+
 app.post('/api/auth/admin/bot-control/messages', async (req, res) => {
   if (!requireBotOwner(req, res)) return;
   const guildId = String(req.body?.guildId || getHomeGuildId()).trim();
@@ -503,7 +637,7 @@ app.post('/api/auth/admin/bot-control/partners', async (req, res) => {
   }
   try {
     const result = getBotDb().prepare('INSERT INTO autopartner_partners (guild_id, name, invite_url, description, created_by) VALUES (?, ?, ?, ?, ?)').run(guildId, name, inviteUrl, description, 'website');
-    return res.status(201).json({ partner: getBotDb().prepare('SELECT id, name, invite_url, description, created_at FROM autopartner_partners WHERE id = ?').get(result.lastInsertRowid) });
+    return res.status(201).json({ partner: getBotDb().prepare('SELECT id, name, invite_url, description, member_count, created_at FROM autopartner_partners WHERE id = ?').get(result.lastInsertRowid) });
   } catch (error) {
     return res.status(409).json({ error: String(error.message).includes('UNIQUE') ? 'A partner with that name already exists.' : 'Could not save partner.' });
   }
@@ -528,7 +662,7 @@ app.put('/api/auth/admin/bot-control/partners/:id', async (req, res) => {
   try {
     const result = getBotDb().prepare('UPDATE autopartner_partners SET name = ?, invite_url = ?, description = ? WHERE id = ? AND guild_id = ?').run(name, inviteUrl, description, id, guildId);
     if (!result.changes) return res.status(404).json({ error: 'Partner not found.' });
-    return res.json({ partner: getBotDb().prepare('SELECT id, name, invite_url, description, created_at FROM autopartner_partners WHERE id = ? AND guild_id = ?').get(id, guildId) });
+    return res.json({ partner: getBotDb().prepare('SELECT id, name, invite_url, description, member_count, created_at FROM autopartner_partners WHERE id = ? AND guild_id = ?').get(id, guildId) });
   } catch (error) {
     return res.status(409).json({ error: String(error.message).includes('UNIQUE') ? 'A partner with that name already exists.' : 'Could not update partner.' });
   }

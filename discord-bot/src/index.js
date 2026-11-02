@@ -1,8 +1,9 @@
 import 'dotenv/config';
 import { ticketCommand } from './lib/ticket-commands.js';
 import { serverSetupCommand } from './lib/server-setup.js';
-import { handleTicketCommand, handleTicketButton, handleTicketPanelCommand } from './lib/tickets.js';
-import { handleServerSetup, handleServerSetupButton } from './lib/server-setup.js';
+import { handleTicketCommand, handleTicketButton, handleTicketPanelCommand, runPendingTicketDeletions } from './lib/tickets.js';
+import { staffApplicationCommands, handleStaffApplicationCommand, handleStaffApplicationComponent } from './lib/applications.js';
+import { applyServerTemplate, previewServerTemplate, handleServerSetup, handleServerSetupButton } from './lib/server-setup.js';
 import { db, getSetting } from './lib/database.js';
 import { moderationCommands, handleModerationCommand } from './lib/moderation.js';
 import { autoPartnerCommands, handleAutoPartnerCommand, runAutoPartnerScheduler } from './lib/autopartner.js';
@@ -70,12 +71,12 @@ const commands = [
   .addStringOption(option => option.setName('question').setDescription('Your question').setMaxLength(250).setRequired(true)),
  new SlashCommandBuilder().setName('announce').setDescription('Post an official server announcement').setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .addStringOption(option => option.setName('message').setDescription('Announcement text').setMaxLength(1800).setRequired(true)),
- new SlashCommandBuilder().setName('setup-applications').setDescription('Post the staff application panel in this channel').setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
  ticketCommand,
  serverSetupCommand,
  ...moderationCommands.map(command => ({ toJSON: () => command })),
  ...autoPartnerCommands.map(command => ({ toJSON: () => command })),
  ...communityCommands.map(command => ({ toJSON: () => command })),
+ ...staffApplicationCommands.map(command => ({ toJSON: () => command })),
 ].map(command => command.toJSON());
 client.once(Events.ClientReady, async readyClient => {
  console.log(`Meta bot ready as ${readyClient.user.tag}`);
@@ -130,6 +131,8 @@ client.once(Events.ClientReady, async readyClient => {
  };
  applyConfiguredPresence();
  runAutoPartnerScheduler(readyClient).catch(error => console.error('Autopartner startup check failed:', error.message));
+ runPendingTicketDeletions(readyClient, db).catch(error => console.error('Ticket deletion recovery failed:', error.message));
+ setInterval(() => runPendingTicketDeletions(readyClient, db).catch(error => console.error('Ticket deletion scheduler failed:', error.message)), 1000).unref();
  setInterval(() => {
   try { applyConfiguredPresence(); }
   catch (error) { console.error('Bot presence refresh failed:', error.message); }
@@ -160,7 +163,8 @@ client.on(Events.InteractionCreate, async interaction => {
    if (await handleAutoPartnerCommand(interaction)) return;
    if (await handleModerationCommand(interaction)) return;
    if (await handleCommunityCommand(interaction)) return;
-   if (await handleCodingChallengeCommand(interaction)) return;
+    if (await handleCodingChallengeCommand(interaction)) return;
+   if (await handleStaffApplicationCommand(interaction)) return;
    if (interaction.commandName === 'setup-server') {
     await handleServerSetup(interaction);
     return;
@@ -177,7 +181,7 @@ client.on(Events.InteractionCreate, async interaction => {
      .setTitle('Meta Bot | Command Guide')
      .setDescription('Helpful tools for the Meta Code community.')
      .addFields(
-      { name: 'Learning', value: '`/meta` — website, projects and account links\n`/lessons` — jump into coding lessons\n`/challenge today` — daily coding prompt\n`/challenge answer` — submit privately for XP\n`/challenge hint` and `/challenge stats` — help and progress\n`/remindme` — DM yourself a reminder\n`/randomcolor` — generate a color code', inline: false },
+       { name: 'Learning', value: '`/meta` — website, projects and account links\n`/lessons` — jump into coding lessons\n`/challenge today` — daily coding prompt\n`/challenge answer` — submit privately for XP\n`/challenge hint` and `/challenge stats` — help and progress\n`/remindme` — DM yourself a reminder\n`/randomcolor` — generate a color code', inline: false },
       { name: 'Community', value: '`/poll` — create a reaction poll\n`/suggest` — share an idea\n`/coinflip` — flip a coin\n`/roll` — random number\n`/choose` — choose from a list\n`/8ball` — playful answer\n`/serverinfo` — server details\n`/userinfo` — member details\n`/ping` — check bot status\n`/membercount` — server member totals\n`/avatar` — view an avatar\n`/roleinfo` — inspect a role\n`/thread` — start a discussion\n`/topic` — update a channel topic (staff)', inline: false },
       { name: 'Moderation', value: '`/warn` and `/warnings` — record and review warnings\n`/timeout` and `/untimeout` — manage member timeouts\n`/purge` — delete up to 100 recent messages (staff permissions required)', inline: false },
       { name: 'Administrator', value: '`/announce` — post an official announcement (administrators only)\n`/embed` — post a formatted announcement\n`/lock`, `/unlock`, `/slowmode` — manage a text channel', inline: false },
@@ -400,15 +404,9 @@ client.on(Events.InteractionCreate, async interaction => {
    else if (interaction.commandName === 'ping') await interaction.reply({ content: 'Meta bot is online ✅', flags: MessageFlags.Ephemeral });
    else if (interaction.commandName === 'lessons') await interaction.reply({ content: `Start learning: ${siteUrl}/play`, flags: MessageFlags.Ephemeral });
    else if (interaction.commandName === 'meta') await interaction.reply({ content: `Welcome to Meta CodeLearn!\nWebsite: ${siteUrl}\nLessons: ${siteUrl}/play\nProjects: ${siteUrl}/projects\nAccount: ${siteUrl}/account`, flags: MessageFlags.Ephemeral });
-   else if (interaction.commandName === 'setup-applications') {
-    if (!interaction.inGuild() || !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) { await interaction.reply({ content: 'Only server administrators can post this panel.', flags: MessageFlags.Ephemeral }); return; }
-    const embed = new EmbedBuilder().setColor(0x5865F2).setTitle('Meta CodeLearn | Staff Applications').setDescription('Want to help Meta CodeLearn grow? We are looking for friendly, responsible people to support our community.\n\n**Available areas**\n• Community Moderator\n• Support Team\n• Coding Helper\n\n**How it works**\nClick **Apply for Staff** to begin privately through Discord DMs. Keep your DMs open so the bot can contact you.').setFooter({ text: 'Meta CodeLearn • Staff Recruitment' });
-    const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('staff_apply_start').setLabel('Apply for Staff').setEmoji('📋').setStyle(ButtonStyle.Primary));
-    await interaction.channel.send({ embeds: [embed], components: [row] });
-    await interaction.reply({ content: 'Staff application panel posted.', flags: MessageFlags.Ephemeral });
-   }
    return;
   }
+    if (await handleStaffApplicationComponent(interaction)) return;
     if (await handleCommunityComponent(interaction)) return;
     if (
       interaction.isButton() &&
@@ -422,21 +420,55 @@ client.on(Events.InteractionCreate, async interaction => {
       (interaction.customId === 'ticket_create' ||
        interaction.customId === 'ticket_category_select' ||
        interaction.customId.startsWith('ticket_category_button_') ||
-       interaction.customId.startsWith('ticket_form_submit_'))
+       interaction.customId.startsWith('ticket_form_submit_') ||
+       interaction.customId.startsWith('ticket_close_'))
     ) {
       await handleTicketButton(interaction, db);
       return;
     }
-  if (interaction.isButton() && interaction.customId === 'staff_apply_start') {
-   try { await interaction.user.send('Welcome to Meta CodeLearn staff recruitment! 📋\n\nYou started the staff application process. The private questionnaire and submission workflow are the next setup step. Please keep your DMs open.'); await interaction.reply({ content: 'I sent you a DM. Check your Discord messages.', flags: MessageFlags.Ephemeral }); }
-   catch { await interaction.reply({ content: 'I could not DM you. Please enable DMs from server members and try again.', flags: MessageFlags.Ephemeral }); }
-  }
  } catch (error) {
   console.error('Interaction failed:', error.message);
   if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) await interaction.reply({ content: 'Something went wrong. Please try again later.', flags: MessageFlags.Ephemeral }).catch(() => {});
  }
 });
 handleCommunityEvents(client);
+let processingWebsiteSetups = false;
+async function processWebsiteSetups() {
+ if (processingWebsiteSetups || !client.isReady()) return;
+ processingWebsiteSetups = true;
+ try {
+  const pending = db.prepare("SELECT * FROM bot_setup_outbox WHERE status = 'pending' ORDER BY id LIMIT 2").all();
+  for (const item of pending) {
+   try {
+    const homeGuildId = String(process.env.META_HOME_GUILD_ID || process.env.DISCORD_GUILD_ID || '').trim();
+    if (!homeGuildId || item.guild_id !== homeGuildId) throw new Error('This job is not for the configured Meta home server.');
+    const guild = await client.guilds.fetch(homeGuildId);
+    const template = JSON.parse(item.template_json);
+    let result;
+    if (item.action === 'apply') {
+      result = await applyServerTemplate(guild, template, {
+        deleteUnlisted: true,
+        expectedFingerprint: item.confirmation_hash
+      });
+      result.mode = 'applied';
+    } else {
+      result = await previewServerTemplate(guild, template);
+      result.mode = 'preview';
+    }
+    db.prepare("UPDATE bot_setup_outbox SET status = 'applied', result_json = ?, error = NULL, completed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'")
+      .run(JSON.stringify(result), item.id);
+    console.log('Website setup job completed:', item.id, result.mode);
+   } catch (error) {
+    db.prepare("UPDATE bot_setup_outbox SET status = 'failed', error = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'")
+      .run(String(error?.message || 'Setup failed').slice(0, 1000), item.id);
+    console.error('Website setup publish failed:', error?.message || error);
+   }
+  }
+ } catch (error) { console.error('Website setup queue check failed:', error?.message || error); }
+ finally { processingWebsiteSetups = false; }
+}
+setInterval(() => { void processWebsiteSetups(); }, 2000).unref();
+
 let processingWebsiteMessages = false;
 async function processWebsiteMessages() {
  if (processingWebsiteMessages || !client.isReady()) return;

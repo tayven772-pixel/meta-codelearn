@@ -52,6 +52,9 @@ jobs:
           node --check api/auth/discord.js
           node --check api/auth/callback.js
           node --check discord-bot/src/index.js
+          node --check discord-bot/src/lib/tickets.js
+          node --check discord-bot/src/lib/ticket-commands.js
+          node --check discord-bot/src/lib/tickets.js
 
       - name: Build production website
         run: npm run build
@@ -94,6 +97,8 @@ jobs:
           scp -P "$VPS_SSH_PORT" -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes lib/discord-auth.js "$VPS_USER@$VPS_HOST:/tmp/meta-codelearn-discord-auth-lib-$DEPLOY_SHA.js"
           scp -P "$VPS_SSH_PORT" -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes discord-bot/src/index.js "$VPS_USER@$VPS_HOST:/tmp/meta-codelearn-bot-index-$DEPLOY_SHA.js"
           scp -P "$VPS_SSH_PORT" -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes discord-bot/src/lib/database.js "$VPS_USER@$VPS_HOST:/tmp/meta-codelearn-bot-database-$DEPLOY_SHA.js"
+          scp -P "$VPS_SSH_PORT" -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes discord-bot/src/lib/tickets.js "$VPS_USER@$VPS_HOST:/tmp/meta-codelearn-bot-tickets-$DEPLOY_SHA.js"
+          scp -P "$VPS_SSH_PORT" -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes discord-bot/src/lib/ticket-commands.js "$VPS_USER@$VPS_HOST:/tmp/meta-codelearn-bot-ticket-commands-$DEPLOY_SHA.js"
 
       - name: Back up and publish site
         env:
@@ -116,12 +121,16 @@ jobs:
           DISCORD_AUTH_LIB_STAGE="/tmp/meta-codelearn-discord-auth-lib-$DEPLOY_SHA.js"
           BOT_INDEX_STAGE="/tmp/meta-codelearn-bot-index-$DEPLOY_SHA.js"
           BOT_DATABASE_STAGE="/tmp/meta-codelearn-bot-database-$DEPLOY_SHA.js"
+          BOT_TICKETS_STAGE="/tmp/meta-codelearn-bot-tickets-$DEPLOY_SHA.js"
+          BOT_TICKET_COMMANDS_STAGE="/tmp/meta-codelearn-bot-ticket-commands-$DEPLOY_SHA.js"
           test -s "$AUTH_STAGE"
           test -s "$DISCORD_START_STAGE"
           test -s "$DISCORD_CALLBACK_STAGE"
           test -s "$DISCORD_AUTH_LIB_STAGE"
           test -s "$BOT_INDEX_STAGE"
           test -s "$BOT_DATABASE_STAGE"
+          test -s "$BOT_TICKETS_STAGE"
+          test -s "$BOT_TICKET_COMMANDS_STAGE"
           BACKUP="/var/www/html.backup-$DEPLOY_SHA-$(date +%Y%m%d-%H%M%S)"
           AUTH_BACKUP="/opt/meta-codelearn/server/auth.js.backup-$DEPLOY_SHA"
           DISCORD_START_BACKUP="/opt/meta-codelearn/api/auth/discord.js.backup-$DEPLOY_SHA"
@@ -129,6 +138,8 @@ jobs:
           DISCORD_AUTH_LIB_BACKUP="/opt/meta-codelearn/lib/discord-auth.js.backup-$DEPLOY_SHA"
           BOT_INDEX_BACKUP="/opt/meta-codelearn/discord-bot/src/index.js.backup-$DEPLOY_SHA"
           BOT_DATABASE_BACKUP="/opt/meta-codelearn/discord-bot/src/lib/database.js.backup-$DEPLOY_SHA"
+          BOT_TICKETS_BACKUP="/opt/meta-codelearn/discord-bot/src/lib/tickets.js.backup-$DEPLOY_SHA"
+          BOT_TICKET_COMMANDS_BACKUP="/opt/meta-codelearn/discord-bot/src/lib/ticket-commands.js.backup-$DEPLOY_SHA"
           NGINX_SNIPPET="/etc/nginx/snippets/meta-codelearn-auth.conf"
           NGINX_BACKUP="$NGINX_SNIPPET.backup-$DEPLOY_SHA"
           sudo -n cp -a /var/www/html "$BACKUP"
@@ -138,6 +149,8 @@ jobs:
           sudo -n cp -a /opt/meta-codelearn/lib/discord-auth.js "$DISCORD_AUTH_LIB_BACKUP"
           sudo -n cp -a /opt/meta-codelearn/discord-bot/src/index.js "$BOT_INDEX_BACKUP"
           sudo -n cp -a /opt/meta-codelearn/discord-bot/src/lib/database.js "$BOT_DATABASE_BACKUP"
+          sudo -n cp -a /opt/meta-codelearn/discord-bot/src/lib/tickets.js "$BOT_TICKETS_BACKUP"
+          sudo -n cp -a /opt/meta-codelearn/discord-bot/src/lib/ticket-commands.js "$BOT_TICKET_COMMANDS_BACKUP"
           sudo -n cp -a "$NGINX_SNIPPET" "$NGINX_BACKUP"
           if ! sudo -n grep -Fq 'location = /api/auth/content' "$NGINX_SNIPPET"; then
             sudo -n tee -a "$NGINX_SNIPPET" >/dev/null <<'NGINX'
@@ -216,6 +229,8 @@ jobs:
           sudo -n cp -a "$DISCORD_AUTH_LIB_STAGE" /opt/meta-codelearn/lib/discord-auth.js
           sudo -n cp -a "$BOT_INDEX_STAGE" /opt/meta-codelearn/discord-bot/src/index.js
           sudo -n cp -a "$BOT_DATABASE_STAGE" /opt/meta-codelearn/discord-bot/src/lib/database.js
+          sudo -n cp -a "$BOT_TICKETS_STAGE" /opt/meta-codelearn/discord-bot/src/lib/tickets.js
+          sudo -n cp -a "$BOT_TICKET_COMMANDS_STAGE" /opt/meta-codelearn/discord-bot/src/lib/ticket-commands.js
           # Database permissions are configured once on the VPS. Do not change ownership
           # during every deployment because the deploy account is not authorized to do so.
           sudo -n nginx -t
@@ -266,6 +281,6 @@ jobs:
             echo "WARNING: website and settings API deployed, but sudo cannot restart meta-codelearn-discord.service. Bot code is staged on the VPS; grant the deploy user permission to restart this service to apply bot code changes."
           fi
           rm -rf "$STAGING"
-          rm -f "$AUTH_STAGE" "$DISCORD_START_STAGE" "$DISCORD_CALLBACK_STAGE" "$DISCORD_AUTH_LIB_STAGE" "$BOT_INDEX_STAGE" "$BOT_DATABASE_STAGE"
-          echo "Website, auth server, Discord bot entrypoint, Discord OAuth routes, and versioned Discord session library deployed. Website backup: $BACKUP; auth backup: $AUTH_BACKUP; Discord route backups: $DISCORD_START_BACKUP, $DISCORD_CALLBACK_BACKUP; session library backup: $DISCORD_AUTH_LIB_BACKUP; Nginx snippet backup: $NGINX_BACKUP"
+          rm -f "$AUTH_STAGE" "$DISCORD_START_STAGE" "$DISCORD_CALLBACK_STAGE" "$DISCORD_AUTH_LIB_STAGE" "$BOT_INDEX_STAGE" "$BOT_DATABASE_STAGE" "$BOT_TICKETS_STAGE" "$BOT_TICKET_COMMANDS_STAGE"
+          echo "Website, auth server, Discord bot entrypoint, Discord OAuth routes, and versioned Discord session library, ticket handler, and ticket commands deployed. Website backup: $BACKUP; auth backup: $AUTH_BACKUP; Discord route backups: $DISCORD_START_BACKUP, $DISCORD_CALLBACK_BACKUP; session library backup: $DISCORD_AUTH_LIB_BACKUP; Nginx snippet backup: $NGINX_BACKUP"
           REMOTE
