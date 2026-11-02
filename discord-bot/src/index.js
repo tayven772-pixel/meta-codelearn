@@ -8,6 +8,7 @@ import { db, getSetting } from './lib/database.js';
 import { moderationCommands, handleModerationCommand } from './lib/moderation.js';
 import { autoPartnerCommands, handleAutoPartnerCommand, runAutoPartnerScheduler } from './lib/autopartner.js';
 import { communityCommands, handleCommunityCommand, handleCommunityComponent, handleCommunityEvents, runCommunityScheduler } from './lib/community-features.js';
+import { codingChallengeCommand, handleCodingChallengeCommand } from './lib/coding-challenges.js';
 import { ActionRowBuilder, ActivityType, ButtonBuilder, ButtonStyle, Client, EmbedBuilder, Events, GatewayIntentBits, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 const siteUrl = (process.env.META_SITE_URL || 'https://metasupportcom.dbm.shared-servers.com').replace(/\/$/, '');
 const token = process.env.DISCORD_BOT_TOKEN;
@@ -18,6 +19,7 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 const commands = [
  new SlashCommandBuilder().setName('meta').setDescription('Open Meta CodeLearn and explore coding lessons'),
  new SlashCommandBuilder().setName('lessons').setDescription('Get Meta CodeLearn learning links'),
+ codingChallengeCommand,
  new SlashCommandBuilder().setName('ping').setDescription('Check whether the Meta bot is online'),
  new SlashCommandBuilder().setName('membercount').setDescription('Show this server’s member count'),
  new SlashCommandBuilder().setName('avatar').setDescription('Show a member’s avatar')
@@ -161,6 +163,7 @@ client.on(Events.InteractionCreate, async interaction => {
    if (await handleAutoPartnerCommand(interaction)) return;
    if (await handleModerationCommand(interaction)) return;
    if (await handleCommunityCommand(interaction)) return;
+    if (await handleCodingChallengeCommand(interaction)) return;
    if (await handleStaffApplicationCommand(interaction)) return;
    if (interaction.commandName === 'setup-server') {
     await handleServerSetup(interaction);
@@ -178,7 +181,7 @@ client.on(Events.InteractionCreate, async interaction => {
      .setTitle('Meta Bot | Command Guide')
      .setDescription('Helpful tools for the Meta Code community.')
      .addFields(
-      { name: 'Learning', value: '`/meta` — website, projects and account links\n`/lessons` — jump into coding lessons\n`/remindme` — DM yourself a reminder\n`/randomcolor` — generate a color code', inline: false },
+       { name: 'Learning', value: '`/meta` — website, projects and account links\n`/lessons` — jump into coding lessons\n`/challenge today` — daily coding prompt\n`/challenge answer` — submit privately for XP\n`/challenge hint` and `/challenge stats` — help and progress\n`/remindme` — DM yourself a reminder\n`/randomcolor` — generate a color code', inline: false },
       { name: 'Community', value: '`/poll` — create a reaction poll\n`/suggest` — share an idea\n`/coinflip` — flip a coin\n`/roll` — random number\n`/choose` — choose from a list\n`/8ball` — playful answer\n`/serverinfo` — server details\n`/userinfo` — member details\n`/ping` — check bot status\n`/membercount` — server member totals\n`/avatar` — view an avatar\n`/roleinfo` — inspect a role\n`/thread` — start a discussion\n`/topic` — update a channel topic (staff)', inline: false },
       { name: 'Moderation', value: '`/warn` and `/warnings` — record and review warnings\n`/timeout` and `/untimeout` — manage member timeouts\n`/purge` — delete up to 100 recent messages (staff permissions required)', inline: false },
       { name: 'Administrator', value: '`/announce` — post an official announcement (administrators only)\n`/embed` — post a formatted announcement\n`/lock`, `/unlock`, `/slowmode` — manage a text channel', inline: false },

@@ -15,6 +15,7 @@ This companion bot provides learning links, staff utilities, and community tools
 - `/8ball` — get a playful answer to a question
 - `/announce` — publish an official embed announcement (administrators only)
 - `/meta`, `/lessons`, `/ping` — learning links and bot status
+- `/challenge today`, `/challenge answer`, `/challenge hint`, `/challenge stats` — daily coding prompt, private answer checking, hints, and progress
 - `/ticket` and server/staff setup commands — additional tools, depending on configuration and permissions
 
 Polls and suggestions are posted in the channel where the command is used. Staff setup commands should only be used by trusted moderators or administrators.
@@ -64,6 +65,7 @@ The website has a private bot-owner page at `/bot-control`. It is protected by t
 ## Expanded non-AI community features
 
 The bot also includes:
+- Daily coding challenges selected by UTC date. Use `/challenge today` to post the prompt, `/challenge answer` to submit privately, `/challenge hint` for a hint, and `/challenge stats` to view solved days and streaks. A correct answer awards 25 XP once per UTC day; challenge completions also count toward `/level` and `/leaderboard`.
 - Welcome messages with `{user}`, `{server}`, and `{membercount}` placeholders (`/welcome-config`).
 - Automatic join roles (`/autorole`).
 - Server event logging for joins, departures, message deletions, and channel creation/deletion (`/logging`).
@@ -141,3 +143,7 @@ Publish first produces a live preview; it does not change Discord. The preview l
 `controlPanel.sections` controls which dashboard sections are shown; `title` and `description` update the dashboard heading. Supported sections: `setup`, `commands`, `responses`, `tickets`, `messages`, `community`, `autopartner`, and `applications`. The JSON settings blocks support `welcome`, `autopartner`, `applications`, and `tickets`. Names referenced by a setting must be present in the same template.
 
 The legacy `/setup-server` command remains non-destructive: it applies the saved template without deleting unlisted resources. Use the owner dashboard preview/confirm flow when you intend the server to match the JSON exactly.
+
+## Run bot tests
+
+From this folder, run `npm test` to verify daily challenge rotation, answer matching, streak calculation, and the existing bot test suite.
