@@ -115,6 +115,18 @@ export async function handleStaffApplicationCommand(interaction) {
 }
 
 const activeApplicationDMs = new Set();
+const APPLICATION_EMBED_COLOR = 0x5865F2;
+function applicationDMEmbed(title, description, color = APPLICATION_EMBED_COLOR) {
+  return new EmbedBuilder()
+    .setColor(color)
+    .setTitle(title)
+    .setDescription(description)
+    .setFooter({ text: 'Meta Code • Staff Applications' })
+    .setTimestamp();
+}
+async function sendApplicationDM(dm, title, description, color) {
+  return dm.send({ embeds: [applicationDMEmbed(title, description, color)] });
+}
 
 async function collectStaffApplicationByDM(interaction, dm, staffChannel) {
   const prompts = [
@@ -127,7 +139,7 @@ async function collectStaffApplicationByDM(interaction, dm, staffChannel) {
   const answers = {};
   try {
     for (const [key, prompt, maxLength] of prompts) {
-      await dm.send(prompt + '\\nReply with your answer. Send **cancel** at any time to stop.');
+      await sendApplicationDM(dm, prompt, 'Reply to this message with your answer. Send **cancel** at any time to stop.');
       const collected = await dm.awaitMessages({
         filter: message => message.author.id === interaction.user.id && !message.author.bot,
         max: 1,
@@ -136,11 +148,11 @@ async function collectStaffApplicationByDM(interaction, dm, staffChannel) {
       });
       const answer = collected.first()?.content?.trim() || '';
       if (answer.toLowerCase() === 'cancel') {
-        await dm.send('Your Meta Code staff application was cancelled.');
+        await sendApplicationDM(dm, 'Application cancelled', 'Your Meta Code staff application was cancelled.', 0xED4245);
         return;
       }
       if (!answer || answer.length > maxLength) {
-        await dm.send('That answer must be between 1 and ' + maxLength + ' characters. Please start again by clicking **Apply for Staff** in the server.');
+        await sendApplicationDM(dm, 'Answer not accepted', 'Your answer must be between 1 and ' + maxLength + ' characters. Please start again by clicking **Apply for Staff** in the server.', 0xED4245);
         return;
       }
       answers[key] = answer;
@@ -149,7 +161,7 @@ async function collectStaffApplicationByDM(interaction, dm, staffChannel) {
     const existing = db.prepare("SELECT id FROM staff_applications WHERE guild_id = ? AND user_id = ? AND status = 'pending'")
       .get(interaction.guildId, interaction.user.id);
     if (existing) {
-      await dm.send('You already have a pending application (#' + existing.id + '). Please wait for the team to review it.');
+      await sendApplicationDM(dm, 'Application already pending', 'You already have a pending application (#' + existing.id + '). Please wait for the team to review it.');
       return;
     }
 
@@ -171,13 +183,13 @@ async function collectStaffApplicationByDM(interaction, dm, staffChannel) {
       db.prepare("UPDATE staff_applications SET status = 'rejected', reviewed_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
       throw error;
     }
-    await dm.send('✅ Your Meta Code staff application was submitted successfully. The team will review it.');
+    await sendApplicationDM(dm, 'Application submitted', '✅ Your Meta Code staff application was submitted successfully. The team will review it.', 0x57F287);
   } catch (error) {
     if (error?.code === 'CollectorTimeout') {
-      await dm.send('Your application timed out because no answer was received within 5 minutes. Click **Apply for Staff** to start again.').catch(() => {});
+      await sendApplicationDM(dm, 'Application timed out', 'No answer was received within 5 minutes. Click **Apply for Staff** to start again.', 0xED4245).catch(() => {});
     } else {
       console.error('[Applications] DM application failed:', error?.message || error);
-      await dm.send('I could not complete your application. Please contact a server administrator.').catch(() => {});
+      await sendApplicationDM(dm, 'Application error', 'I could not complete your application. Please contact a server administrator.', 0xED4245).catch(() => {});
     }
   } finally {
     activeApplicationDMs.delete(interaction.user.id);
