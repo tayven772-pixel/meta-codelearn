@@ -3133,3 +3133,95 @@ body {
 @media (max-width: 700px) {
   .topbar { background: rgb(244 250 246 / .97); }
 }
+
+
+/* Christmas makeover: strong holiday colours and a festive home hero. */
+:root {
+  --background: 150 28% 96%;
+  --foreground: 155 32% 14%;
+  --primary: 151 67% 25%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 62% 94%;
+  --secondary-foreground: 0 62% 30%;
+  --accent: 43 91% 66%;
+}
+body {
+  background:
+    radial-gradient(circle at 12px 12px, rgb(190 30 45 / .14) 1.5px, transparent 2px) 0 0 / 34px 34px,
+    linear-gradient(135deg, #f4faf5 0%, #fffaf0 52%, #f8eeee 100%);
+}
+.topbar {
+  border-bottom: 3px solid #b52b3a;
+  background: rgb(12 69 48 / .97);
+  color: #fffdf5;
+  box-shadow: 0 4px 18px rgb(12 69 48 / .16);
+}
+.topbar .brand, .topbar .top-links, .topbar .top-progress,
+.topbar .account-name, .topbar .account-signin, .topbar .account-signout { color: #fffdf5; }
+.topbar .brand-mark, .topbar .account-join { background: #b52b3a; color: white; }
+.topbar .theme-toggle { border-color: #d5b66a; background: #fff8e8; color: #174b35; }
+.top-links a:hover { color: #f2cf79; }
+.hero {
+  position: relative;
+  margin-top: 22px;
+  padding: 66px 30px 60px;
+  overflow: hidden;
+  border: 1px solid #d8e5d9;
+  border-top: 7px solid #b52b3a;
+  border-radius: 20px;
+  background: radial-gradient(circle at 90% 15%, white 0 2px, transparent 3px) 0 0 / 28px 28px,
+    linear-gradient(115deg, #e3f1e6, #fff9e9 58%, #f8e5e5);
+  box-shadow: 0 18px 45px rgb(18 70 47 / .09);
+}
+.hero::after {
+  content: "✦  ❄  ✦  ❄  ✦";
+  position: absolute; top: 15px; right: 22px;
+  color: #b52b3a; font-size: 19px; letter-spacing: 9px;
+  pointer-events: none;
+}
+.eyebrow, .section-kicker, .pathway-intro .section-kicker { color: #a51f32; }
+.eyebrow-line { background: #a51f32; }
+.hero h1 em, .auth-copy h1 em { color: #b52b3a; }
+.button-primary, .account-join { background: #14633f; color: white; }
+.button-primary:hover { background: #0c472e; }
+.button-secondary { background: #b52b3a; color: white; }
+.language-card, .play-card, .play-hub-card, .published-content-card,
+.progression-section, .project-list-section {
+  border-color: #d5e2d5;
+  box-shadow: 0 8px 24px rgb(20 80 51 / .055);
+}
+.language-card:hover, .play-card:hover, .play-hub-card:hover { border-color: #b52b3a; }
+.pathway, .library-note, .play-note { background: linear-gradient(120deg, #e2f0e5, #fff4e3); }
+.atlas-card {
+  border-color: #174b35;
+  background: linear-gradient(145deg, #123e2c, #1d5b3e);
+  box-shadow: 14px 18px 0 #b52b3a, 0 28px 60px rgb(18 62 44 / .2);
+}
+.visual-stamp { background: #f2d17d; color: #174b35; }
+.bottom-workspace-nav { border-top: 2px solid #b52b3a; background: rgb(12 69 48 / .97); }
+.bottom-workspace-button { color: #e6f1e8; }
+.bottom-workspace-button.active { color: #f5d47e; }
+.holiday-banner {
+  display: flex; min-height: 48px; align-items: center; justify-content: center;
+  gap: 12px; padding: 10px 18px; overflow: hidden;
+  background: linear-gradient(90deg, #0d4b32, #176b45 50%, #0d4b32);
+  color: #fff9e9; text-align: center;
+  font: 700 11px/1.4 var(--app-font-sans); letter-spacing: .045em;
+}
+.holiday-banner::before, .holiday-banner::after {
+  content: "✦  ❄  ✦  ❄  ✦"; color: #f4d37d; letter-spacing: 7px; white-space: nowrap;
+}
+.holiday-banner strong { color: #f4d37d; }
+.holiday-banner .holiday-badge {
+  display: inline-grid; width: 27px; height: 27px; place-items: center;
+  border-radius: 50%; background: #b52b3a; color: white; font-size: 15px;
+}
+:root[data-theme='dark'] body { background: radial-gradient(circle at 12px 12px, rgb(244 211 125 / .10) 1.5px, transparent 2px) 0 0 / 34px 34px, #101b18; }
+:root[data-theme='dark'] .hero { border-color: #315744; background: linear-gradient(115deg, #183d2c, #243c31 58%, #47252b); }
+:root[data-theme='dark'] .hero h1, :root[data-theme='dark'] .section-heading h2 { color: #f6f1df; }
+@media (max-width: 650px) {
+  .holiday-banner { min-height: 44px; gap: 7px; padding: 8px 10px; font-size: 9px; }
+  .holiday-banner::before, .holiday-banner::after { content: "✦"; letter-spacing: 0; }
+  .hero { margin-top: 12px; padding: 48px 18px 36px; border-radius: 14px; }
+  .hero::after { top: 10px; right: 12px; font-size: 14px; }
+}
