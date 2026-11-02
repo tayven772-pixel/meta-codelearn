@@ -48,7 +48,7 @@ jobs:
                   "color": 5793266,
                   "fields": [
                       {"name": "Update", "value": title or "Website update", "inline": False},
-                      {"name": "Website", "value": os.environ["SITE_URL"], "inline": True},
+                      {"name": "Website", "value": f"**[Website]({os.environ['SITE_URL']})**", "inline": True},
                       {"name": "Version / Previous update", "value": f"[{os.environ['SHORT_SHA']}]({os.environ['COMMIT_URL']})", "inline": True}
                   ],
                   "footer": {"text": "Meta Code • Automated deployment notice"}
