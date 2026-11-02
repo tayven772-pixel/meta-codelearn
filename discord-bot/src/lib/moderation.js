@@ -27,6 +27,20 @@ const moderationCommands = [
     .setDescription('Create and enable the channel that softbans members who post in it')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
   new SlashCommandBuilder()
+    .setName('allow-bot')
+    .setDescription('Approve a bot account so it can stay in this server')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addUserOption(option => option.setName('bot').setDescription('Bot account to approve').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('remove-allowed-bot')
+    .setDescription('Remove a bot account from the approved list')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addUserOption(option => option.setName('bot').setDescription('Bot account to remove from the approved list').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('list-allowed-bots')
+    .setDescription('Show bot accounts approved to stay in this server')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+  new SlashCommandBuilder()
     .setName('disable-softban-channel')
     .setDescription('Disable automatic softbans for the configured channel')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
@@ -87,13 +101,37 @@ async function fetchTarget(interaction) {
 }
 
 export async function handleModerationCommand(interaction) {
-  if (!['warn', 'warnings', 'timeout', 'untimeout', 'purge', 'setup-softban-channel', 'disable-softban-channel'].includes(interaction.commandName)) return false;
+  if (!['warn', 'warnings', 'timeout', 'untimeout', 'purge', 'setup-softban-channel', 'disable-softban-channel', 'allow-bot', 'remove-allowed-bot', 'list-allowed-bots'].includes(interaction.commandName)) return false;
   if (!interaction.inGuild()) {
     await interaction.reply({ content: 'Use moderation commands inside a server.', flags: MessageFlags.Ephemeral });
     return true;
   }
 
   const command = interaction.commandName;
+  if (['allow-bot', 'remove-allowed-bot', 'list-allowed-bots'].includes(command)) {
+    if (!hasPermission(interaction, PermissionFlagsBits.ManageGuild)) {
+      await interaction.reply({ content: 'You need Manage Server permission to manage the approved bot list.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    if (command === 'list-allowed-bots') {
+      const ids = db.prepare('SELECT user_id FROM approved_server_bots WHERE guild_id = ? ORDER BY user_id').all(interaction.guildId);
+      await interaction.reply({ content: ids.length ? '**Approved bots:**\\n' + ids.map(row => '• <@' + row.user_id + '> (ID: ' + row.user_id + ')').join('\\n') : 'No bots have been approved yet.', flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
+      return true;
+    }
+    const botUser = interaction.options.getUser('bot', true);
+    if (command === 'allow-bot') {
+      if (!botUser.bot) {
+        await interaction.reply({ content: 'That account is not a bot account.', flags: MessageFlags.Ephemeral });
+        return true;
+      }
+      db.prepare('INSERT OR IGNORE INTO approved_server_bots (guild_id, user_id, approved_by) VALUES (?, ?, ?)').run(interaction.guildId, botUser.id, interaction.user.id);
+      await interaction.reply({ content: '✅ Approved **' + botUser.username + '**. This bot is now on the allowlist for this server.', flags: MessageFlags.Ephemeral });
+    } else {
+      db.prepare('DELETE FROM approved_server_bots WHERE guild_id = ? AND user_id = ?').run(interaction.guildId, botUser.id);
+      await interaction.reply({ content: 'Removed **' + botUser.username + '** from the approved list. If it joins again, Meta will kick it.', flags: MessageFlags.Ephemeral });
+    }
+    return true;
+  }
   if (command === 'setup-softban-channel') {
     if (!hasPermission(interaction, PermissionFlagsBits.ManageGuild)) {
       await interaction.reply({ content: 'You need Manage Server permission to configure this.', flags: MessageFlags.Ephemeral });
@@ -240,6 +278,33 @@ export async function handleModerationCommand(interaction) {
   }
 
   return false;
+}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS approved_server_bots (
+    guild_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    approved_by TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (guild_id, user_id)
+  );
+`);
+
+export async function handleUnapprovedBotJoin(member) {
+  if (!member?.guild || !member.user?.bot) return;
+  const approved = db.prepare('SELECT 1 FROM approved_server_bots WHERE guild_id = ? AND user_id = ?').get(member.guild.id, member.id);
+  if (approved) return;
+  const botMember = member.guild.members.me;
+  if (!botMember?.permissions.has(PermissionFlagsBits.KickMembers) || !member.kickable) {
+    console.error('[Moderation] Could not kick unapproved bot; check Kick Members permission and role hierarchy.', member.id);
+    return;
+  }
+  try {
+    await member.kick('Meta Code security: bot is not on this server’s approved bot list');
+    console.log('[Moderation] Kicked unapproved bot account:', member.id, 'from', member.guild.id);
+  } catch (error) {
+    console.error('[Moderation] Failed to kick unapproved bot:', error?.message || error);
+  }
 }
 
 export async function handleSoftbanMessage(message) {
