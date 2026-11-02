@@ -6,7 +6,7 @@ import { handleTicketCommand, handleTicketButton, handleTicketPanelCommand, runP
 import { staffApplicationCommands, handleStaffApplicationCommand, handleStaffApplicationComponent } from './lib/applications.js';
 import { applyServerTemplate, previewServerTemplate, handleServerSetup, handleServerSetupButton } from './lib/server-setup.js';
 import { db, getSetting } from './lib/database.js';
-import { moderationCommands, handleModerationCommand } from './lib/moderation.js';
+import { moderationCommands, handleModerationCommand, handleSoftbanMessage } from './lib/moderation.js';
 import { autoPartnerCommands, handleAutoPartnerCommand, runAutoPartnerScheduler } from './lib/autopartner.js';
 import { communityCommands, handleCommunityCommand, handleCommunityComponent, handleCommunityEvents, runCommunityScheduler } from './lib/community-features.js';
 import { ActionRowBuilder, ActivityType, ButtonBuilder, ButtonStyle, Client, EmbedBuilder, Events, GatewayIntentBits, MessageFlags, Partials, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
@@ -491,8 +491,9 @@ const recentDiscordMessages = new Map();
 const spamAlertCooldown = new Map();
 const SPAM_WINDOW_MS = 10000;
 const SPAM_THRESHOLD = 7;
-client.on(Events.MessageCreate, message => {
+client.on(Events.MessageCreate, async message => {
  if (!message.guild || message.author?.bot || message.webhookId) return;
+ await handleSoftbanMessage(message);
  const now = Date.now();
  const key = `${message.guild.id}:${message.author.id}`;
  const timestamps = (recentDiscordMessages.get(key) || []).filter(ts => now - ts < SPAM_WINDOW_MS);
