@@ -22,7 +22,6 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_SITE_WEBHOOK_URL }}
           SITE_URL: https://metacodework.dbm.shared-servers.com
-          CONTROL_URL: https://metacodework.dbm.shared-servers.com/bot-control
           COMMIT_SHA: ${{ github.event.workflow_run.head_sha || 'v1.0.0' }}
           COMMIT_TITLE: "${{ github.event.workflow_run.head_commit.message || 'TEST - Previous update: ticket deletion scheduler fix (PR #56), version 1.0.0' }}"
           COMMIT_URL: ${{ github.event.workflow_run.head_commit.url || 'https://github.com/tayven772-pixel/meta-codelearn/pull/56' }}
@@ -50,7 +49,6 @@ jobs:
                   "fields": [
                       {"name": "Update", "value": title or "Website update", "inline": False},
                       {"name": "Website", "value": os.environ["SITE_URL"], "inline": True},
-                      {"name": "Bot Control", "value": os.environ["CONTROL_URL"], "inline": True},
                       {"name": "Version / Previous update", "value": f"[{os.environ['SHORT_SHA']}]({os.environ['COMMIT_URL']})", "inline": True}
                   ],
                   "footer": {"text": "Meta Code • Automated deployment notice"}
