@@ -305,6 +305,17 @@ function getBotDb() {
   try { connection.exec("ALTER TABLE bot_setup_outbox ADD COLUMN action TEXT NOT NULL DEFAULT 'preview'"); } catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
   try { connection.exec('ALTER TABLE bot_setup_outbox ADD COLUMN confirmation_hash TEXT'); } catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
   try { connection.exec('ALTER TABLE autopartner_partners ADD COLUMN member_count INTEGER'); } catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
+  connection.exec(`CREATE TABLE IF NOT EXISTS security_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  subject_hash TEXT,
+  detail TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','alerted','ignored')),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS security_events_pending ON security_events(status,id);
+`);
   botDb = connection;
   return botDb;
 }
@@ -321,6 +332,35 @@ function requireBotOwner(req, res) {
   // Use the verified Meta website owner account. Discord OAuth is not required.
   return requireAdmin(req, res);
 }
+
+
+// Honeypot paths: deliberately fake endpoints commonly probed by scanners.
+// Store only a keyed IP digest and limited request metadata; never request or log credentials.
+getBotDb().exec(`CREATE TABLE IF NOT EXISTS security_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  subject_hash TEXT,
+  detail TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','alerted','ignored')),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS security_events_pending ON security_events(status,id);
+`);
+const honeypotPaths = new Set(['/wp-admin', '/wp-login.php', '/phpmyadmin', '/.env', '/admin-login', '/administrator']);
+function recordSecurityEvent(source, eventType, subjectHash, detail) {
+  getBotDb().prepare('INSERT INTO security_events (source,event_type,subject_hash,detail) VALUES (?,?,?,?)')
+    .run(source, eventType, subjectHash || null, String(detail || '').slice(0, 300));
+}
+app.use((req, res, next) => {
+  const pathname = String(req.path || '').toLowerCase();
+  if (!honeypotPaths.has(pathname)) return next();
+  const clientIp = String(req.ip || req.socket?.remoteAddress || 'unknown');
+  const ipDigest = crypto.createHmac('sha256', process.env.AUTH_SECRET).update(clientIp).digest('hex').slice(0, 24);
+  recordSecurityEvent('website', 'honeypot_hit', ipDigest, `path=${pathname}; method=${req.method}; ua=${String(req.get('user-agent') || '').slice(0, 120)}`);
+  // Return a generic not-found response rather than confirming a decoy exists.
+  return res.status(404).json({ error: 'Not found.' });
+});
 
 function normalizeServerSetupTemplate(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
