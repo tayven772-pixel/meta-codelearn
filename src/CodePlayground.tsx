@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Code2, Download, Play, RotateCcw, Save, Sparkles } from 'lucide-react';
 import { Link } from 'wouter';
+import './code-playground.css';
 
 type EditorTab = 'html' | 'css' | 'js';
 
