@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   notify:
@@ -26,6 +27,10 @@ jobs:
           COMMIT_TITLE: "${{ github.event.workflow_run.head_commit.message || 'TEST - Previous update: ticket deletion scheduler fix (PR #56), version 1.0.0' }}"
           COMMIT_URL: ${{ github.event.workflow_run.head_commit.url || 'https://github.com/tayven772-pixel/meta-codelearn/pull/56' }}
           RUN_URL: ${{ github.event.workflow_run.html_url || github.server_url }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          DEPLOY_WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id || '' }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -eu
           if [ -z "${DISCORD_WEBHOOK_URL:-}" ]; then
@@ -37,6 +42,32 @@ jobs:
           export SHORT_SHA
           python3 - <<'PY'
           import json, os, urllib.request, urllib.error
+
+          # Send only after every third successful deployment workflow run.
+          # Manual workflow_dispatch remains available for testing.
+          if os.environ.get("EVENT_NAME") != "workflow_dispatch":
+              workflow_id = os.environ.get("DEPLOY_WORKFLOW_ID", "")
+              if not workflow_id:
+                  print("No deployment workflow ID found; skipping notification.")
+                  raise SystemExit(0)
+              api_url = (
+                  f"https://api.github.com/repos/{os.environ['REPO']}/actions/workflows/"
+                  f"{workflow_id}/runs?status=success&per_page=1"
+              )
+              api_request = urllib.request.Request(
+                  api_url,
+                  headers={
+                      "Accept": "application/vnd.github+json",
+                      "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                  },
+              )
+              with urllib.request.urlopen(api_request, timeout=15) as response:
+                  successful_runs = json.load(response).get("total_count", 0)
+              print(f"Successful deployment runs so far: {successful_runs}")
+              if successful_runs % 3 != 0:
+                  print("Not the third update yet; skipping Discord notification.")
+                  raise SystemExit(0)
 
           title = os.environ.get("COMMIT_TITLE", "Website update").splitlines()[0][:240]
           payload = {
