@@ -38,7 +38,12 @@ export default function GlobalSearch() {
     }
   }, [open]);
 
-  useEffect(() => setOpen(false), [location]);
+  useEffect(() => {
+    setOpen(false);
+    // Run after Wouter has committed the destination page so its layout cannot
+    // restore the previous page's scroll position over this reset.
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
+  }, [location]);
 
   const results = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -62,9 +67,6 @@ export default function GlobalSearch() {
   const goTo = (href: string) => {
     setOpen(false);
     setLocation(href);
-    // Wouter keeps the previous page's scroll offset during client-side navigation.
-    // Search results should always open the destination from the top.
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   };
 
   return (
