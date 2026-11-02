@@ -608,13 +608,17 @@ app.post('/api/auth/admin/bot-control/messages', async (req, res) => {
   if (!requireBotOwner(req, res)) return;
   const guildId = String(req.body?.guildId || getHomeGuildId()).trim();
   const channelId = String(req.body?.channelId || '').trim();
+  const format = req.body?.format === 'embed' ? 'embed' : 'plain';
   const content = typeof req.body?.content === 'string' ? req.body.content.trim() : '';
+  const embed = req.body?.embed && typeof req.body.embed === 'object' ? req.body.embed : {};
   if (!validGuildId(guildId)) return res.status(400).json({ error: 'Select a valid Discord server.' });
   if (!(await requireOwnedGuild(req, res, guildId))) return;
   if (!validGuildId(channelId)) return res.status(400).json({ error: 'Enter a valid Discord text channel ID.' });
-  if (!content || content.length > 2000) return res.status(400).json({ error: 'Message must contain 1–2000 characters.' });
+  if (format === 'plain' && (!content || content.length > 2000)) return res.status(400).json({ error: 'Message must contain 1–2000 characters.' });
+  if (format === 'embed' && (typeof embed.description !== 'string' || !embed.description.trim() || embed.description.length > 4000 || (typeof embed.title === 'string' && embed.title.length > 256) || !/^#[0-9a-fA-F]{6}$/.test(String(embed.color || '#5865F2')))) return res.status(400).json({ error: 'Provide a valid embed description, optional title, and hex color.' });
+  const queuedContent = format === 'embed' ? JSON.stringify({ __meta_code_embed: true, title: String(embed.title || '').trim(), description: embed.description.trim(), color: String(embed.color || '#5865F2') }) : content;
   try {
-    const result = getBotDb().prepare("INSERT INTO bot_message_outbox (guild_id, channel_id, content) VALUES (?, ?, ?)").run(guildId, channelId, content);
+    const result = getBotDb().prepare("INSERT INTO bot_message_outbox (guild_id, channel_id, content) VALUES (?, ?, ?)").run(guildId, channelId, queuedContent);
     return res.status(202).json({ queued: true, messageId: Number(result.lastInsertRowid) });
   } catch (error) {
     console.error('Bot message queue failed:', error?.message || error);
