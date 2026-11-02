@@ -3459,3 +3459,70 @@ body::after {
 :root[data-theme='dark'] .app-shell::after {
   background: linear-gradient(180deg, #f9fbfc 0%, #e9f1f4 68%, #dce8ed 100%);
 }
+
+
+/* Follow-up Christmas contrast fixes: make the whole dark UI unmistakably
+   evergreen/red, while preserving readable code-editor colors in light mode. */
+:root[data-theme='dark'] {
+  --background: 145 48% 5%;
+  --card: 145 42% 8%;
+  --card-foreground: 0 0% 97%;
+  --border: 145 38% 20%;
+  --primary: 145 72% 34%;
+  --secondary: 0 62% 30%;
+  --accent: 145 60% 24%;
+  --muted: 145 28% 14%;
+  --muted-foreground: 145 15% 76%;
+  --ring: 0 72% 48%;
+}
+:root[data-theme='dark'] body {
+  background:
+    radial-gradient(ellipse at 8% 0%, rgb(16 100 55 / .24), transparent 48%),
+    radial-gradient(ellipse at 95% 12%, rgb(130 20 35 / .18), transparent 42%),
+    hsl(var(--background));
+}
+:root[data-theme='dark'] .topbar,
+:root[data-theme='dark'] .bottom-nav,
+:root[data-theme='dark'] .mobile-nav-panel {
+  background: #061a10;
+  border-color: #174b2d;
+  color: #f3fff5;
+}
+:root[data-theme='dark'] .button-primary,
+:root[data-theme='dark'] .account-join {
+  background: #126b3c;
+  color: #f5fff7;
+  border-color: #25864e;
+}
+:root[data-theme='dark'] .button-secondary {
+  background: #741b2a;
+  color: #fff5f5;
+  border-color: #a33343;
+}
+:root[data-theme='dark'] .hero,
+:root[data-theme='dark'] .atlas-card,
+:root[data-theme='dark'] .lesson-card,
+:root[data-theme='dark'] .project-card,
+:root[data-theme='dark'] .playground-editor-panel,
+:root[data-theme='dark'] .playground-preview-panel {
+  background-color: #082719;
+  border-color: #1b5b36;
+  color: #f2fff5;
+}
+:root[data-theme='dark'] .holiday-banner {
+  background: linear-gradient(90deg, #071d12, #145b35 48%, #651b2b 72%, #071d12);
+  color: #fff;
+}
+
+/* The global light-theme black-text rule was overriding the editor's
+   intentional dark canvas and light monospace text. */
+:root:not([data-theme='dark']) .playground-code-input {
+  background: #101827 !important;
+  color: #e6edf8 !important;
+  caret-color: #8fb6ff !important;
+  -webkit-text-fill-color: #e6edf8 !important;
+}
+:root:not([data-theme='dark']) .playground-code-input::selection {
+  color: #ffffff;
+  background: #315b91;
+}
