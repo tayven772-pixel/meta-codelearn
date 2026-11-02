@@ -129,8 +129,8 @@ client.once(Events.ClientReady, async readyClient => {
  };
  applyConfiguredPresence();
  runAutoPartnerScheduler(readyClient).catch(error => console.error('Autopartner startup check failed:', error.message));
- runPendingTicketDeletions(readyClient).catch(error => console.error('Ticket deletion recovery failed:', error.message));
- setInterval(() => runPendingTicketDeletions(readyClient).catch(error => console.error('Ticket deletion scheduler failed:', error.message)), 1000).unref();
+ runPendingTicketDeletions(readyClient, db).catch(error => console.error('Ticket deletion recovery failed:', error.message));
+ setInterval(() => runPendingTicketDeletions(readyClient, db).catch(error => console.error('Ticket deletion scheduler failed:', error.message)), 1000).unref();
  setInterval(() => {
   try { applyConfiguredPresence(); }
   catch (error) { console.error('Bot presence refresh failed:', error.message); }
