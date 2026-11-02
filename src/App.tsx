@@ -692,6 +692,12 @@ function AppShell({ children, showBottomNav = true, showHeader = true }: { child
   return (
     <div className="app-shell">
       {showHeader && <Header progressCount={progress.completedLessonIds.length} />}
+      {showHeader && (
+        <div className="holiday-banner" role="note" aria-label="Christmas season theme">
+          <span className="holiday-badge" aria-hidden="true">✦</span>
+          <span><strong>Meta Code Holiday Season</strong> · Learn, build, and make something brilliant this Christmas</span>
+        </div>
+      )}
       {children}
       {showBottomNav && (
         <nav className="bottom-workspace-nav" aria-label="Main navigation">
