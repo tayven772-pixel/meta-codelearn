@@ -8,13 +8,14 @@ on:
       - completed
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   notify:
-    if: github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Send website update to Discord
@@ -22,10 +23,10 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_SITE_WEBHOOK_URL }}
           SITE_URL: https://metacodework.dbm.shared-servers.com
           CONTROL_URL: https://metacodework.dbm.shared-servers.com/bot-control
-          COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
-          COMMIT_TITLE: ${{ github.event.workflow_run.head_commit.message }}
-          COMMIT_URL: ${{ github.event.workflow_run.head_commit.url }}
-          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha || 'v1.0.0' }}
+          COMMIT_TITLE: ${{ github.event.workflow_run.head_commit.message || 'TEST: Previous update — ticket deletion scheduler fix (PR #56), version 1.0.0' }}
+          COMMIT_URL: ${{ github.event.workflow_run.head_commit.url || 'https://github.com/tayven772-pixel/meta-codelearn/pull/56' }}
+          RUN_URL: ${{ github.event.workflow_run.html_url || github.server_url }}
         run: |
           set -eu
           if [ -z "${DISCORD_WEBHOOK_URL:-}" ]; then
@@ -50,7 +51,7 @@ jobs:
                       {"name": "Update", "value": title or "Website update", "inline": False},
                       {"name": "Website", "value": os.environ["SITE_URL"], "inline": True},
                       {"name": "Bot Control", "value": os.environ["CONTROL_URL"], "inline": True},
-                      {"name": "Commit", "value": f"[{os.environ['SHORT_SHA']}]({os.environ['COMMIT_URL']})", "inline": True}
+                      {"name": "Version / Previous update", "value": f"[{os.environ['SHORT_SHA']}]({os.environ['COMMIT_URL']})", "inline": True}
                   ],
                   "footer": {"text": "Meta Code • Automated deployment notice"}
               }],
