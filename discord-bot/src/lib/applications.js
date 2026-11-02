@@ -114,25 +114,107 @@ export async function handleStaffApplicationCommand(interaction) {
   return true;
 }
 
+const activeApplicationDMs = new Set();
+
+async function collectStaffApplicationByDM(interaction, dm, staffChannel) {
+  const prompts = [
+    ['requested_role', '1/5 — Which staff role are you applying for?', 80],
+    ['availability', '2/5 — What days and times are you available to help?', 180],
+    ['experience', '3/5 — What skills or experience would you bring? (600 characters max)', 600],
+    ['motivation', '4/5 — Why would you like to help Meta Code? (600 characters max)', 600],
+    ['scenario', '5/5 — How would you handle a disagreement between members? (600 characters max)', 600]
+  ];
+  const answers = {};
+  try {
+    for (const [key, prompt, maxLength] of prompts) {
+      await dm.send(prompt + '\\nReply with your answer. Send **cancel** at any time to stop.');
+      const collected = await dm.awaitMessages({
+        filter: message => message.author.id === interaction.user.id && !message.author.bot,
+        max: 1,
+        time: 5 * 60 * 1000,
+        errors: ['time']
+      });
+      const answer = collected.first()?.content?.trim() || '';
+      if (answer.toLowerCase() === 'cancel') {
+        await dm.send('Your Meta Code staff application was cancelled.');
+        return;
+      }
+      if (!answer || answer.length > maxLength) {
+        await dm.send('That answer must be between 1 and ' + maxLength + ' characters. Please start again by clicking **Apply for Staff** in the server.');
+        return;
+      }
+      answers[key] = answer;
+    }
+
+    const existing = db.prepare("SELECT id FROM staff_applications WHERE guild_id = ? AND user_id = ? AND status = 'pending'")
+      .get(interaction.guildId, interaction.user.id);
+    if (existing) {
+      await dm.send('You already have a pending application (#' + existing.id + '). Please wait for the team to review it.');
+      return;
+    }
+
+    const application = {
+      guild_id: interaction.guildId,
+      user_id: interaction.user.id,
+      username: interaction.user.tag || interaction.user.username,
+      avatar_url: interaction.user.displayAvatarURL({ size: 256, extension: 'png' }),
+      ...answers
+    };
+    const inserted = db.prepare(`INSERT INTO staff_applications
+      (guild_id, user_id, username, avatar_url, requested_role, availability, experience, motivation, scenario)
+      VALUES (@guild_id, @user_id, @username, @avatar_url, @requested_role, @availability, @experience, @motivation, @scenario)`).run(application);
+    const id = Number(inserted.lastInsertRowid);
+    const saved = db.prepare('SELECT * FROM staff_applications WHERE id = ?').get(id);
+    try {
+      await staffChannel.send({ embeds: [buildApplicationEmbed(saved, interaction.guild)], components: [reviewButtons(id)], allowedMentions: { parse: [] } });
+    } catch (error) {
+      db.prepare("UPDATE staff_applications SET status = 'rejected', reviewed_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
+      throw error;
+    }
+    await dm.send('✅ Your Meta Code staff application was submitted successfully. The team will review it.');
+  } catch (error) {
+    if (error?.code === 'CollectorTimeout') {
+      await dm.send('Your application timed out because no answer was received within 5 minutes. Click **Apply for Staff** to start again.').catch(() => {});
+    } else {
+      console.error('[Applications] DM application failed:', error?.message || error);
+      await dm.send('I could not complete your application. Please contact a server administrator.').catch(() => {});
+    }
+  } finally {
+    activeApplicationDMs.delete(interaction.user.id);
+  }
+}
+
 export async function handleStaffApplicationComponent(interaction) {
   if (interaction.isButton() && interaction.customId === 'staff_apply_start') {
+    if (!interaction.inGuild()) {
+      await interaction.reply({ content: 'Please start your application from the Meta Code server.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
     if (getSetting(interaction.guildId, 'staff_applications_enabled') === 'false') {
       await interaction.reply({ content: 'Staff applications are currently closed.', flags: MessageFlags.Ephemeral });
       return true;
     }
-    const modal = new ModalBuilder().setCustomId('staff_apply_submit').setTitle('Meta Code Staff Application');
-    const fields = [
-      ['requested_role', 'Which role are you applying for?', TextInputStyle.Short, 80],
-      ['availability', 'What days/times can you help?', TextInputStyle.Short, 180],
-      ['experience', 'What skills or experience do you have?', TextInputStyle.Paragraph, 600],
-      ['motivation', 'Why would you like to help Meta Code?', TextInputStyle.Paragraph, 600],
-      ['scenario', 'How would you handle a member disagreement?', TextInputStyle.Paragraph, 600]
-    ].map(([id, label, style, maxLength]) => new ActionRowBuilder().addComponents(
-      new TextInputBuilder().setCustomId(id).setLabel(label).setStyle(style).setRequired(true).setMaxLength(maxLength)
-        .setPlaceholder(id === 'requested_role' ? 'Moderator, Support Team, Coding Helper…' : 'Write a clear, thoughtful answer')
-    ));
-    modal.addComponents(...fields);
-    await interaction.showModal(modal);
+    if (activeApplicationDMs.has(interaction.user.id)) {
+      await interaction.reply({ content: 'You already have an application conversation open in your DMs.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    const staffChannelId = getSetting(interaction.guildId, 'staff_applications_channel_id');
+    const staffChannel = staffChannelId ? await interaction.guild.channels.fetch(staffChannelId).catch(() => null) : null;
+    if (!staffChannel?.isTextBased() || !staffChannel.send) {
+      await interaction.reply({ content: 'Applications are not configured yet. Please contact a server administrator.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    let dm;
+    try {
+      dm = await interaction.user.createDM();
+      await dm.send('👋 Welcome to the Meta Code staff application! I’ll ask you 5 questions here in private. You have 5 minutes to answer each question. Send **cancel** at any time to stop.');
+    } catch {
+      await interaction.reply({ content: 'I could not DM you. Please enable direct messages from this server, then click Apply for Staff again.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    activeApplicationDMs.add(interaction.user.id);
+    await interaction.reply({ content: '📩 I sent you a DM to complete your staff application. Check your Discord messages!', flags: MessageFlags.Ephemeral });
+    void collectStaffApplicationByDM(interaction, dm, staffChannel);
     return true;
   }
 
