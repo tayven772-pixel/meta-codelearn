@@ -3826,13 +3826,14 @@ function BotControlPage() {
   const setValue = (key: string, value: string) => setSettings(current => ({ ...current, [key]: value }));
   const sendBotMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (sendingMessage || !guildId || !messageChannelId.trim() || !messageContent.trim()) return;
+    const messageText = messageFormat === 'plain' ? messageContent.trim() : embedDescription.trim();
+    if (sendingMessage || !guildId || !messageChannelId.trim() || !messageText) return;
     setSendingMessage(true);
     setStatus('Sending message through Meta bot…');
     try {
       const response = await fetch('/api/auth/admin/bot-control/messages', {
         method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guildId, channelId: messageChannelId.trim(), format: messageFormat, content: messageContent.trim(), embed: { title: embedTitle.trim(), description: embedDescription.trim(), color: embedColor } })
+        body: JSON.stringify({ guildId, channelId: messageChannelId.trim(), format: messageFormat, content: messageFormat === 'plain' ? messageContent.trim() : '', embed: { title: embedTitle.trim(), description: embedDescription.trim(), color: embedColor } })
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Could not send the message.');
