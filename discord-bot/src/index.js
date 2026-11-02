@@ -9,13 +9,13 @@ import { db, getSetting } from './lib/database.js';
 import { moderationCommands, handleModerationCommand } from './lib/moderation.js';
 import { autoPartnerCommands, handleAutoPartnerCommand, runAutoPartnerScheduler } from './lib/autopartner.js';
 import { communityCommands, handleCommunityCommand, handleCommunityComponent, handleCommunityEvents, runCommunityScheduler } from './lib/community-features.js';
-import { ActionRowBuilder, ActivityType, ButtonBuilder, ButtonStyle, Client, EmbedBuilder, Events, GatewayIntentBits, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import { ActionRowBuilder, ActivityType, ButtonBuilder, ButtonStyle, Client, EmbedBuilder, Events, GatewayIntentBits, MessageFlags, Partials, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 const siteUrl = (process.env.META_SITE_URL || 'https://metasupportcom.dbm.shared-servers.com').replace(/\/$/, '');
 const token = process.env.DISCORD_BOT_TOKEN;
 const clientId = process.env.DISCORD_CLIENT_ID;
 const guildId = process.env.DISCORD_GUILD_ID;
 if (!token || !clientId) { console.error('Missing bot token or client ID in .env'); process.exit(1); }
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages] });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.DirectMessages], partials: [Partials.Channel] });
 const commands = [
  new SlashCommandBuilder().setName('meta').setDescription('Open Meta CodeLearn and explore coding lessons'),
  new SlashCommandBuilder().setName('lessons').setDescription('Get Meta CodeLearn learning links'),
