@@ -338,7 +338,6 @@ function ThemeProvider({ children }: { children: ReactNode }) {
       // Christmas styling runs Dec 1–26 in the visitor's local time.
       const christmas = now.getMonth() === 11 && now.getDate() >= 1 && now.getDate() <= 26;
       document.documentElement.dataset.season = christmas ? 'christmas' : 'normal';
-      document.documentElement.style.setProperty('--snow-shift-x', `${Math.floor(Math.random() * 18 - 9)}vw`);
     };
     updateSeason();
     const seasonTimer = window.setInterval(updateSeason, 60 * 60 * 1000);
