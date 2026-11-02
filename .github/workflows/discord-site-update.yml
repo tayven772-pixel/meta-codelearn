@@ -24,7 +24,7 @@ jobs:
           SITE_URL: https://metacodework.dbm.shared-servers.com
           CONTROL_URL: https://metacodework.dbm.shared-servers.com/bot-control
           COMMIT_SHA: ${{ github.event.workflow_run.head_sha || 'v1.0.0' }}
-          COMMIT_TITLE: ${{ github.event.workflow_run.head_commit.message || 'TEST: Previous update — ticket deletion scheduler fix (PR #56), version 1.0.0' }}
+          COMMIT_TITLE: ${{ github.event.workflow_run.head_commit.message || 'TEST - Previous update: ticket deletion scheduler fix (PR #56), version 1.0.0' }}
           COMMIT_URL: ${{ github.event.workflow_run.head_commit.url || 'https://github.com/tayven772-pixel/meta-codelearn/pull/56' }}
           RUN_URL: ${{ github.event.workflow_run.html_url || github.server_url }}
         run: |
