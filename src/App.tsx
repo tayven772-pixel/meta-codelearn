@@ -1,6 +1,5 @@
 
 import { createContext, lazy, Suspense, useContext, useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
-import JSZip from 'jszip';
 import { Link, Redirect, Route, Router as WouterRouter, Switch, useLocation, useParams } from 'wouter';
 import {
   ArrowLeft,
@@ -1541,6 +1540,7 @@ function ProjectPage() {
   };
 
   const downloadProject = async () => {
+    const { default: JSZip } = await import('jszip');
     const zip = new JSZip();
     Object.entries(currentFiles).forEach(([path, content]) => zip.file(path, content));
     const blob = await zip.generateAsync({ type: 'blob' });
