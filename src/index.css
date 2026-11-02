@@ -3236,7 +3236,7 @@ body::after {
   left: 4%;
   z-index: 9998;
   pointer-events: none;
-  color: #fff;
+  color: #dcecf3;
   line-height: 1;
   text-shadow:
     9vw 13vh 0 #fff, 18vw 37vh 0 #fff, 27vw 7vh 0 #fff,
@@ -3266,12 +3266,12 @@ body::after {
 .app-shell::after {
   content: "";
   position: fixed;
-  z-index: 9997;
+  z-index: 5;
   pointer-events: none;
   left: -5%;
-  bottom: -38px;
+  bottom: -24px;
   width: 110%;
-  height: 88px;
+  height: 42px;
   border-radius: 50% 50% 0 0 / 42% 42% 0 0;
   background:
     radial-gradient(ellipse at 18% 18%, #fff 0 2px, transparent 3px),
@@ -3282,3 +3282,14 @@ body::after {
 @media (prefers-reduced-motion: reduce) {
   body::before, body::after { animation: none; display: none; }
 }
+
+/* Keep body text and controls above the decorative snowbank in light mode. */
+.app-shell { isolation: isolate; }
+.app-shell::after { opacity: .88; }
+:root:not([data-theme='dark']) .global-search-dialog,
+:root:not([data-theme='dark']) .global-search-input-row input,
+:root:not([data-theme='dark']) .global-search-result { color: #172b22; }
+:root:not([data-theme='dark']) .global-search-input-row input::placeholder { color: #52665b; opacity: 1; }
+:root:not([data-theme='dark']) .global-search-result-copy small,
+:root:not([data-theme='dark']) .global-search-empty,
+:root:not([data-theme='dark']) .global-search-footer { color: #46594e; }
