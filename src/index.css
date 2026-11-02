@@ -3323,3 +3323,16 @@ body::after {
 :root:not([data-theme='dark']) .global-search-result-copy small,
 :root:not([data-theme='dark']) .global-search-empty,
 :root:not([data-theme='dark']) .global-search-footer { color: #46594e; }
+
+
+/* High-contrast typography for the Christmas light theme. */
+:root[data-theme='light'] body,
+:root:not([data-theme='dark']) body { color: #111111; }
+:root[data-theme='light'] :where(h1, h2, h3, h4, p, li, label, small, strong, em, span, a, button, input, textarea, select),
+:root:not([data-theme='dark']) :where(h1, h2, h3, h4, p, li, label, small, strong, em, span, a, button, input, textarea, select) {
+  color: #111111;
+}
+:root[data-theme='light'] input::placeholder,
+:root:not([data-theme='dark']) input::placeholder,
+:root[data-theme='light'] textarea::placeholder,
+:root:not([data-theme='dark']) textarea::placeholder { color: #4b4b4b; opacity: 1; }
