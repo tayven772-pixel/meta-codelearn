@@ -478,7 +478,19 @@ async function processWebsiteMessages() {
     if (!homeGuildId || item.guild_id !== homeGuildId) throw new Error('Destination is not the configured Meta home server.');
     const channel = await client.channels.fetch(item.channel_id);
     if (!channel || channel.guildId !== homeGuildId || !channel.isTextBased() || typeof channel.send !== 'function') throw new Error('Destination is not an accessible text channel in the Meta home server.');
-    await channel.send({ content: item.content, allowedMentions: { parse: [] } });
+    let messagePayload;
+    try {
+      const queued = JSON.parse(item.content);
+      if (queued && queued.__meta_code_embed === true) {
+        const embed = new EmbedBuilder()
+          .setDescription(queued.description)
+          .setColor(queued.color || '#5865F2');
+        if (queued.title) embed.setTitle(queued.title);
+        messagePayload = { embeds: [embed], allowedMentions: { parse: [] } };
+      }
+    } catch { /* Normal plain-text message */ }
+    if (!messagePayload) messagePayload = { content: item.content, allowedMentions: { parse: [] } };
+    await channel.send(messagePayload);
     db.prepare("UPDATE bot_message_outbox SET status = 'sent', sent_at = CURRENT_TIMESTAMP, error = NULL WHERE id = ? AND status = 'pending'").run(item.id);
    } catch (error) {
     db.prepare("UPDATE bot_message_outbox SET status = 'failed', error = ? WHERE id = ? AND status = 'pending'").run(String(error?.message || 'Send failed').slice(0, 500), item.id);
