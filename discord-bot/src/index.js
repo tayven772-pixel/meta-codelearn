@@ -499,17 +499,18 @@ setInterval(() => {
 }, SPAM_WINDOW_MS).unref();
 
 async function processSecurityAlerts() {
- const alertChannelId = String(process.env.META_SECURITY_ALERT_CHANNEL_ID || '').trim();
- if (!alertChannelId || !client.isReady()) return;
+ // Send security notifications privately to the configured owner account.
+ const alertUserId = String(process.env.META_SECURITY_ALERT_USER_ID || '1393734299663994910').trim();
+ if (!/^\\d{17,20}$/.test(alertUserId) || !client.isReady()) return;
  const pending = db.prepare("SELECT * FROM security_events WHERE status='pending' ORDER BY id LIMIT 5").all();
  for (const event of pending) {
   try {
-   const channel = await client.channels.fetch(alertChannelId);
-   if (!channel?.isTextBased() || typeof channel.send !== 'function') throw new Error('Security alert channel is unavailable.');
+   const owner = await client.users.fetch(alertUserId);
+   if (!owner) throw new Error('Configured security alert user is unavailable.');
    const embed = new EmbedBuilder().setColor(0xF59E0B).setTitle('Meta Code security signal')
     .setDescription(`**Source:** ${event.source}\n**Event:** ${event.event_type}\n**Details:** ${String(event.detail || '').slice(0, 800)}\n**Event ID:** ${event.id}`)
     .setTimestamp(new Date(event.created_at + 'Z'));
-   await channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
+   await owner.send({ embeds: [embed], allowedMentions: { parse: [] } });
    db.prepare("UPDATE security_events SET status='alerted' WHERE id=? AND status='pending'").run(event.id);
   } catch (error) {
    console.error('[Security] Could not deliver alert:', error?.message || error);
