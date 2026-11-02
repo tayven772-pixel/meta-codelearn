@@ -3262,16 +3262,17 @@ body::after {
   from { transform: translate3d(0, -5vh, 0); }
   to { transform: translate3d(3vw, 110vh, 0); }
 }
-/* The curved white bank stays at the foot of the viewport on every page. */
+/* A decorative snowbank appears at the actual bottom of the page,
+   so visitors discover it when they scroll all the way down. */
 .app-shell::after {
   content: "";
-  position: fixed;
+  position: absolute;
   z-index: 5;
   pointer-events: none;
   left: -5%;
-  bottom: -24px;
+  bottom: 0;
   width: 110%;
-  height: 42px;
+  height: 58px;
   border-radius: 50% 50% 0 0 / 42% 42% 0 0;
   background:
     radial-gradient(ellipse at 18% 18%, #fff 0 2px, transparent 3px),
