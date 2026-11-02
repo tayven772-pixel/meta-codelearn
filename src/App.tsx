@@ -333,6 +333,14 @@ function ThemeProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
+    const updateSeason = () => {
+      const now = new Date();
+      // Christmas styling runs Dec 1–26 in the visitor's local time.
+      const christmas = now.getMonth() === 11 && now.getDate() >= 1 && now.getDate() <= 26;
+      document.documentElement.dataset.season = christmas ? 'christmas' : 'normal';
+    };
+    updateSeason();
+    const seasonTimer = window.setInterval(updateSeason, 60 * 60 * 1000);
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
     try {
@@ -340,6 +348,7 @@ function ThemeProvider({ children }: { children: ReactNode }) {
     } catch {
       // Keep the selected theme for this session when storage is unavailable.
     }
+    return () => window.clearInterval(seasonTimer);
   }, [theme]);
 
   useEffect(() => {
@@ -691,7 +700,7 @@ function AppShell({ children, showBottomNav = true, showHeader = true }: { child
   return (
     <div className="app-shell">
       {showHeader && <Header progressCount={progress.completedLessonIds.length} />}
-      {showHeader && (
+      {showHeader && document.documentElement.dataset.season === 'christmas' && (
         <div className="holiday-banner" role="note" aria-label="Christmas season theme">
           <span className="holiday-badge" aria-hidden="true">✦</span>
           <span><strong>Meta Code Holiday Season</strong> · Learn, build, and make something brilliant this Christmas</span>
