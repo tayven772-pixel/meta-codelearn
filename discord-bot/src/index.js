@@ -6,7 +6,7 @@ import { handleTicketCommand, handleTicketButton, handleTicketPanelCommand, runP
 import { staffApplicationCommands, handleStaffApplicationCommand, handleStaffApplicationComponent } from './lib/applications.js';
 import { applyServerTemplate, previewServerTemplate, handleServerSetup, handleServerSetupButton } from './lib/server-setup.js';
 import { db, getSetting } from './lib/database.js';
-import { moderationCommands, handleModerationCommand, handleSoftbanMessage } from './lib/moderation.js';
+import { moderationCommands, handleModerationCommand, handleSoftbanMessage, handleUnapprovedBotJoin } from './lib/moderation.js';
 import { autoPartnerCommands, handleAutoPartnerCommand, runAutoPartnerScheduler } from './lib/autopartner.js';
 import { communityCommands, handleCommunityCommand, handleCommunityComponent, handleCommunityEvents, runCommunityScheduler } from './lib/community-features.js';
 import { ActionRowBuilder, ActivityType, ButtonBuilder, ButtonStyle, Client, EmbedBuilder, Events, GatewayIntentBits, MessageFlags, Partials, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
@@ -153,6 +153,7 @@ client.once(Events.ClientReady, async readyClient => {
  }
  catch (error) { console.error('Command registration failed:', error.message); }
 });
+client.on(Events.GuildMemberAdd, member => { void handleUnapprovedBotJoin(member); });
 client.on(Events.InteractionCreate, async interaction => {
  try {
   if (interaction.isChatInputCommand()) {
