@@ -1,5 +1,5 @@
 
-import { createContext, useContext, useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { createContext, lazy, Suspense, useContext, useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import JSZip from 'jszip';
 import { Link, Redirect, Route, Router as WouterRouter, Switch, useLocation, useParams } from 'wouter';
 import {
@@ -49,10 +49,10 @@ import {
 } from 'lucide-react';
 import { languageFor, languages, lessonFor, lessons, type LearnerSkillLevel, type Lesson, type Progress } from './data/academy';
 import { getProgressionStats, learnerSkillLevels } from './data/progression';
-import CodePlaygroundPage from './CodePlayground';
-import GlobalSearch from './GlobalSearch';
-import MetaAIPage from './MetaAIPage';
-import './code-playground.css';
+const CodePlaygroundPage = lazy(() => import('./CodePlayground'));
+const GlobalSearch = lazy(() => import('./GlobalSearch'));
+const MetaAIPage = lazy(() => import('./MetaAIPage'));
+
 import './global-search.css';
 
 const PROGRESS_KEY = 'meta-progress-v1';
@@ -4362,8 +4362,13 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 function UserPortal() {
   return <HomePage />;
 }
+function RouteLoading() {
+  return <div className="route-loading" role="status" aria-live="polite">Loading Meta Code…</div>;
+}
+
 function MainRoutes() {
   return (
+    <Suspense fallback={<RouteLoading />}>
     <Switch>
       <Route path="/" component={HomePage} />
       <Route path="/admin" component={AdminPublishingPage} />
@@ -4386,6 +4391,7 @@ function MainRoutes() {
       <Route path="/sign-up/*?" component={LoginPage} />
       <Route component={NotFound} />
     </Switch>
+    </Suspense>
   );
 }
 function Router() {
