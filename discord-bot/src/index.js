@@ -408,7 +408,7 @@ client.on(Events.InteractionCreate, async interaction => {
     }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
-     const owner = await readyClient.users.fetch(alertUserId);
+     const owner = await client.users.fetch(alertUserId);
      await owner.send({ embeds: [new EmbedBuilder().setColor(0x22C55E).setTitle('Meta Code security test').setDescription('✅ Test successful. Security alerts are reaching this Discord account.').setTimestamp()], allowedMentions: { parse: [] } });
      await interaction.editReply('✅ Test DM sent. Check your Discord messages.');
     } catch (error) {
@@ -518,7 +518,7 @@ setInterval(() => {
 async function processSecurityAlerts() {
  // Send security notifications privately to the configured owner account.
  const alertUserId = String(process.env.META_SECURITY_ALERT_USER_ID || '1393734299663994910').trim();
- if (!/^\\d{17,20}$/.test(alertUserId) || !client.isReady()) return;
+ if (!/^\d{17,20}$/.test(alertUserId) || !client.isReady()) return;
  const pending = db.prepare("SELECT * FROM security_events WHERE status='pending' ORDER BY id LIMIT 5").all();
  for (const event of pending) {
   try {
