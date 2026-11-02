@@ -3696,6 +3696,10 @@ function AdminPublishingPage() {
 function BotControlPage() {
   const [messageChannelId, setMessageChannelId] = useState('');
   const [messageContent, setMessageContent] = useState('');
+  const [messageFormat, setMessageFormat] = useState<'plain' | 'embed'>('plain');
+  const [embedTitle, setEmbedTitle] = useState('');
+  const [embedDescription, setEmbedDescription] = useState('');
+  const [embedColor, setEmbedColor] = useState('#5865F2');
   const [sendingMessage, setSendingMessage] = useState(false);
   const [discordReady, setDiscordReady] = useState(false);
   const [discordChecked, setDiscordChecked] = useState(false);
@@ -3828,11 +3832,12 @@ function BotControlPage() {
     try {
       const response = await fetch('/api/auth/admin/bot-control/messages', {
         method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guildId, channelId: messageChannelId.trim(), content: messageContent.trim() })
+        body: JSON.stringify({ guildId, channelId: messageChannelId.trim(), format: messageFormat, content: messageContent.trim(), embed: { title: embedTitle.trim(), description: embedDescription.trim(), color: embedColor } })
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Could not send the message.');
       setMessageContent('');
+      setEmbedTitle(''); setEmbedDescription('');
       setStatus('Message queued for delivery by Meta bot. It should appear in Discord shortly.');
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not send the message.'); }
     finally { setSendingMessage(false); }
@@ -4163,11 +4168,26 @@ function BotControlPage() {
                   <input required value={messageChannelId} onChange={event => setMessageChannelId(event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Right-click a channel and copy its ID" style={fieldStyle} inputMode="numeric" />
                 </label>
                 <label style={{ display: 'block', marginTop: 12 }}>
-                  <strong>Message</strong>
-                  <textarea required value={messageContent} onChange={event => setMessageContent(event.target.value)} maxLength={2000} rows={5} placeholder="Write the message Meta should send…" style={fieldStyle} />
-                  <small>{messageContent.length}/2000 characters. Mentions will not ping members.</small>
+                  <strong>Message format</strong>
+                  <select value={messageFormat} onChange={event => setMessageFormat(event.target.value as 'plain' | 'embed')} style={fieldStyle}>
+                    <option value="plain">Normal message (plain text)</option>
+                    <option value="embed">Embedded message</option>
+                  </select>
                 </label>
-                <button type="submit" className="button-primary" disabled={sendingMessage || !guildId || !messageChannelId.trim() || !messageContent.trim()} style={{ marginTop: 12 }}>
+                {messageFormat === 'plain' ? (
+                  <label style={{ display: 'block', marginTop: 12 }}>
+                    <strong>Message</strong>
+                    <textarea required value={messageContent} onChange={event => setMessageContent(event.target.value)} maxLength={2000} rows={5} placeholder="Write the message Meta should send…" style={fieldStyle} />
+                    <small>{messageContent.length}/2000 characters. Mentions will not ping members.</small>
+                  </label>
+                ) : (
+                  <>
+                    <label style={{ display: 'block', marginTop: 12 }}><strong>Embed title</strong><input value={embedTitle} onChange={event => setEmbedTitle(event.target.value)} maxLength={256} placeholder="Rules / Announcement / Update" style={fieldStyle} /></label>
+                    <label style={{ display: 'block', marginTop: 12 }}><strong>Embed description</strong><textarea required value={embedDescription} onChange={event => setEmbedDescription(event.target.value)} maxLength={4000} rows={6} placeholder="Write the embedded message…" style={fieldStyle} /></label>
+                    <label style={{ display: 'block', marginTop: 12 }}><strong>Embed color</strong><input type="color" value={embedColor} onChange={event => setEmbedColor(event.target.value)} style={{ ...fieldStyle, height: 48, padding: 4 }} /></label>
+                  </>
+                )}
+                <button type="submit" className="button-primary" disabled={sendingMessage || !guildId || !messageChannelId.trim() || !(messageFormat === 'plain' ? messageContent.trim() : embedDescription.trim())} style={{ marginTop: 12 }}>
                   {sendingMessage ? 'Sending…' : 'Send as Meta'}
                 </button>
               </form>
