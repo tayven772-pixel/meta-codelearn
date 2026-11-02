@@ -2027,6 +2027,35 @@ html[data-reduced-motion='true'] *::after {
 :root:not([data-theme='dark']) input:focus-visible,
 :root:not([data-theme='dark']) textarea:focus-visible { outline-color: #4b7957; }
 :root[data-theme='light'] ::selection, :root:not([data-theme='dark']) ::selection { background: #356c50; }
+
+/* Christmas parchment palette for light mode: warm beige with evergreen and cranberry accents. */
+:root[data-theme='light'],
+:root:not([data-theme='dark']) {
+  --background: 38 42% 90%;
+  --foreground: 150 22% 17%;
+  --card: 40 43% 95%;
+  --card-foreground: 150 22% 17%;
+  --card-border: 34 25% 78%;
+  --border: 34 25% 78%;
+  --input: 34 25% 78%;
+  --muted: 36 31% 85%;
+  --muted-foreground: 150 10% 36%;
+  --popover: 40 43% 95%;
+  --popover-foreground: 150 22% 17%;
+}
+:root[data-theme='light'] body,
+:root:not([data-theme='dark']) body {
+  background:
+    radial-gradient(circle at 1px 1px, rgb(112 91 61 / .14) 1px, transparent 0) 0 0 / 24px 24px,
+    linear-gradient(145deg, #f1e8d5 0%, #e9ddc5 52%, #f3ead9 100%);
+}
+:root[data-theme='light'] .holiday-banner,
+:root:not([data-theme='dark']) .holiday-banner {
+  background: linear-gradient(100deg, #244c3b, #315d45 58%, #743b3b);
+  color: #fff8e9;
+  border-color: #b9945c;
+}
+
 :root[data-theme='light'] .top-links a:hover,
 :root:not([data-theme='dark']) .top-links a:hover,
 :root[data-theme='light'] .theme-toggle:hover,
