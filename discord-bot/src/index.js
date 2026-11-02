@@ -466,6 +466,58 @@ async function processWebsiteSetups() {
 }
 setInterval(() => { void processWebsiteSetups(); }, 2000).unref();
 
+
+// Discord anti-spam signal: count rapid message bursts without reading message text.
+// Keeps only a short in-memory window and emits a security event for owner review.
+const recentDiscordMessages = new Map();
+const spamAlertCooldown = new Map();
+const SPAM_WINDOW_MS = 10000;
+const SPAM_THRESHOLD = 7;
+client.on(Events.MessageCreate, message => {
+ if (!message.guild || message.author?.bot || message.webhookId) return;
+ const now = Date.now();
+ const key = `${message.guild.id}:${message.author.id}`;
+ const timestamps = (recentDiscordMessages.get(key) || []).filter(ts => now - ts < SPAM_WINDOW_MS);
+ timestamps.push(now);
+ recentDiscordMessages.set(key, timestamps);
+ if (timestamps.length < SPAM_THRESHOLD) return;
+ if (now - (spamAlertCooldown.get(key) || 0) < 60000) return;
+ spamAlertCooldown.set(key, now);
+ const subjectHash = require('node:crypto').createHash('sha256').update(message.author.id).digest('hex').slice(0, 24);
+ const detail = `guild=${message.guild.id}; channel=${message.channel.id}; burst=${timestamps.length} messages/${SPAM_WINDOW_MS/1000}s`;
+ db.prepare('INSERT INTO security_events (source,event_type,subject_hash,detail) VALUES (?,?,?,?)')
+   .run('discord', 'rapid_message_burst', subjectHash, detail);
+ console.warn('[Security] Rapid Discord message burst detected:', detail);
+});
+setInterval(() => {
+ const cutoff = Date.now() - SPAM_WINDOW_MS;
+ for (const [key, values] of recentDiscordMessages) {
+  const fresh = values.filter(ts => ts > cutoff);
+  if (fresh.length) recentDiscordMessages.set(key, fresh); else recentDiscordMessages.delete(key);
+ }
+}, SPAM_WINDOW_MS).unref();
+
+async function processSecurityAlerts() {
+ const alertChannelId = String(process.env.META_SECURITY_ALERT_CHANNEL_ID || '').trim();
+ if (!alertChannelId || !client.isReady()) return;
+ const pending = db.prepare("SELECT * FROM security_events WHERE status='pending' ORDER BY id LIMIT 5").all();
+ for (const event of pending) {
+  try {
+   const channel = await client.channels.fetch(alertChannelId);
+   if (!channel?.isTextBased() || typeof channel.send !== 'function') throw new Error('Security alert channel is unavailable.');
+   const embed = new EmbedBuilder().setColor(0xF59E0B).setTitle('Meta Code security signal')
+    .setDescription(`**Source:** ${event.source}\n**Event:** ${event.event_type}\n**Details:** ${String(event.detail || '').slice(0, 800)}\n**Event ID:** ${event.id}`)
+    .setTimestamp(new Date(event.created_at + 'Z'));
+   await channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
+   db.prepare("UPDATE security_events SET status='alerted' WHERE id=? AND status='pending'").run(event.id);
+  } catch (error) {
+   console.error('[Security] Could not deliver alert:', error?.message || error);
+   break;
+  }
+ }
+}
+setInterval(() => { void processSecurityAlerts(); }, 5000).unref();
+
 let processingWebsiteMessages = false;
 async function processWebsiteMessages() {
  if (processingWebsiteMessages || !client.isReady()) return;
