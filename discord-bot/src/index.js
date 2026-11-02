@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { createHash } from 'node:crypto';
 import { ticketCommand } from './lib/ticket-commands.js';
 import { serverSetupCommand } from './lib/server-setup.js';
 import { handleTicketCommand, handleTicketButton, handleTicketPanelCommand, runPendingTicketDeletions } from './lib/tickets.js';
@@ -483,7 +484,7 @@ client.on(Events.MessageCreate, message => {
  if (timestamps.length < SPAM_THRESHOLD) return;
  if (now - (spamAlertCooldown.get(key) || 0) < 60000) return;
  spamAlertCooldown.set(key, now);
- const subjectHash = require('node:crypto').createHash('sha256').update(message.author.id).digest('hex').slice(0, 24);
+ const subjectHash = createHash('sha256').update(message.author.id).digest('hex').slice(0, 24);
  const detail = `guild=${message.guild.id}; channel=${message.channel.id}; burst=${timestamps.length} messages/${SPAM_WINDOW_MS/1000}s`;
  db.prepare('INSERT INTO security_events (source,event_type,subject_hash,detail) VALUES (?,?,?,?)')
    .run('discord', 'rapid_message_burst', subjectHash, detail);
