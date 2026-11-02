@@ -3041,3 +3041,95 @@ html[data-reduced-motion='true'] *::after {
     max-height: calc(100dvh - 82px);
   }
 }
+
+
+/* Meta Code seasonal Christmas theme — visual-only; all app behavior is unchanged. */
+:root {
+  --background: 150 22% 96%;
+  --foreground: 153 29% 16%;
+  --card: 0 0% 100%;
+  --card-foreground: 153 29% 16%;
+  --card-border: 148 18% 83%;
+  --border: 148 18% 83%;
+  --input: 148 18% 83%;
+  --primary: 151 54% 29%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 5 58% 93%;
+  --secondary-foreground: 0 57% 35%;
+  --muted: 145 18% 91%;
+  --muted-foreground: 153 12% 43%;
+  --accent: 43 79% 72%;
+  --accent-foreground: 153 29% 16%;
+  --ring: 151 54% 29%;
+  --chart-1: 151 54% 29%;
+  --chart-2: 0 57% 43%;
+  --chart-3: 43 79% 55%;
+  --chart-4: 153 29% 22%;
+  --chart-5: 145 25% 62%;
+  color-scheme: light;
+}
+body {
+  background:
+    radial-gradient(circle at 12% 9%, #cce7d4 0 1px, transparent 2px),
+    radial-gradient(circle at 82% 18%, #e8d6a8 0 1px, transparent 2px),
+    radial-gradient(circle at 58% 72%, #cce7d4 0 1px, transparent 2px),
+    radial-gradient(circle at 1px 1px, #d9e6dc 1px, transparent 0) 0 0 / 26px 26px,
+    hsl(var(--background));
+}
+.topbar {
+  border-bottom-color: #cbded0;
+  background: rgb(244 250 246 / .94);
+}
+.brand-mark { background: #174c37; color: #fff8e9; }
+.top-links a:hover, .eyebrow, .section-kicker { color: #a52f35; }
+.eyebrow-line { background: #a52f35; }
+.top-progress { color: #174c37; }
+.progress-dot { background: #b6383e; }
+.account-join, .brand-mark { box-shadow: 0 3px 10px #174c371c; }
+.account-join, .button-primary {
+  background: #17613f;
+  color: #fff;
+}
+.account-join:hover, .button-primary:hover { background: #104b30; }
+.button-secondary { background: #a52f35; color: #fff; }
+.button-secondary:hover { background: #87252b; }
+.theme-toggle, .search-input, .filter-select {
+  border-color: #cbded0;
+  background: #fff;
+  color: #174c37;
+}
+.theme-toggle:hover, .search-input:focus, .filter-select:focus { border-color: #b6383e; }
+.hero h1 em { color: #a52f35; }
+.atlas-card {
+  border-color: #173e30;
+  background: linear-gradient(145deg, #174c37, #102f25);
+  box-shadow: 14px 18px 0 #d9e6dc, 0 28px 60px #174c3725;
+}
+.window-dots i { background: #b6383e; }
+.window-dots i:nth-child(2) { background: #e4bd62; }
+.window-dots i:nth-child(3) { background: #80b78c; }
+.visual-stamp { background: #f0d995; color: #6e3329; }
+.language-card, .auth-note {
+  border-color: #d5e3d8;
+  background: #fffefa;
+}
+.language-card:hover, .lesson-link:hover { border-color: #b6383e; }
+.mini-code { background: #e5f0e7; color: #17613f; }
+.library-note, .pathway { background: #e4f0e6; }
+.library-note { border-left-color: #a52f35; color: #385b47; }
+.pathway-intro .section-kicker { color: #a52f35; }
+.lesson-link { border-color: #d1e1d4; background: #f8fbf7; }
+.lesson-index { background: #e4f0e6; color: #17613f; }
+.lesson-link.done .lesson-index, .progress-fill, .level-progress-fill { background: #17613f; }
+.level-badge { background: #174c37; }
+.reward-count { background: #f8e8e5; color: #a52f35; }
+.reward-card.earned { border-color: #c9dfcd; background: #e8f2e9; color: #28583d; }
+.auth-copy h1 em { color: #a52f35; }
+.auth-note .progress-dot { background: #17613f; }
+::selection { color: #fff; background: #a52f35; }
+@media (prefers-reduced-motion: no-preference) {
+  .app-shell { position: relative; }
+}
+@media (max-width: 700px) {
+  .topbar { background: rgb(244 250 246 / .97); }
+}
