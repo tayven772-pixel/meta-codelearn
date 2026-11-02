@@ -20,6 +20,7 @@ const commands = [
  new SlashCommandBuilder().setName('meta').setDescription('Open Meta CodeLearn and explore coding lessons'),
  new SlashCommandBuilder().setName('lessons').setDescription('Get Meta CodeLearn learning links'),
  new SlashCommandBuilder().setName('ping').setDescription('Check whether the Meta bot is online'),
+ new SlashCommandBuilder().setName('security-test').setDescription('Send a security alert test DM to the bot owner'),
  new SlashCommandBuilder().setName('membercount').setDescription('Show this server’s member count'),
  new SlashCommandBuilder().setName('avatar').setDescription('Show a member’s avatar')
   .addUserOption(option => option.setName('user').setDescription('Member (defaults to you)').setRequired(false)),
@@ -398,6 +399,22 @@ client.on(Events.InteractionCreate, async interaction => {
     await interaction.reply({ content: '⏰ I’ll DM you in ' + minutes + ' minute' + (minutes === 1 ? '' : 's') + ': **' + reminder + '**\nKeep DMs open. Reminders are lost if the bot restarts before they fire.', flags: MessageFlags.Ephemeral });
     const timer = setTimeout(() => interaction.user.send('⏰ Reminder from Meta Code: ' + reminder).catch(() => {}), minutes * 60000);
     timer.unref?.();
+   }
+   else if (interaction.commandName === 'security-test') {
+    const alertUserId = String(process.env.META_SECURITY_ALERT_USER_ID || '1393734299663994910').trim();
+    if (interaction.user.id !== alertUserId) {
+     await interaction.reply({ content: 'This command is restricted to the configured bot owner.', flags: MessageFlags.Ephemeral });
+     return;
+    }
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    try {
+     const owner = await readyClient.users.fetch(alertUserId);
+     await owner.send({ embeds: [new EmbedBuilder().setColor(0x22C55E).setTitle('Meta Code security test').setDescription('✅ Test successful. Security alerts are reaching this Discord account.').setTimestamp()], allowedMentions: { parse: [] } });
+     await interaction.editReply('✅ Test DM sent. Check your Discord messages.');
+    } catch (error) {
+     console.error('[Security] Test DM delivery failed:', error?.message || error);
+     await interaction.editReply('❌ Could not send the test DM. Check that your DMs are open and the bot can message you.');
+    }
    }
    else if (interaction.commandName === 'ping') await interaction.reply({ content: 'Meta bot is online ✅', flags: MessageFlags.Ephemeral });
    else if (interaction.commandName === 'lessons') await interaction.reply({ content: `Start learning: ${siteUrl}/play`, flags: MessageFlags.Ephemeral });
