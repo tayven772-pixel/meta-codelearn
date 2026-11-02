@@ -124,9 +124,9 @@ export async function handleStaffApplicationComponent(interaction) {
     const fields = [
       ['requested_role', 'Which role are you applying for?', TextInputStyle.Short, 80],
       ['availability', 'What days/times can you help?', TextInputStyle.Short, 180],
-      ['experience', 'What relevant experience or skills do you have?', TextInputStyle.Paragraph, 600],
+      ['experience', 'What skills or experience do you have?', TextInputStyle.Paragraph, 600],
       ['motivation', 'Why would you like to help Meta Code?', TextInputStyle.Paragraph, 600],
-      ['scenario', 'How would you handle a disagreement between members?', TextInputStyle.Paragraph, 600]
+      ['scenario', 'How would you handle a member disagreement?', TextInputStyle.Paragraph, 600]
     ].map(([id, label, style, maxLength]) => new ActionRowBuilder().addComponents(
       new TextInputBuilder().setCustomId(id).setLabel(label).setStyle(style).setRequired(true).setMaxLength(maxLength)
         .setPlaceholder(id === 'requested_role' ? 'Moderator, Support Team, Coding Helper…' : 'Write a clear, thoughtful answer')
