@@ -3640,3 +3640,90 @@ body::after {
    flakes in the document's scrolling coordinate space. */
 body::before { left: calc(4% + var(--snow-shift-x, 0px)); }
 body::after { left: calc(1% + var(--snow-shift-x, 0px)); }
+
+
+/* Final holiday palette pass: remove the remaining blue/slate accents.
+   Christmas dark mode uses evergreen, cranberry red, and warm ivory only. */
+:root[data-season='christmas'][data-theme='dark'] {
+  --background: 145 55% 4%;
+  --foreground: 45 35% 96%;
+  --card: 145 45% 7%;
+  --card-foreground: 45 35% 96%;
+  --border: 145 42% 19%;
+  --primary: 145 75% 32%;
+  --primary-foreground: 45 35% 98%;
+  --secondary: 0 58% 24%;
+  --secondary-foreground: 0 25% 97%;
+  --accent: 0 55% 27%;
+  --accent-foreground: 45 35% 97%;
+  --muted: 145 28% 12%;
+  --muted-foreground: 145 12% 76%;
+  --ring: 0 72% 48%;
+}
+:root[data-season='christmas'][data-theme='dark'] body {
+  background:
+    radial-gradient(ellipse at 10% 0%, rgb(15 105 53 / .25), transparent 46%),
+    radial-gradient(ellipse at 90% 10%, rgb(170 24 42 / .20), transparent 42%),
+    #04140c;
+}
+:root[data-season='christmas'][data-theme='dark'] .topbar,
+:root[data-season='christmas'][data-theme='dark'] .bottom-workspace-nav,
+:root[data-season='christmas'][data-theme='dark'] .mobile-nav-panel {
+  background: #04180d;
+  border-color: #175b32;
+  color: #fff8ed;
+}
+:root[data-season='christmas'][data-theme='dark'] .button-primary,
+:root[data-season='christmas'][data-theme='dark'] .account-join {
+  background: #14733d;
+  border: 1px solid #25884e;
+  color: #fffaf0;
+}
+:root[data-season='christmas'][data-theme='dark'] .button-secondary {
+  background: #8f172d;
+  border: 1px solid #bd3347;
+  color: #fff8f5;
+}
+:root[data-season='christmas'][data-theme='dark'] .theme-toggle,
+:root[data-season='christmas'][data-theme='dark'] .search-input,
+:root[data-season='christmas'][data-theme='dark'] .filter-select {
+  background: #092719;
+  color: #f8fff9;
+  border-color: #28603c;
+}
+:root[data-season='christmas'][data-theme='dark'] .hero,
+:root[data-season='christmas'][data-theme='dark'] .atlas-card,
+:root[data-season='christmas'][data-theme='dark'] .language-card,
+:root[data-season='christmas'][data-theme='dark'] .play-card,
+:root[data-season='christmas'][data-theme='dark'] .play-hub-card,
+:root[data-season='christmas'][data-theme='dark'] .published-content-card,
+:root[data-season='christmas'][data-theme='dark'] .progression-section,
+:root[data-season='christmas'][data-theme='dark'] .project-list-section,
+:root[data-season='christmas'][data-theme='dark'] .lesson-link,
+:root[data-season='christmas'][data-theme='dark'] .project-card,
+:root[data-season='christmas'][data-theme='dark'] .playground-editor-panel,
+:root[data-season='christmas'][data-theme='dark'] .playground-preview-panel {
+  background-color: #082719;
+  border-color: #1b5b36;
+  color: #fff8ed;
+}
+:root[data-season='christmas'][data-theme='dark'] .hero {
+  background: linear-gradient(115deg, #082b1a 0%, #10482b 55%, #581b2b 100%);
+  border-top-color: #bd3347;
+}
+:root[data-season='christmas'][data-theme='dark'] .hero h1 em,
+:root[data-season='christmas'][data-theme='dark'] .section-kicker,
+:root[data-season='christmas'][data-theme='dark'] .eyebrow {
+  color: #ff687b;
+}
+:root[data-season='christmas'][data-theme='dark'] .bottom-workspace-button.active {
+  color: #ff7585;
+}
+:root[data-season='christmas'][data-theme='dark'] .holiday-banner {
+  background: linear-gradient(90deg, #061c10, #12633a 45%, #811c31 75%, #061c10);
+  color: #fff8ed;
+}
+
+/* Snow is deterministic: don't randomize its CSS offset on refresh. */
+body::before { left: 4%; }
+body::after { left: 1%; }
