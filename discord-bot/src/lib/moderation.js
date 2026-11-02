@@ -3,8 +3,9 @@ import {
   MessageFlags,
   PermissionFlagsBits,
   SlashCommandBuilder,
+  ChannelType,
 } from 'discord.js';
-import { db } from './database.js';
+import { db, getSetting, setSetting } from './database.js';
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS moderation_warnings (
@@ -21,6 +22,14 @@ db.exec(`
 
 const STAFF_PERMISSION = PermissionFlagsBits.ManageMessages;
 const moderationCommands = [
+  new SlashCommandBuilder()
+    .setName('setup-softban-channel')
+    .setDescription('Create and enable the channel that softbans members who post in it')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+  new SlashCommandBuilder()
+    .setName('disable-softban-channel')
+    .setDescription('Disable automatic softbans for the configured channel')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
   new SlashCommandBuilder()
     .setName('warn')
     .setDescription('Record a moderation warning for a member')
@@ -78,13 +87,61 @@ async function fetchTarget(interaction) {
 }
 
 export async function handleModerationCommand(interaction) {
-  if (!['warn', 'warnings', 'timeout', 'untimeout', 'purge'].includes(interaction.commandName)) return false;
+  if (!['warn', 'warnings', 'timeout', 'untimeout', 'purge', 'setup-softban-channel', 'disable-softban-channel'].includes(interaction.commandName)) return false;
   if (!interaction.inGuild()) {
     await interaction.reply({ content: 'Use moderation commands inside a server.', flags: MessageFlags.Ephemeral });
     return true;
   }
 
   const command = interaction.commandName;
+  if (command === 'setup-softban-channel') {
+    if (!hasPermission(interaction, PermissionFlagsBits.ManageGuild)) {
+      await interaction.reply({ content: 'You need Manage Server permission to configure this.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    try {
+      const existingId = getSetting(interaction.guildId, 'softban_channel_id');
+      const existing = existingId ? await interaction.guild.channels.fetch(existingId).catch(() => null) : null;
+      if (existing?.isTextBased()) {
+        await interaction.editReply('The softban channel is already configured: ' + existing.toString() + '. Use /disable-softban-channel before creating another.');
+        return true;
+      }
+      const channel = await interaction.guild.channels.create({
+        name: 'softban',
+        type: ChannelType.GuildText,
+        topic: '⚠️ Automatic softban zone: sending a message here will softban you. Staff with Manage Messages are exempt.',
+        reason: 'Meta Code automatic softban channel setup'
+      });
+      setSetting(interaction.guildId, 'softban_channel_id', channel.id);
+      const embed = new EmbedBuilder()
+        .setColor(0xED4245)
+        .setTitle('⚠️ Automatic Softban Channel')
+        .setDescription('**Do not send messages in this channel.** Any regular member who posts here will be automatically softbanned (banned and immediately unbanned), and their messages from the last 7 days will be deleted. Staff with Manage Messages permission and bots are exempt.')
+        .setFooter({ text: 'Meta Code Moderation' })
+        .setTimestamp();
+      await channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
+      await interaction.editReply('Created and enabled ' + channel.toString() + '. Make sure I have **Ban Members** permission and my highest role is above regular members.');
+    } catch (error) {
+      console.error('[Moderation] Softban channel setup failed:', error?.message || error);
+      await interaction.editReply('I could not create the channel. Check that I have Manage Channels permission.');
+    }
+    return true;
+  }
+  if (command === 'disable-softban-channel') {
+    if (!hasPermission(interaction, PermissionFlagsBits.ManageGuild)) {
+      await interaction.reply({ content: 'You need Manage Server permission to configure this.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    const current = getSetting(interaction.guildId, 'softban_channel_id');
+    if (!current) {
+      await interaction.reply({ content: 'Automatic softbans are already disabled.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    setSetting(interaction.guildId, 'softban_channel_id', '');
+    await interaction.reply({ content: 'Automatic softbans are now disabled. The channel was left in place.', flags: MessageFlags.Ephemeral });
+    return true;
+  }
   const needed = command === 'timeout' || command === 'untimeout'
     ? PermissionFlagsBits.ModerateMembers
     : STAFF_PERMISSION;
@@ -183,6 +240,32 @@ export async function handleModerationCommand(interaction) {
   }
 
   return false;
+}
+
+export async function handleSoftbanMessage(message) {
+  if (!message.guild || message.author?.bot || message.webhookId) return;
+  const configuredChannelId = getSetting(message.guild.id, 'softban_channel_id');
+  if (!configuredChannelId || message.channel.id !== configuredChannelId) return;
+  const member = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
+  if (!member || member.id === message.guild.ownerId || member.permissions.has(PermissionFlagsBits.ManageMessages)) return;
+  const botMember = message.guild.members.me;
+  if (!botMember?.permissions.has(PermissionFlagsBits.BanMembers) ||
+      !member.bannable ||
+      botMember.roles.highest.comparePositionTo(member.roles.highest) <= 0) {
+    console.error('[Moderation] Cannot softban member in configured channel; check Ban Members permission and role hierarchy.');
+    return;
+  }
+  try {
+    const reason = 'Automatic softban: posted in the designated softban channel';
+    await message.guild.members.ban(member.id, {
+      deleteMessageSeconds: 7 * 24 * 60 * 60,
+      reason
+    });
+    await message.guild.members.unban(member.id, 'Automatic softban completed');
+    console.log('[Moderation] Softbanned member for posting in configured channel:', member.id);
+  } catch (error) {
+    console.error('[Moderation] Automatic softban failed:', error?.message || error);
+  }
 }
 
 export { moderationCommands };
