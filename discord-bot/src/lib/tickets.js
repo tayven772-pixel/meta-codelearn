@@ -120,8 +120,9 @@ async function archiveTicketTranscript(guild, channel, ticket, closedBy) {
   });
 }
 
-export async function runPendingTicketDeletions(client) {
-  const due = db.prepare("SELECT id, guild_id, channel_id FROM tickets WHERE status = 'closed' AND delete_at IS NOT NULL AND delete_at <= ?")
+export async function runPendingTicketDeletions(client, database) {
+  if (!database) throw new Error('Ticket deletion worker was not given a database connection.');
+  const due = database.prepare("SELECT id, guild_id, channel_id FROM tickets WHERE status = 'closed' AND delete_at IS NOT NULL AND delete_at <= ?")
     .all(Date.now());
   for (const ticket of due) {
     const guild = client.guilds.cache.get(ticket.guild_id);
@@ -133,7 +134,7 @@ export async function runPendingTicketDeletions(client) {
         continue;
       }
     }
-    db.prepare('UPDATE tickets SET delete_at = NULL WHERE id = ? AND status = ?')
+    database.prepare('UPDATE tickets SET delete_at = NULL WHERE id = ? AND status = ?')
       .run(ticket.id, 'closed');
     console.log('Closed ticket #' + ticket.id + ' channel deletion completed.');
   }
@@ -253,8 +254,14 @@ async function handleTicketControlButton(interaction, database) {
     return true;
   }
   const delaySeconds = ticketCloseDelaySeconds(interaction.guildId);
-  database.prepare("UPDATE tickets SET status = 'closed', closed_at = CURRENT_TIMESTAMP, delete_at = ? WHERE id = ?")
-    .run(Date.now() + delaySeconds * 1000, ticket.id);
+  const deleteAt = Date.now() + delaySeconds * 1000;
+  const scheduled = database.prepare("UPDATE tickets SET status = 'closed', closed_at = CURRENT_TIMESTAMP, delete_at = ? WHERE id = ? AND status = 'open'")
+    .run(deleteAt, ticket.id);
+  const savedSchedule = database.prepare('SELECT status, delete_at FROM tickets WHERE id = ?').get(ticket.id);
+  if (scheduled.changes !== 1 || savedSchedule?.status !== 'closed' || Number(savedSchedule.delete_at) !== deleteAt) {
+    throw new Error('Ticket #' + ticket.id + ' deletion deadline could not be saved to the ticket database.');
+  }
+  console.log('Scheduled deletion for ticket #' + ticket.id + ' at ' + deleteAt + ' (in ' + delaySeconds + ' seconds).');
   await interaction.editReply({
     content: 'Ticket #' + ticket.id + ' is closed. This channel will be deleted in ' +
       delaySeconds + ' seconds. Reopen it with /ticket reopen id:' + ticket.id + '.'
