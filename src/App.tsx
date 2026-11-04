@@ -472,6 +472,7 @@ function useProgress() {
         current.storageKey === storageKey &&
         current.progress.completedLessonIds.join('|') === next.completedLessonIds.join('|') &&
         (current.progress.completedQuizLessonIds ?? []).join('|') === (next.completedQuizLessonIds ?? []).join('|') &&
+        JSON.stringify(current.progress.completedLanguageLessonIds ?? {}) === JSON.stringify(next.completedLanguageLessonIds ?? {}) &&
         current.progress.skillLevel === next.skillLevel
           ? current
           : { storageKey, progress: next }
@@ -808,13 +809,13 @@ function HomePage() {
               {nextLesson ? (
                 <>
                   <span className="progress-dot" aria-hidden="true" />
-                  <span>{completedCount > 0 ? 'Up next' : 'Your first step'} · <strong>Lesson {String(nextLessonIndex + 1).padStart(2, '0')}: {nextLesson.title}</strong> · {completedCount} of {lessons.length} complete
+                  <span>{completedCount > 0 ? 'Up next' : 'Your first step'} · <strong>Lesson {String(nextLessonIndex + 1).padStart(2, '0')}: {nextLesson.title}</strong> · {completedLanguagePathCount} of {languages.length} language paths completed
                 </span>
                 </>
               ) : (
                 <>
                   <CheckCircle2 aria-hidden="true" />
-                  <span><strong>Foundation complete.</strong> You finished all {lessons.length} lessons. Ready to build something?</span>
+                  <span><strong>All language paths complete.</strong> You finished all {languages.length} language paths. Ready to build something?</span>
                 </>
               )}
             </p>
