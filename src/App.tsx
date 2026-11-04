@@ -891,7 +891,13 @@ function HomePage() {
                 key={language.id}
                 className="language-card"
                 style={{ animationDelay: `${Math.min(index, 8) * 35}ms`, '--tile-color': tileHue(language.id) } as CSSProperties}
-                onClick={() => localStorage.setItem(LANGUAGE_KEY, language.id)}
+                onClick={() => {
+                  try {
+                    localStorage.setItem(LANGUAGE_KEY, language.id);
+                  } catch {
+                    // Keep navigation working when browser storage is unavailable.
+                  }
+                }}
                 data-testid={`card-language-${language.id}`}
                 aria-label={`Start learning in ${language.name}`}
               >
