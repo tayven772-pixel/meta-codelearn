@@ -485,19 +485,27 @@ function useProgress() {
     };
   }, [storageKey]);
 
-  const complete = (lessonId: string) => setSnapshot((current) => {
+  const complete = (lessonId: string, languageId: string) => setSnapshot((current) => {
     const currentProgress = current.storageKey === storageKey
       ? current.progress
       : readProgress(storageKey);
-    return currentProgress.completedLessonIds.includes(lessonId)
-      ? current
-      : {
-          storageKey,
-          progress: {
-            ...currentProgress,
-            completedLessonIds: [...currentProgress.completedLessonIds, lessonId],
-          },
-        };
+    const completedLessonIds = currentProgress.completedLessonIds.includes(lessonId)
+      ? currentProgress.completedLessonIds
+      : [...currentProgress.completedLessonIds, lessonId];
+    const languageLessons = currentProgress.completedLanguageLessonIds ?? {};
+    const completedForLanguage = languageLessons[languageId] ?? [];
+    if (completedForLanguage.includes(lessonId) && completedLessonIds === currentProgress.completedLessonIds) return current;
+    return {
+      storageKey,
+      progress: {
+        ...currentProgress,
+        completedLessonIds,
+        completedLanguageLessonIds: {
+          ...languageLessons,
+          [languageId]: completedForLanguage.includes(lessonId) ? completedForLanguage : [...completedForLanguage, lessonId],
+        },
+      },
+    };
   });
 
   const completeQuiz = (lessonId: string) => setSnapshot((current) => {
@@ -544,7 +552,7 @@ function Header({ progressCount }: { progressCount: number }) {
   const [authChecked, setAuthChecked] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState('');
-  const completion = Math.round((progressCount / lessons.length) * 100);
+  const completion = Math.round((progressCount / languages.length) * 100);
 
   useEffect(() => { setMenuOpen(false); }, [location]);
 
@@ -628,9 +636,9 @@ function Header({ progressCount }: { progressCount: number }) {
       </nav>
 
       <div className="top-actions">
-        <span className="top-progress" data-testid="status-lessons-completed" title={`${progressCount} of ${lessons.length} lessons complete`}>
+        <span className="top-progress" data-testid="status-language-paths-completed" title={`${progressCount} of ${languages.length} language paths complete`}>
           <span className="progress-dot" />
-          <span className="top-progress-text">{progressCount} / {lessons.length} lessons</span>
+          <span className="top-progress-text">{progressCount} / {languages.length} paths</span>
           <span className="top-progress-track" aria-hidden="true"><span className="top-progress-fill" style={{ width: `${completion}%` }} /></span>
         </span>
         <GlobalSearch />
@@ -699,7 +707,7 @@ function AppShell({ children, showBottomNav = true, showHeader = true }: { child
   };
   return (
     <div className="app-shell">
-      {showHeader && <Header progressCount={progress.completedLessonIds.length} />}
+      {showHeader && <Header progressCount={languages.filter((language) => (progress.completedLanguageLessonIds?.[language.id] ?? []).length >= lessons.length).length} />}
       {showHeader && document.documentElement.dataset.season === 'christmas' && (
         <div className="holiday-banner" role="note" aria-label="Christmas season theme">
           <span className="holiday-badge" aria-hidden="true">✦</span>
@@ -751,9 +759,11 @@ function HomePage() {
   }, [search, category, level]);
   const completedLessonIds = new Set(progress.completedLessonIds);
   const completedCount = lessons.filter((lesson) => completedLessonIds.has(lesson.id)).length;
+  const completedLanguagePathIds = new Set(languages.filter((language) => (progress.completedLanguageLessonIds?.[language.id] ?? []).length >= lessons.length).map((language) => language.id));
+  const completedLanguagePathCount = completedLanguagePathIds.size;
   const nextLesson = lessons.find((lesson) => !completedLessonIds.has(lesson.id));
   const nextLessonIndex = nextLesson ? lessons.findIndex((lesson) => lesson.id === nextLesson.id) : -1;
-  const completion = Math.min(100, (completedCount / lessons.length) * 100);
+  const completion = Math.min(100, (completedLanguagePathCount / languages.length) * 100);
   const resetLanguageFilters = () => {
     setSearch('');
     setCategory('All paths');
@@ -835,12 +845,12 @@ function HomePage() {
           <div className="momentum-intro">
             <p className="section-kicker">Your learning dashboard</p>
             <h2 id="momentum-heading">Small steps. <em>Real progress.</em></h2>
-            <p>Keep your momentum going. Every completed foundation lesson adds 25 XP and unlocks milestones.</p>
-            <div className="momentum-progress-copy"><span>{completedCount} of {lessons.length} lessons</span><strong>{Math.round(completion)}%</strong></div>
-            <div className="momentum-progress-track" role="progressbar" aria-label="Lesson completion" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(completion)}><span style={{ width: `${completion}%` }} /></div>
+            <p>Keep your momentum going. Finish every foundation lesson in a language to complete its learning path.</p>
+            <div className="momentum-progress-copy"><span>{completedLanguagePathCount} of {languages.length} language paths completed</span><strong>{Math.round(completion)}%</strong></div>
+            <div className="momentum-progress-track" role="progressbar" aria-label="Language path completion" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(completion)}><span style={{ width: `${completion}%` }} /></div>
           </div>
           <div className="momentum-stats">
-            <article className="momentum-xp-card"><span className="momentum-stat-icon"><Zap aria-hidden="true" /></span><span className="momentum-stat-label">Total XP</span><strong>{completedCount * 25}</strong><small>Earned from lessons</small></article>
+            <article className="momentum-xp-card"><span className="momentum-stat-icon"><Zap aria-hidden="true" /></span><span className="momentum-stat-label">Paths completed</span><strong>{completedLanguagePathCount}</strong><small>Across all 12 language paths</small></article>
             <article className={completedCount >= 1 ? 'momentum-badge unlocked' : 'momentum-badge'}><span className="momentum-badge-icon"><Star aria-hidden="true" /></span><strong>First step</strong><small>{completedCount >= 1 ? 'Unlocked · First lesson complete' : 'Complete one lesson to unlock'}</small></article>
             <article className={completedCount >= 5 ? 'momentum-badge unlocked' : 'momentum-badge'}><span className="momentum-badge-icon"><Zap aria-hidden="true" /></span><strong>Momentum</strong><small>{completedCount >= 5 ? 'Unlocked · Five lessons complete' : `${Math.max(0, 5 - completedCount)} more lesson${5 - completedCount === 1 ? '' : 's'} to unlock`}</small></article>
             <article className={completedCount >= lessons.length ? 'momentum-badge unlocked' : 'momentum-badge'}><span className="momentum-badge-icon"><CheckCircle2 aria-hidden="true" /></span><strong>Foundation graduate</strong><small>{completedCount >= lessons.length ? 'Unlocked · Foundation complete' : 'Finish every foundation lesson'}</small></article>
@@ -931,11 +941,11 @@ function HomePage() {
 
         <section className="pathway" id="learning-path" aria-labelledby="path-heading">
           <div className="pathway-intro">
-            <p className="section-kicker">Your learning path · {lessons.length} lessons</p>
+            <p className="section-kicker">Your learning paths · {languages.length} languages</p>
             <h2 id="path-heading">A little progress<br />adds up.</h2>
-            <p>Short, guided lessons make the big ideas feel small enough to try. No setup, no pressure — just one useful concept at a time.</p>
+            <p>Complete all foundation lessons in a language to finish that learning path. Your progress is tracked separately for each language.</p>
             <div className="path-progress" data-testid="status-path-progress">
-              <span>{completedCount} of {lessons.length} complete</span>
+              <span>{completedLanguagePathCount} of {languages.length} language paths complete</span>
               <span className="progress-track" aria-hidden="true"><span className="progress-fill" style={{ width: `${completion}%` }} /></span>
             </div>
           </div>
@@ -3419,7 +3429,7 @@ function LessonPage() {
     event.preventDefault();
     if (isAnswerCorrect(answer, lesson)) {
       setFeedback('correct');
-      complete(lesson.id);
+      complete(lesson.id, languageId);
     } else {
       setFeedback('try-again');
     }
