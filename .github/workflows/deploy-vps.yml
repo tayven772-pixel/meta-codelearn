@@ -202,6 +202,20 @@ jobs:
           }
           NGINX
           fi
+          if ! sudo -n grep -Fq 'location ^~ /api/auth/admin/ai/' "$NGINX_SNIPPET"; then
+            sudo -n tee -a "$NGINX_SNIPPET" >/dev/null <<'NGINX'
+          # Private Meta AI (Ollama) status and chat endpoints.
+          location ^~ /api/auth/admin/ai/ {
+            proxy_pass http://127.0.0.1:3001;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 65s;
+          }
+          NGINX
+          fi
           if sudo -n grep -q '^META_ADMIN_EMAILS=' /etc/meta-codelearn-auth.env; then
             if ! sudo -n sed -n 's/^META_ADMIN_EMAILS=//p' /etc/meta-codelearn-auth.env | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -Fqx 'metasupport43@gmail.com'; then
               sudo -n sed -i '/^META_ADMIN_EMAILS=/ s/$/,metasupport43@gmail.com/' /etc/meta-codelearn-auth.env

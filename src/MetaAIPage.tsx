@@ -18,6 +18,7 @@ export default function MetaAIPage() {
   const [access, setAccess] = useState<'checking' | 'allowed' | 'denied'>('checking');
   const [enabled, setEnabled] = useState(false);
   const [model, setModel] = useState('');
+  const [provider, setProvider] = useState('Ollama');
   const [projects] = useState<Project[]>(loadProjects);
   const [projectId, setProjectId] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -41,6 +42,7 @@ export default function MetaAIPage() {
         setAccess('allowed');
         setEnabled(Boolean(data.enabled));
         setModel(typeof data.model === 'string' ? data.model : '');
+        setProvider(typeof data.provider === 'string' ? data.provider : 'Ollama');
       })
       .catch(() => { if (active) { setAccess('denied'); setError('Could not verify access. Check your connection and try again.'); } });
     return () => { active = false; };
@@ -94,8 +96,8 @@ export default function MetaAIPage() {
         <p style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}><ShieldCheck size={17} /> Only accounts listed in the server-side META_ADMIN_EMAILS setting can use this test.</p>
         {access === 'checking' && <p>Checking owner access…</p>}
         {access === 'denied' && <p role="alert">{error}</p>}
-        {access === 'allowed' && !enabled && <p role="status">Access verified, but Omniroute is not configured yet. Set OMNIROUTE_MODEL in the auth service environment.</p>}
-        {access === 'allowed' && enabled && <p role="status"><Sparkles size={15} style={{ verticalAlign: 'middle' }} /> Connected to Omniroute{model ? ' · ' + model : ''}</p>}
+        {access === 'allowed' && !enabled && <p role="status">Access verified, but Ollama is not configured yet. Set OLLAMA_BASE_URL and OLLAMA_MODEL in the auth service environment.</p>}
+        {access === 'allowed' && enabled && <p role="status"><Sparkles size={15} style={{ verticalAlign: 'middle' }} /> Connected to {provider}{model ? ' · ' + model : ''}</p>}
       </section>
       {access === 'allowed' && <section className="admin-publishing-guide">
         <label style={{ display: 'block', marginBottom: 12 }}><strong>Project context (optional)</strong>
