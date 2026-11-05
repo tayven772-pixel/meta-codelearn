@@ -754,10 +754,12 @@ app.get('/api/auth/admin/ai/status', (req, res) => {
   const user = requireAdmin(req, res);
   if (!user) return;
   res.setHeader('Cache-Control', 'no-store');
+  const ollamaConfigured = Boolean(process.env.OLLAMA_BASE_URL || process.env.OLLAMA_MODEL);
+  const model = String(process.env.OLLAMA_MODEL || process.env.OMNIROUTE_MODEL || '').trim();
   return res.json({
-    enabled: Boolean(process.env.OMNIROUTE_MODEL),
-    model: process.env.OMNIROUTE_MODEL || null,
-    provider: 'Omniroute'
+    enabled: Boolean(model),
+    model: model || null,
+    provider: ollamaConfigured ? 'Ollama' : 'Omniroute'
   });
 });
 app.post('/api/auth/admin/ai/chat', aiRequestLimiter, async (req, res) => {
@@ -785,10 +787,10 @@ app.post('/api/auth/admin/ai/chat', aiRequestLimiter, async (req, res) => {
   try {
     endpoint = new URL(baseUrl);
     if (!['http:', 'https:'].includes(endpoint.protocol) || (endpoint.protocol === 'http:' && !['127.0.0.1', 'localhost', '::1'].includes(endpoint.hostname))) {
-      return res.status(500).json({ error: 'Omniroute must use HTTPS or a loopback address.' });
+      return res.status(500).json({ error: provider + ' must use HTTPS or a loopback address.' });
     }
   } catch {
-    return res.status(500).json({ error: 'OMNIROUTE_BASE_URL is invalid.' });
+    return res.status(500).json({ error: provider + ' base URL is invalid.' });
   }
   const systemPrompt = [
     'You are Meta AI, the coding assistant for Meta Code. Be warm, accurate, and practical.',
@@ -815,10 +817,10 @@ app.post('/api/auth/admin/ai/chat', aiRequestLimiter, async (req, res) => {
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
-      console.error('Omniroute chat request failed:', response.status);
+      console.error(provider + ' chat request failed:', response.status);
       return res.status(502).json({ error: response.status === 401 || response.status === 403
-        ? 'Omniroute rejected the configured API key. Check OMNIROUTE_API_KEY in the server environment.'
-        : 'Omniroute could not answer the request. Check that the service and model are available.' });
+        ? provider + ' rejected the configured credentials. Check the provider API key in the server environment.'
+        : provider + ' could not answer the request. Check that the service and model are available.' });
     }
     const answer = payload?.choices?.[0]?.message?.content;
     if (typeof answer !== 'string' || !answer.trim()) {
@@ -826,8 +828,8 @@ app.post('/api/auth/admin/ai/chat', aiRequestLimiter, async (req, res) => {
     }
     return res.json({ answer: answer.slice(0, 30000), model: payload.model || model });
   } catch (error) {
-    console.error('Omniroute chat connection failed:', error?.name || 'unknown error');
-    return res.status(502).json({ error: 'Could not reach Omniroute from the Meta Code server. Verify the local service URL and status.' });
+    console.error(provider + ' chat connection failed:', error?.name || 'unknown error');
+    return res.status(502).json({ error: 'Could not reach ' + provider + ' from the Meta Code server. Verify the configured service URL and status.' });
   }
 });
 
