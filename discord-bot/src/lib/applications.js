@@ -36,7 +36,7 @@ export const staffApplicationCommands = [
     .addChannelOption(option => option.setName('staff_channel')
       .setDescription('Private channel where completed applications are sent')
       .addChannelTypes(ChannelType.GuildText)
-      .setRequired(false))
+      .setRequired(false)),
   new SlashCommandBuilder().setName('application-question').setDescription('Edit application question wording and minimum word count').setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addIntegerOption(o => o.setName('number').setDescription('Question number 1–5').setMinValue(1).setMaxValue(5).setRequired(true))
     .addStringOption(o => o.setName('question').setDescription('New question wording (optional)').setMaxLength(350).setRequired(false))
