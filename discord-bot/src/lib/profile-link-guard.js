@@ -12,7 +12,7 @@ function ownerId() {
 function isEnabled(guildId, key) {
   return getSetting(guildId, key) === 'true';
 }
-function isLinkMessage(message) {
+export function isLinkMessage(message) {
   if (LINK_RE.test(message.content || '')) return true;
   if (message.embeds?.some(embed => LINK_RE.test([embed.url, embed.title, embed.description, embed.author?.url, embed.footer?.text, ...(embed.fields || []).flatMap(field => [field.name, field.value])].filter(Boolean).join(' ')))) return true;
   return Boolean(message.components?.some(row => row.components?.some(component => LINK_RE.test(component.url || ''))));
