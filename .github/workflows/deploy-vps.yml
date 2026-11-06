@@ -52,6 +52,7 @@ jobs:
           node --check api/auth/discord.js
           node --check api/auth/callback.js
           node --check discord-bot/src/index.js
+          node --check discord-bot/src/lib/profile-link-guard.js
           node --check discord-bot/src/lib/tickets.js
           node --check discord-bot/src/lib/ticket-commands.js
           node --check discord-bot/src/lib/tickets.js
