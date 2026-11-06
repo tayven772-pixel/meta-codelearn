@@ -301,7 +301,7 @@ export async function handleModerationCommand(interaction) {
     const limit = interaction.options.getInteger('limit') ?? 10000;
     const confirm = interaction.options.getBoolean('confirm') ?? false;
     const before = interaction.options.getString('before')?.trim() || undefined;
-    if (before && !/^\\d{17,20}$/.test(before)) {
+    if (before && !/^\d{17,20}$/.test(before)) {
       await interaction.reply({ content: 'The before value must be a valid Discord message ID from a previous scan.', flags: MessageFlags.Ephemeral });
       return true;
     }
