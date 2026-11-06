@@ -443,6 +443,7 @@ client.on(Events.InteractionCreate, async interaction => {
    else if (interaction.commandName === 'meta') await interaction.reply({ content: `Welcome to Meta CodeLearn!\nWebsite: ${siteUrl}\nLessons: ${siteUrl}/play\nProjects: ${siteUrl}/projects\nAccount: ${siteUrl}/account`, flags: MessageFlags.Ephemeral });
    return;
   }
+    if (await handleRulesInteraction(interaction)) return;
     if (await handleStaffApplicationComponent(interaction)) return;
     if (await handleCommunityComponent(interaction)) return;
     if (
