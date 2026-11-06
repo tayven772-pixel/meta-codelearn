@@ -337,9 +337,9 @@ export async function handleStaffApplicationComponent(interaction) {
     const application = db.prepare('SELECT * FROM staff_applications WHERE id = ? AND guild_id = ?').get(id, interaction.guildId);
     if (!application) { await interaction.editReply({ content: 'Application not found.', flags: MessageFlags.Ephemeral }); return true; }
     const existingTicket = interaction.guild.channels.cache.find(channel => channel.type === ChannelType.GuildText && channel.topic === 'Meta Code staff application follow-up #' + id);
-    if (existingTicket) { await interaction.reply({ content: 'A follow-up ticket already exists: ' + existingTicket.toString(), flags: MessageFlags.Ephemeral }); return true; }
+    if (existingTicket) { await interaction.editReply({ content: 'A follow-up ticket already exists: ' + existingTicket.toString(), flags: MessageFlags.Ephemeral }); return true; }
     const applicant = await interaction.guild.members.fetch(application.user_id).catch(() => null);
-    if (!applicant) { await interaction.reply({ content: 'Applicant is no longer in this server, so a private follow-up ticket cannot be created.', flags: MessageFlags.Ephemeral }); return true; }
+    if (!applicant) { await interaction.editReply({ content: 'Applicant is no longer in this server, so a private follow-up ticket cannot be created.', flags: MessageFlags.Ephemeral }); return true; }
     const staffRoleId = getSetting(interaction.guildId, 'staff_applications_role_id');
     const overwrites = [
       { id: interaction.guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
@@ -354,7 +354,7 @@ export async function handleStaffApplicationComponent(interaction) {
       parent: interaction.channel?.parentId || undefined, reason: 'Staff application follow-up ticket #' + id
     });
     await ticket.send({ content: applicant.toString() + ' ' + (staffRoleId ? '<@&' + staffRoleId + '>' : '') + '\n**Staff application follow-up #' + id + '**\nStaff can ask additional questions here. The applicant can reply in this private ticket. Please keep all discussion respectful and application-related.', embeds: [buildApplicationEmbed(application, interaction.guild)], allowedMentions: { users: [applicant.id], roles: staffRoleId ? [staffRoleId] : [] } });
-    await interaction.reply({ content: 'Created a private follow-up ticket: ' + ticket.toString() + '. The applicant and authorized staff can continue the conversation there.', flags: MessageFlags.Ephemeral });    return true;
+    await interaction.editReply({ content: 'Created a private follow-up ticket: ' + ticket.toString() + '. The applicant and authorized staff can continue the conversation there.', flags: MessageFlags.Ephemeral });    return true;
   }
   if (interaction.isModalSubmit() && /^staff_application_followup_modal_\\d+$/.test(interaction.customId)) {
     if (!(await isStaffReviewer(interaction))) { await interaction.reply({ content: 'Only authorized staff can send follow-ups.', flags: MessageFlags.Ephemeral }); return true; }
