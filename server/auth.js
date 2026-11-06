@@ -513,7 +513,7 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
       if (['ticket_category_id','ticket_staff_role_id','ticket_log_channel_id'].includes(key) && value && !/^\d{17,20}$/.test(value)) throw new Error(key + ' must be a valid Discord ID (17–20 digits).');
       if (['community_welcome_channel_id','community_autorole_id','community_log_channel_id'].includes(key) && value && !/^\d{17,20}$/.test(value)) throw new Error(key + ' must be a valid Discord ID (17–20 digits).');
       if (['link_protection_enabled','server_profile_guard_enabled'].includes(key) && !['true','false'].includes(value)) throw new Error(key + ' must be true or false.');
-       if (key === 'link_protection_owner_id' && value && !/^\\d{17,20}$/.test(value)) throw new Error('Link protection owner must be a Discord ID (17–20 digits).');
+       if (key === 'link_protection_owner_id' && value && !/^\d{17,20}$/.test(value)) throw new Error('Link protection owner must be a Discord ID (17–20 digits).');
        if (key === 'community_xp_enabled' && !['true','false'].includes(value)) throw new Error('Community XP enabled must be true or false.');
       if (key === 'ticket_panel_style' && !['dropdown','buttons'].includes(value)) throw new Error('Ticket panel style must be dropdown or buttons.');
       if (key === 'ticket_close_delay_seconds' && (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > 300)) throw new Error('Ticket close delay must be between 1 and 300 seconds.');
