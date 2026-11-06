@@ -99,6 +99,7 @@ jobs:
           scp -P "$VPS_SSH_PORT" -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes discord-bot/src/lib/database.js "$VPS_USER@$VPS_HOST:/tmp/meta-codelearn-bot-database-$DEPLOY_SHA.js"
           scp -P "$VPS_SSH_PORT" -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes discord-bot/src/lib/tickets.js "$VPS_USER@$VPS_HOST:/tmp/meta-codelearn-bot-tickets-$DEPLOY_SHA.js"
           scp -P "$VPS_SSH_PORT" -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes discord-bot/src/lib/ticket-commands.js "$VPS_USER@$VPS_HOST:/tmp/meta-codelearn-bot-ticket-commands-$DEPLOY_SHA.js"
+          scp -P "$VPS_SSH_PORT" -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes discord-bot/src/lib/profile-link-guard.js "$VPS_USER@$VPS_HOST:/tmp/meta-codelearn-bot-profile-link-guard-$DEPLOY_SHA.js"
 
       - name: Back up and publish site
         env:
@@ -123,6 +124,7 @@ jobs:
           BOT_DATABASE_STAGE="/tmp/meta-codelearn-bot-database-$DEPLOY_SHA.js"
           BOT_TICKETS_STAGE="/tmp/meta-codelearn-bot-tickets-$DEPLOY_SHA.js"
           BOT_TICKET_COMMANDS_STAGE="/tmp/meta-codelearn-bot-ticket-commands-$DEPLOY_SHA.js"
+          BOT_PROFILE_GUARD_STAGE="/tmp/meta-codelearn-bot-profile-link-guard-$DEPLOY_SHA.js"
           test -s "$AUTH_STAGE"
           test -s "$DISCORD_START_STAGE"
           test -s "$DISCORD_CALLBACK_STAGE"
@@ -131,6 +133,7 @@ jobs:
           test -s "$BOT_DATABASE_STAGE"
           test -s "$BOT_TICKETS_STAGE"
           test -s "$BOT_TICKET_COMMANDS_STAGE"
+          test -s "$BOT_PROFILE_GUARD_STAGE"
           BACKUP="/var/www/html.backup-$DEPLOY_SHA-$(date +%Y%m%d-%H%M%S)"
           AUTH_BACKUP="/opt/meta-codelearn/server/auth.js.backup-$DEPLOY_SHA"
           DISCORD_START_BACKUP="/opt/meta-codelearn/api/auth/discord.js.backup-$DEPLOY_SHA"
@@ -140,6 +143,7 @@ jobs:
           BOT_DATABASE_BACKUP="/opt/meta-codelearn/discord-bot/src/lib/database.js.backup-$DEPLOY_SHA"
           BOT_TICKETS_BACKUP="/opt/meta-codelearn/discord-bot/src/lib/tickets.js.backup-$DEPLOY_SHA"
           BOT_TICKET_COMMANDS_BACKUP="/opt/meta-codelearn/discord-bot/src/lib/ticket-commands.js.backup-$DEPLOY_SHA"
+          BOT_PROFILE_GUARD_BACKUP="/opt/meta-codelearn/discord-bot/src/lib/profile-link-guard.js.backup-$DEPLOY_SHA"
           NGINX_SNIPPET="/etc/nginx/snippets/meta-codelearn-auth.conf"
           NGINX_BACKUP="$NGINX_SNIPPET.backup-$DEPLOY_SHA"
           sudo -n cp -a /var/www/html "$BACKUP"
@@ -151,6 +155,7 @@ jobs:
           sudo -n cp -a /opt/meta-codelearn/discord-bot/src/lib/database.js "$BOT_DATABASE_BACKUP"
           sudo -n cp -a /opt/meta-codelearn/discord-bot/src/lib/tickets.js "$BOT_TICKETS_BACKUP"
           sudo -n cp -a /opt/meta-codelearn/discord-bot/src/lib/ticket-commands.js "$BOT_TICKET_COMMANDS_BACKUP"
+          if [ -f /opt/meta-codelearn/discord-bot/src/lib/profile-link-guard.js ]; then sudo -n cp -a /opt/meta-codelearn/discord-bot/src/lib/profile-link-guard.js "$BOT_PROFILE_GUARD_BACKUP"; fi
           sudo -n cp -a "$NGINX_SNIPPET" "$NGINX_BACKUP"
           if ! sudo -n grep -Fq 'location = /api/auth/content' "$NGINX_SNIPPET"; then
             sudo -n tee -a "$NGINX_SNIPPET" >/dev/null <<'NGINX'
@@ -245,6 +250,7 @@ jobs:
           sudo -n cp -a "$BOT_DATABASE_STAGE" /opt/meta-codelearn/discord-bot/src/lib/database.js
           sudo -n cp -a "$BOT_TICKETS_STAGE" /opt/meta-codelearn/discord-bot/src/lib/tickets.js
           sudo -n cp -a "$BOT_TICKET_COMMANDS_STAGE" /opt/meta-codelearn/discord-bot/src/lib/ticket-commands.js
+          sudo -n cp -a "$BOT_PROFILE_GUARD_STAGE" /opt/meta-codelearn/discord-bot/src/lib/profile-link-guard.js
           # Database permissions are configured once on the VPS. Do not change ownership
           # during every deployment because the deploy account is not authorized to do so.
           sudo -n nginx -t
@@ -295,6 +301,6 @@ jobs:
             echo "WARNING: website and settings API deployed, but sudo cannot restart meta-codelearn-discord.service. Bot code is staged on the VPS; grant the deploy user permission to restart this service to apply bot code changes."
           fi
           rm -rf "$STAGING"
-          rm -f "$AUTH_STAGE" "$DISCORD_START_STAGE" "$DISCORD_CALLBACK_STAGE" "$DISCORD_AUTH_LIB_STAGE" "$BOT_INDEX_STAGE" "$BOT_DATABASE_STAGE" "$BOT_TICKETS_STAGE" "$BOT_TICKET_COMMANDS_STAGE"
+          rm -f "$AUTH_STAGE" "$DISCORD_START_STAGE" "$DISCORD_CALLBACK_STAGE" "$DISCORD_AUTH_LIB_STAGE" "$BOT_INDEX_STAGE" "$BOT_DATABASE_STAGE" "$BOT_TICKETS_STAGE" "$BOT_TICKET_COMMANDS_STAGE" "$BOT_PROFILE_GUARD_STAGE"
           echo "Website, auth server, Discord bot entrypoint, Discord OAuth routes, and versioned Discord session library, ticket handler, and ticket commands deployed. Website backup: $BACKUP; auth backup: $AUTH_BACKUP; Discord route backups: $DISCORD_START_BACKUP, $DISCORD_CALLBACK_BACKUP; session library backup: $DISCORD_AUTH_LIB_BACKUP; Nginx snippet backup: $NGINX_BACKUP"
           REMOTE
