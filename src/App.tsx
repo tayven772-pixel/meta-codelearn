@@ -3864,6 +3864,32 @@ function BotControlPage() {
     finally { setBusy(false); }
   };
   const setValue = (key: string, value: string) => setSettings(current => ({ ...current, [key]: value }));
+  const exportBotConfigJson = () => {
+    let serverTemplate: Record<string, unknown> = {};
+    try {
+      const parsed = JSON.parse(templateText);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) serverTemplate = parsed;
+    } catch {
+      setStatus('Fix the setup JSON before exporting the complete configuration.');
+      return;
+    }
+    const exported = {
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      server: serverTemplate,
+      botSettings: settings,
+    };
+    const blob = new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'meta-code-bot-config.json';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setStatus('Exported the current server template and bot settings. This file is a backup; importing it is not yet supported as a unified restore.');
+  };
   const sendBotMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const messageText = messageFormat === 'plain' ? messageContent.trim() : embedDescription.trim();
@@ -4079,6 +4105,7 @@ function BotControlPage() {
           {editorOpen && <>
             <section id="bot-settings-editor" className="admin-publishing-guide" hidden={!panelSectionEnabled('setup')}>
               <h2>Publish server setup JSON</h2>
+              <button type="button" className="button-secondary" onClick={exportBotConfigJson} disabled={busy}>Export server + bot JSON backup</button>
               <p>The JSON controls Discord roles, categories and channels, supported bot settings, and which dashboard sections are shown. Publish first creates a read-only preview. Confirm only after reviewing all removals. Deleting channels also deletes their message history.</p>
               <textarea value={templateText} onChange={event => setTemplateText(event.target.value)} rows={18} spellCheck={false} style={{ ...fieldStyle, fontFamily: 'monospace' }} aria-label="Discord setup JSON" />
               <button type="button" className="button-primary" onClick={() => { void publishSetupTemplate(); }} disabled={busy}>{busy ? 'Publishing…' : 'Publish JSON to Discord'}</button>
