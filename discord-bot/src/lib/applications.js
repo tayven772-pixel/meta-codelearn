@@ -331,10 +331,11 @@ export async function handleStaffApplicationComponent(interaction) {
   }
 
   if (interaction.isButton() && /^staff_application_followup_\\d+$/.test(interaction.customId)) {
-    if (!(await isStaffReviewer(interaction))) { await interaction.reply({ content: 'Only authorized staff can follow up on applications.', flags: MessageFlags.Ephemeral }); return true; }
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    if (!(await isStaffReviewer(interaction))) { await interaction.editReply({ content: 'Only authorized staff can follow up on applications.' }); return true; }
     const id = Number(interaction.customId.split('_').at(-1));
     const application = db.prepare('SELECT * FROM staff_applications WHERE id = ? AND guild_id = ?').get(id, interaction.guildId);
-    if (!application) { await interaction.reply({ content: 'Application not found.', flags: MessageFlags.Ephemeral }); return true; }
+    if (!application) { await interaction.editReply({ content: 'Application not found.', flags: MessageFlags.Ephemeral }); return true; }
     const existingTicket = interaction.guild.channels.cache.find(channel => channel.type === ChannelType.GuildText && channel.topic === 'Meta Code staff application follow-up #' + id);
     if (existingTicket) { await interaction.reply({ content: 'A follow-up ticket already exists: ' + existingTicket.toString(), flags: MessageFlags.Ephemeral }); return true; }
     const applicant = await interaction.guild.members.fetch(application.user_id).catch(() => null);
