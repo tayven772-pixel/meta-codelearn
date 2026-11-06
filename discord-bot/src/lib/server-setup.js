@@ -122,6 +122,23 @@ export function validateServerTemplate(template) {
     channelKeys.push(normalizeChannelName(rawName));
   }
   if (new Set(channelKeys).size !== channelKeys.length) throw new Error('Channel names must be unique for each channel type after normalization.');
+  const channelPermissions = template.channelPermissions;
+  if (channelPermissions !== undefined && (!Array.isArray(channelPermissions) || channelPermissions.length > 500 ||
+      channelPermissions.some(rule => !rule || typeof rule !== 'object' || Array.isArray(rule) ||
+        typeof rule.channel !== 'string' || !rule.channel.trim() || rule.channel.length > 100 ||
+        typeof rule.role !== 'string' || !rule.role.trim() || rule.role.length > 100 ||
+        (rule.sendMessages !== undefined && !['allow','deny','inherit'].includes(rule.sendMessages))))) {
+    throw new Error('channelPermissions must be an array of { channel, role, sendMessages: "allow" | "deny" | "inherit" } rules.');
+  }
+  const channelNamesForPermissions = new Set(template.categories.flatMap(group => group.channels.map(channel => normalizeChannelName(channel[1]))));
+  const roleNamesForPermissions = new Set(template.roles.map(role => role.name.trim().toLowerCase()));
+  for (const rule of channelPermissions || []) {
+    if (!channelNamesForPermissions.has(normalizeChannelName(rule.channel))) throw new Error('channelPermissions.channel must reference a channel in categories.');
+    if (!roleNamesForPermissions.has(rule.role.trim().toLowerCase())) throw new Error('channelPermissions.role must reference a role in roles.');
+  }
+  const permissionKeys = (channelPermissions || []).map(rule => normalizeChannelName(rule.channel) + '|' + rule.role.trim().toLowerCase());
+  if (new Set(permissionKeys).size !== permissionKeys.length) throw new Error('Only one channelPermissions rule per channel/role pair is allowed.');
+
   const panel = template.controlPanel;
   if (panel !== undefined && (!panel || typeof panel !== 'object' || Array.isArray(panel) ||
       (panel.title !== undefined && (typeof panel.title !== 'string' || panel.title.length > 80)) ||
@@ -304,7 +321,7 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
     } else if (deleteUnlisted) deleteCategories.push({ id: category.id, name: category.name });
   }
 
-  const plan = { renameServer, createRoles, updateRoles, deleteRoles, protectedRoles, createCategories, updateCategories, deleteCategories, createChannels, moveChannels, syncChannelPermissions, deleteChannels, protectedChannels };
+  const plan = { renameServer, createRoles, updateRoles, deleteRoles, protectedRoles, createCategories, updateCategories, deleteCategories, createChannels, moveChannels, syncChannelPermissions, deleteChannels, protectedChannels, channelPermissions: template.channelPermissions || [] };
   const fingerprint = createHash('sha256').update(JSON.stringify(plan)).digest('hex');
   return { fingerprint, plan };
 }
@@ -451,6 +468,25 @@ export async function applyServerTemplate(guild, template, options = {}) {
       catch (error) { throw new Error('Could not delete role ' + stale.name + ': ' + error.message); }
     }
   }
+  // Apply explicit role-level channel message permissions after channels and roles exist.
+  for (const rule of template.channelPermissions || []) {
+    const channel = guild.channels.cache.find(item => item.name.toLowerCase() === normalizeChannelName(rule.channel));
+    const role = guild.roles.cache.find(item => item.name.toLowerCase() === rule.role.trim().toLowerCase());
+    if (!channel || !role) { skipped.push('channel permission rule ' + rule.channel + ' / ' + rule.role + ' (missing target)'); continue; }
+    try {
+      const overwrite = channel.permissionOverwrites.cache.get(role.id);
+      if (rule.sendMessages === 'inherit') {
+        if (overwrite) await channel.permissionOverwrites.delete(role.id, 'Meta Code JSON channel permission sync');
+      } else {
+        await channel.permissionOverwrites.edit(role.id, {
+          SendMessages: rule.sendMessages === 'allow' ? true : false
+        }, { reason: 'Meta Code JSON channel permission sync' });
+      }
+      updated.push('send messages ' + rule.sendMessages + ' for role ' + role.name + ' in #' + channel.name);
+    } catch (error) {
+      throw new Error('Could not set send-message permission for ' + rule.role + ' in ' + rule.channel + ': ' + error.message);
+    }
+  }
   await applyTemplateSettings(guild, template);
   return { created, updated, deleted, skipped, errors: [], protectedRoles: plan.protectedRoles, protectedChannels: plan.protectedChannels };
 }
@@ -472,6 +508,7 @@ export async function previewServerTemplate(guild, template) {
       moveChannels: plan.moveChannels,
       deleteChannels: plan.deleteChannels,
       syncChannelPermissions: plan.syncChannelPermissions,
+      channelPermissions: plan.channelPermissions,
       protectedChannels: plan.protectedChannels
     }
   };
