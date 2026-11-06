@@ -6,6 +6,7 @@ import { handleTicketCommand, handleTicketButton, handleTicketPanelCommand, runP
 import { staffApplicationCommands, handleStaffApplicationCommand, handleStaffApplicationComponent } from './lib/applications.js';
 import { applyServerTemplate, previewServerTemplate, handleServerSetup, handleServerSetupButton } from './lib/server-setup.js';
 import { db, getSetting } from './lib/database.js';
+import { rulesCommands, handleRulesInteraction, getRulesEmbed, rememberRulesMessage } from './lib/rules.js';
 import { moderationCommands, handleModerationCommand, handleSoftbanMessage, handleUnapprovedBotJoin } from './lib/moderation.js';
 import { handleLinkProtection, scanRecentLinks, handleServerProfileUpdate } from './lib/profile-link-guard.js';
 import { autoPartnerCommands, handleAutoPartnerCommand, runAutoPartnerScheduler } from './lib/autopartner.js';
@@ -50,7 +51,8 @@ const commands = [
   .addIntegerOption(option => option.setName('minutes').setDescription('When to remind you (1–1440 minutes)').setMinValue(1).setMaxValue(1440).setRequired(true))
   .addStringOption(option => option.setName('reminder').setDescription('What should I remind you about?').setMaxLength(180).setRequired(true)),
  new SlashCommandBuilder().setName('help').setDescription('Show Meta bot commands and community tools'),
- new SlashCommandBuilder().setName('rules').setDescription('Post the Meta Code community rules in this channel'),
+ new SlashCommandBuilder().setName('rules').setDescription('Post the current Meta Code community rules in this channel'),
+ ...rulesCommands,
  new SlashCommandBuilder().setName('serverinfo').setDescription('Show useful information about this server'),
  new SlashCommandBuilder().setName('userinfo').setDescription('Show information about a server member')
   .addUserOption(option => option.setName('user').setDescription('Member to look up (defaults to you)').setRequired(false)),
@@ -164,6 +166,7 @@ client.on(Events.InteractionCreate, async interaction => {
     await interaction.reply({ content: 'This command is currently disabled by the server owner in the Meta Code bot dashboard.', flags: MessageFlags.Ephemeral });
     return;
    }
+   if (await handleRulesInteraction(interaction)) return;
    if (await handleAutoPartnerCommand(interaction)) return;
    if (await handleModerationCommand(interaction)) return;
    if (await handleCommunityCommand(interaction)) return;
@@ -200,28 +203,14 @@ client.on(Events.InteractionCreate, async interaction => {
      await interaction.reply({ content: 'Use /rules inside a server text channel.', flags: MessageFlags.Ephemeral });
      return;
     }
-    const rulesEmbed = new EmbedBuilder()
-     .setColor(0x42B883)
-     .setTitle('📜 Meta Code Community Rules')
-     .setDescription('Please follow these rules so everyone can learn, build, and enjoy the community.')
-     .addFields(
-      { name: '1. Be respectful', value: 'Treat everyone kindly. Harassment, bullying, hate speech, and personal attacks are not allowed.', inline: false },
-      { name: '2. Keep it appropriate', value: 'Keep messages and shared content suitable for a general community. No explicit or sexual content.', inline: false },
-      { name: '3. No spam or disruption', value: 'Avoid flooding chats, repeated messages, excessive mentions, or disruptive behavior.', inline: false },
-      { name: '4. Share links safely', value: 'Do not post scams, malicious downloads, phishing links, or suspicious invitations. Only share links relevant to the conversation.', inline: false },
-      { name: '5. Use the right channels', value: 'Keep discussions in their relevant channels and follow any channel-specific instructions.', inline: false },
-      { name: '6. Respect privacy', value: 'Never share someone’s personal information, private messages, or account details without permission.', inline: false },
-      { name: '7. Learn and collaborate fairly', value: 'Give credit for other people’s work. Do not claim someone else’s code or projects as your own.', inline: false },
-      { name: '8. Follow staff directions', value: 'Listen to moderators. If you disagree with a decision, raise it calmly through the appropriate support channel.', inline: false }
-     )
-     .setFooter({ text: 'Meta Code • Learn the idea, then the code' })
-     .setTimestamp();
     try {
+     const rulesEmbed = getRulesEmbed(interaction.guildId);
      const posted = await interaction.channel.send({ embeds: [rulesEmbed], allowedMentions: { parse: [] } });
+     rememberRulesMessage(interaction.guildId, interaction.channelId, posted.id);
      await interaction.reply({ content: `📜 Rules posted in ${interaction.channel}. ${posted.url}`, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
     } catch (error) {
      console.error('[Rules] Could not post rules:', error?.message || error);
-     await interaction.reply({ content: 'I could not post the rules here. Check that I have View Channel, Send Messages, and Embed Links permissions.', flags: MessageFlags.Ephemeral });
+     await interaction.reply({ content: `I could not build or post the rules: ${error.message}`, flags: MessageFlags.Ephemeral });
     }
    }
    else if (interaction.commandName === 'membercount') {
