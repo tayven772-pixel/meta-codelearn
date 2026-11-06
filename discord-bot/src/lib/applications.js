@@ -37,6 +37,10 @@ export const staffApplicationCommands = [
       .setDescription('Private channel where completed applications are sent')
       .addChannelTypes(ChannelType.GuildText)
       .setRequired(false))
+  new SlashCommandBuilder().setName('application-question').setDescription('Edit application question wording and minimum word count').setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addIntegerOption(o => o.setName('number').setDescription('Question number 1–5').setMinValue(1).setMaxValue(5).setRequired(true))
+    .addStringOption(o => o.setName('question').setDescription('New question wording (optional)').setMaxLength(350).setRequired(false))
+    .addIntegerOption(o => o.setName('minimum_words').setDescription('Minimum words (0 disables)').setMinValue(0).setMaxValue(500).setRequired(false)),
 ].map(command => command.toJSON());
 
 async function isStaffReviewer(interaction) {
@@ -69,11 +73,23 @@ function buildApplicationEmbed(application, guild) {
 function reviewButtons(id, disabled = false) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('staff_application_accept_' + id).setLabel('Accept').setStyle(ButtonStyle.Success).setDisabled(disabled),
-    new ButtonBuilder().setCustomId('staff_application_reject_' + id).setLabel('Reject').setStyle(ButtonStyle.Danger).setDisabled(disabled)
+    new ButtonBuilder().setCustomId('staff_application_reject_' + id).setLabel('Reject').setStyle(ButtonStyle.Danger).setDisabled(disabled),
+    new ButtonBuilder().setCustomId('staff_application_followup_' + id).setLabel('Follow up').setStyle(ButtonStyle.Secondary).setEmoji('📩').setDisabled(disabled)
   );
 }
 
 export async function handleStaffApplicationCommand(interaction) {
+  if (interaction.commandName === 'application-question') {
+    if (!interaction.inGuild() || !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) { await interaction.reply({ content: 'Only administrators can edit application questions.', flags: MessageFlags.Ephemeral }); return true; }
+    const n = interaction.options.getInteger('number', true);
+    const q = interaction.options.getString('question');
+    const min = interaction.options.getInteger('minimum_words');
+    if (q?.trim()) setSetting('global', 'staff_application_question_' + n, q.trim());
+    if (min !== null) setSetting('global', 'staff_application_min_words_' + n, String(min));
+    const defaults = ['Which staff role are you applying for?', 'What days and times are you available to help?', 'What skills or experience would you bring?', 'Why would you like to help Meta Code?', 'How would you handle a disagreement between members?'];
+    await interaction.reply({ content: 'Saved question ' + n + ': ' + (getSetting(interaction.guildId, 'staff_application_question_' + n) || defaults[n - 1]) + '\nMinimum words: ' + (getSetting(interaction.guildId, 'staff_application_min_words_' + n) || '0'), flags: MessageFlags.Ephemeral });
+    return true;
+  }
   if (interaction.commandName !== 'setup-applications') return false;
   if (!interaction.inGuild() || !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
     await interaction.reply({ content: 'Only server administrators can configure staff applications.', flags: MessageFlags.Ephemeral });
