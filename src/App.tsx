@@ -3777,7 +3777,7 @@ function BotControlPage() {
     controlPanel: {
       title: 'Meta Code bot control',
       description: 'Owner dashboard configured from this JSON template.',
-      sections: ['setup','commands','responses','tickets','messages','community','autopartner','applications']
+      sections: ['setup','commands','responses','tickets','messages','security','community','autopartner','applications']
     },
     settings: {
       welcome: { enabled: true, channel: 'welcome', message: 'Welcome {user} to {server}! You are member #{membercount}.', showAvatar: true },
@@ -3985,7 +3985,7 @@ function BotControlPage() {
         throw new Error('Use roles and categories arrays. Each channel must be ["text" or "voice", "channel-name"]. Limits: 40 roles, 30 categories, 50 channels each.');
       }
     } catch (error) { setStatus('Setup template JSON is invalid: ' + (error instanceof Error ? error.message : 'check the JSON')); return; }
-    const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_min_members','autopartner_template','staff_applications_enabled','staff_applications_channel_id','staff_applications_title','staff_applications_description','staff_applications_role_id','community_welcome_avatar','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help','ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','ticket_close_delay_seconds','community_welcome_channel_id','community_welcome_message','community_autorole_id','community_log_channel_id','community_xp_enabled']);
+    const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_min_members','autopartner_template','staff_applications_enabled','staff_applications_channel_id','staff_applications_title','staff_applications_description','staff_applications_role_id','community_welcome_avatar','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help','ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','ticket_close_delay_seconds','community_welcome_channel_id','community_welcome_message','community_autorole_id','community_log_channel_id','community_xp_enabled','link_protection_enabled','link_protection_owner_id','server_profile_guard_enabled']);
     const payload = Object.fromEntries(Object.entries(settings).filter(([key]) => editableKeys.has(key) || key.startsWith('bot_command_enabled:')));
     payload.server_setup_template = template;
     setBusy(true);
@@ -4259,6 +4259,24 @@ function BotControlPage() {
                   {sendingMessage ? 'Sending…' : 'Send as Meta'}
                 </button>
               </form>
+            </section>
+            <section className="admin-publishing-guide" hidden={!panelSectionEnabled('security')}>
+              <h2>Security protections</h2>
+              <p>These protections apply to the Meta home server. Link removal requires Manage Messages permission in each channel. Profile moderation checks member server nicknames; Discord does not expose reliable profile-image or bio classification to this bot.</p>
+              <label style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}>
+                <input type="checkbox" checked={settings.link_protection_enabled === 'true'} onChange={event => setValue('link_protection_enabled', event.target.checked ? 'true' : 'false')} />
+                Delete links posted by anyone except the owner account
+              </label>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong>Owner Discord user ID (link allowlist)</strong>
+                <input value={settings.link_protection_owner_id || ''} onChange={event => setValue('link_protection_owner_id', event.target.value.replace(/\\D/g, '').slice(0, 20))} placeholder="Your Discord user ID" style={fieldStyle} inputMode="numeric" />
+                <small>Only this account's links are exempt. Server admins are not exempt. Set this to your own Discord ID before enabling link protection.</small>
+              </label>
+              <label style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}>
+                <input type="checkbox" checked={settings.server_profile_guard_enabled === 'true'} onChange={event => setValue('server_profile_guard_enabled', event.target.checked ? 'true' : 'false')} />
+                Auto-ban members with clearly NSFW server nicknames
+              </label>
+              <p>When enabled, a conservative filter checks server-specific nicknames on join and profile update. It does not scan account bios, avatars, or server banner images.</p>
             </section>
             <section className="admin-publishing-guide" hidden={!panelSectionEnabled('community')}>
               <h2>Community features</h2>
