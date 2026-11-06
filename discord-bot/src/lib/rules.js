@@ -82,10 +82,11 @@ export function buildRulesEmbed(config) {
   if (description.length > 4096) throw new Error('Rules description exceeds Discord’s 4,096-character limit.');
   const total = description.length + fields.reduce((sum, field) => sum + field.name.length + field.value.length, 0);
   if (total > 5800) throw new Error('The rules are too long for one Discord embed. Shorten the description or rule text.');
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(color)
-    .setTitle(String(config.title || '').slice(0, 256))
-    .setDescription(description || null)
+    .setTitle(String(config.title || '').slice(0, 256));
+  if (description) embed.setDescription(description);
+  return embed
     .addFields(fields)
     .setFooter({ text: String(config.footer || 'Meta Code Administration').slice(0, 2048) })
     .setTimestamp();
