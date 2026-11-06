@@ -492,7 +492,8 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
     'autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_min_members','autopartner_template',
     'server_setup_template','bot_welcome_message','bot_rules_text','bot_status_text',
     'community_welcome_channel_id','community_welcome_message','community_welcome_avatar','community_autorole_id','community_log_channel_id','community_xp_enabled',
-    'staff_applications_enabled','staff_applications_channel_id','staff_applications_title','staff_applications_description','staff_applications_role_id',
+    'link_protection_enabled','link_protection_owner_id','server_profile_guard_enabled',
+     'staff_applications_enabled','staff_applications_channel_id','staff_applications_title','staff_applications_description','staff_applications_role_id',
     'ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','ticket_close_delay_seconds',
     ...botCommandNames.map(name => `bot_command_enabled:${name}`),
     ...['meta','lessons','ping','help'].map(name => `bot_response:${name}`)
@@ -511,7 +512,9 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
       }
       if (['ticket_category_id','ticket_staff_role_id','ticket_log_channel_id'].includes(key) && value && !/^\d{17,20}$/.test(value)) throw new Error(key + ' must be a valid Discord ID (17–20 digits).');
       if (['community_welcome_channel_id','community_autorole_id','community_log_channel_id'].includes(key) && value && !/^\d{17,20}$/.test(value)) throw new Error(key + ' must be a valid Discord ID (17–20 digits).');
-      if (key === 'community_xp_enabled' && !['true','false'].includes(value)) throw new Error('Community XP enabled must be true or false.');
+      if (['link_protection_enabled','server_profile_guard_enabled'].includes(key) && !['true','false'].includes(value)) throw new Error(key + ' must be true or false.');
+       if (key === 'link_protection_owner_id' && value && !/^\\d{17,20}$/.test(value)) throw new Error('Link protection owner must be a Discord ID (17–20 digits).');
+       if (key === 'community_xp_enabled' && !['true','false'].includes(value)) throw new Error('Community XP enabled must be true or false.');
       if (key === 'ticket_panel_style' && !['dropdown','buttons'].includes(value)) throw new Error('Ticket panel style must be dropdown or buttons.');
       if (key === 'ticket_close_delay_seconds' && (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > 300)) throw new Error('Ticket close delay must be between 1 and 300 seconds.');
       if (key === 'ticket_categories' && value) {
