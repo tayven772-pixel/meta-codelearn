@@ -330,7 +330,7 @@ export async function handleStaffApplicationComponent(interaction) {
     return true;
   }
 
-  if (interaction.isButton() && /^staff_application_followup_\\d+$/.test(interaction.customId)) {
+  if (interaction.isButton() && /^staff_application_followup_\d+$/.test(interaction.customId)) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     if (!(await isStaffReviewer(interaction))) { await interaction.editReply({ content: 'Only authorized staff can follow up on applications.' }); return true; }
     const id = Number(interaction.customId.split('_').at(-1));
@@ -356,7 +356,7 @@ export async function handleStaffApplicationComponent(interaction) {
     await ticket.send({ content: applicant.toString() + ' ' + (staffRoleId ? '<@&' + staffRoleId + '>' : '') + '\n**Staff application follow-up #' + id + '**\nStaff can ask additional questions here. The applicant can reply in this private ticket. Please keep all discussion respectful and application-related.', embeds: [buildApplicationEmbed(application, interaction.guild)], allowedMentions: { users: [applicant.id], roles: staffRoleId ? [staffRoleId] : [] } });
     await interaction.editReply({ content: 'Created a private follow-up ticket: ' + ticket.toString() + '. The applicant and authorized staff can continue the conversation there.', flags: MessageFlags.Ephemeral });    return true;
   }
-  if (interaction.isModalSubmit() && /^staff_application_followup_modal_\\d+$/.test(interaction.customId)) {
+  if (interaction.isModalSubmit() && /^staff_application_followup_modal_\d+$/.test(interaction.customId)) {
     if (!(await isStaffReviewer(interaction))) { await interaction.reply({ content: 'Only authorized staff can send follow-ups.', flags: MessageFlags.Ephemeral }); return true; }
     const id = Number(interaction.customId.split('_').at(-1));
     const application = db.prepare('SELECT * FROM staff_applications WHERE id = ? AND guild_id = ?').get(id, interaction.guildId);
