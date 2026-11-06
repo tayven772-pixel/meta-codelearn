@@ -4269,7 +4269,7 @@ function BotControlPage() {
               </label>
               <label style={{ display: 'block', marginTop: 12 }}>
                 <strong>Owner Discord user ID (link allowlist)</strong>
-                <input value={settings.link_protection_owner_id || ''} onChange={event => setValue('link_protection_owner_id', event.target.value.replace(/\\D/g, '').slice(0, 20))} placeholder="Your Discord user ID" style={fieldStyle} inputMode="numeric" />
+                <input value={settings.link_protection_owner_id || ''} onChange={event => setValue('link_protection_owner_id', event.target.value.replace(/\D/g, '').slice(0, 20))} placeholder="Your Discord user ID" style={fieldStyle} inputMode="numeric" />
                 <small>Only this account's links are exempt. Server admins are not exempt. Set this to your own Discord ID before enabling link protection.</small>
               </label>
               <label style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}>
