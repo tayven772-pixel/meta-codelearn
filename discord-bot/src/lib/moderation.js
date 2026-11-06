@@ -6,6 +6,7 @@ import {
   ChannelType,
 } from 'discord.js';
 import { db, getSetting, setSetting } from './database.js';
+import { isLinkMessage } from './profile-link-guard.js';
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS moderation_warnings (
@@ -73,7 +74,81 @@ const moderationCommands = [
     .setDescription('Delete 1–100 recent messages from this channel')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
     .addIntegerOption(option => option.setName('amount').setDescription('Number of messages to delete (1–100)').setMinValue(1).setMaxValue(100).setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('clearlinks')
+    .setDescription('Preview, then delete link-containing messages in this channel')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+    .addIntegerOption(option => option.setName('limit').setDescription('Newest messages to scan (1–10000; default 10000)').setMinValue(1).setMaxValue(10000).setRequired(false))
+    .addBooleanOption(option => option.setName('confirm').setDescription('Set true to delete the links found in this scan').setRequired(false)),
 ].map(command => command.toJSON());
+
+async function scanChannelForLinks(channel, maxMessages) {
+  const matches = [];
+  let scanned = 0;
+  let before;
+
+  while (scanned < maxMessages) {
+    const batchLimit = Math.min(100, maxMessages - scanned);
+    const batch = await channel.messages.fetch({
+      limit: batchLimit,
+      ...(before ? { before } : {})
+    });
+    const messages = [...batch.values()];
+    if (!messages.length) break;
+
+    scanned += messages.length;
+    for (const message of messages) {
+      if (isLinkMessage(message)) matches.push(message);
+    }
+
+    const oldest = messages.reduce((currentOldest, message) =>
+      BigInt(message.id) < BigInt(currentOldest.id) ? message : currentOldest
+    , messages[0]);
+    before = oldest.id;
+    if (messages.length < batchLimit) break;
+  }
+
+  return { matches, scanned };
+}
+
+async function deleteLinkMessages(channel, messages) {
+  const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+  const recent = messages.filter(message => message.createdTimestamp >= cutoff);
+  const older = messages.filter(message => message.createdTimestamp < cutoff);
+  let deleted = 0;
+  let failed = 0;
+
+  // Discord only supports bulk deletion for messages newer than 14 days.
+  for (let index = 0; index < recent.length; index += 100) {
+    const batch = recent.slice(index, index + 100);
+    if (batch.length < 2 || typeof channel.bulkDelete !== 'function') {
+      for (const message of batch) {
+        try { await message.delete(); deleted += 1; }
+        catch { failed += 1; }
+      }
+      continue;
+    }
+    try {
+      const result = await channel.bulkDelete(batch, true);
+      deleted += result.size;
+      failed += batch.length - result.size;
+    } catch (error) {
+      console.warn('[Moderation] Bulk link cleanup failed; retrying messages individually:', error?.message || error);
+      for (const message of batch) {
+        try { await message.delete(); deleted += 1; }
+        catch { failed += 1; }
+      }
+    }
+  }
+
+  // Older messages must be deleted one at a time because Discord rejects bulk deletion.
+  for (const message of older) {
+    try { await message.delete(); deleted += 1; }
+    catch { failed += 1; }
+  }
+
+  return { deleted, failed };
+}
 
 function hasPermission(interaction, permission) {
   return interaction.inGuild() && interaction.memberPermissions?.has(permission);
@@ -101,7 +176,7 @@ async function fetchTarget(interaction) {
 }
 
 export async function handleModerationCommand(interaction) {
-  if (!['warn', 'warnings', 'timeout', 'untimeout', 'purge', 'setup-softban-channel', 'disable-softban-channel', 'allow-bot', 'remove-allowed-bot', 'list-allowed-bots'].includes(interaction.commandName)) return false;
+  if (!['warn', 'warnings', 'timeout', 'untimeout', 'purge', 'clearlinks', 'setup-softban-channel', 'disable-softban-channel', 'allow-bot', 'remove-allowed-bot', 'list-allowed-bots'].includes(interaction.commandName)) return false;
   if (!interaction.inGuild()) {
     await interaction.reply({ content: 'Use moderation commands inside a server.', flags: MessageFlags.Ephemeral });
     return true;
@@ -204,6 +279,46 @@ export async function handleModerationCommand(interaction) {
     }
     return true;
   }
+  if (command === 'clearlinks') {
+    const channel = interaction.channel;
+    if (!channel?.isTextBased?.() || !channel.messages?.fetch) {
+      await interaction.reply({ content: 'Use this command in a text channel or thread.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    const botMember = interaction.guild.members.me;
+    if (!botMember?.permissionsIn(channel).has(PermissionFlagsBits.ManageMessages)) {
+      await interaction.reply({ content: 'I need the Manage Messages permission in this channel to remove links.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
+
+    const limit = interaction.options.getInteger('limit') ?? 10000;
+    const confirm = interaction.options.getBoolean('confirm') ?? false;
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    try {
+      const { matches, scanned } = await scanChannelForLinks(channel, limit);
+      if (!matches.length) {
+        await interaction.editReply(`No link-containing messages were found in the newest **${scanned.toLocaleString()}** messages scanned. Nothing was deleted.`);
+        return true;
+      }
+
+      if (!confirm) {
+        await interaction.editReply(
+          `Found **${matches.length.toLocaleString()}** messages containing links in the newest **${scanned.toLocaleString()}** messages. Nothing has been deleted yet.\n\nRun \`/clearlinks limit:${limit} confirm:True\` to delete those messages. Messages older than 14 days are deleted individually.`
+        );
+        return true;
+      }
+
+      const result = await deleteLinkMessages(channel, matches);
+      await interaction.editReply(
+        `Link cleanup finished in ${channel}. Scanned **${scanned.toLocaleString()}** messages; deleted **${result.deleted.toLocaleString()}** link-containing messages.${result.failed ? ` Failed to delete **${result.failed.toLocaleString()}** messages (check my channel permissions and message availability).` : ''}${scanned >= limit ? `\n\nThe scan reached its ${limit.toLocaleString()}-message limit. Run \`/clearlinks\` again to continue farther back in the channel history.` : ''}`
+      );
+    } catch (error) {
+      console.error('[Moderation] Clear-links command failed:', error?.message || error);
+      await interaction.editReply('Link cleanup could not finish. Check that I have View Channel, Read Message History, and Manage Messages permissions, then try again.');
+    }
+    return true;
+  }
+
 
   if (command === 'warnings') {
     const user = interaction.options.getUser('user', true);
