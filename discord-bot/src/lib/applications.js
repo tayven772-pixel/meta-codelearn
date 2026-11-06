@@ -145,13 +145,16 @@ async function sendApplicationDM(dm, title, description, color) {
 }
 
 async function collectStaffApplicationByDM(interaction, dm, staffChannel) {
-  const prompts = [
-    ['requested_role', '1/5 — Which staff role are you applying for?', 80],
-    ['availability', '2/5 — What days and times are you available to help?', 180],
-    ['experience', '3/5 — What skills or experience would you bring? (600 characters max)', 600],
-    ['motivation', '4/5 — Why would you like to help Meta Code? (600 characters max)', 600],
-    ['scenario', '5/5 — How would you handle a disagreement between members? (600 characters max)', 600]
+  const defaultPrompts = [
+    ['requested_role', 'Which staff role are you applying for?', 80],
+    ['availability', 'What days and times are you available to help?', 180],
+    ['experience', 'What skills or experience would you bring?', 600],
+    ['motivation', 'Why would you like to help Meta Code?', 600],
+    ['scenario', 'How would you handle a disagreement between members?', 600]
   ];
+  const prompts = defaultPrompts.map(([key, question, maxLength], index) => [
+    key, (index + 1) + '/5 — ' + (getSetting(interaction.guildId, 'staff_application_question_' + (index + 1)) || question) + ' (' + maxLength + ' characters max)', maxLength
+  ]);
   const answers = {};
   try {
     for (const [key, prompt, maxLength] of prompts) {
@@ -165,6 +168,13 @@ async function collectStaffApplicationByDM(interaction, dm, staffChannel) {
       const answer = collected.first()?.content?.trim() || '';
       if (answer.toLowerCase() === 'cancel') {
         await sendApplicationDM(dm, 'Application cancelled', 'Your Meta Code staff application was cancelled.', 0xED4245);
+        return;
+      }
+      const questionNumber = prompts.findIndex(item => item[0] === key) + 1;
+      const minimumWords = Number(getSetting(interaction.guildId, 'staff_application_min_words_' + questionNumber) || 0);
+      const wordCount = answer.split(/\\s+/).filter(Boolean).length;
+      if (minimumWords > 0 && wordCount < minimumWords) {
+        await sendApplicationDM(dm, 'Answer too short', 'Question ' + questionNumber + ' requires at least ' + minimumWords + ' words. Your answer has ' + wordCount + '. Please restart the application and try again.', 0xED4245);
         return;
       }
       if (!answer || answer.length > maxLength) {
