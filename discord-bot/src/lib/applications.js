@@ -184,6 +184,24 @@ async function collectStaffApplicationByDM(interaction, dm, staffChannel) {
       answers[key] = answer;
     }
 
+    await sendApplicationDM(dm, 'Review your answers', 'You can edit answers before sending. Reply with edit 1, edit 2, ... edit 5 to change one, or submit to send your application.');
+    let reviewing = true;
+    while (reviewing) {
+      const review = await dm.awaitMessages({ filter: message => message.author.id === interaction.user.id && !message.author.bot, max: 1, time: 5 * 60 * 1000, errors: ['time'] });
+      const text = review.first()?.content?.trim() || '';
+      if (text.toLowerCase() === 'submit') { reviewing = false; break; }
+      const match = text.match(/^edit\\s+([1-5])$/i);
+      if (!match) { await sendApplicationDM(dm, 'Review answers', 'Use edit 1–5 to revise an answer, or submit to send.'); continue; }
+      const index = Number(match[1]) - 1;
+      await sendApplicationDM(dm, 'Edit answer ' + (index + 1), 'Send the replacement answer in your next message.');
+      const replacementMessages = await dm.awaitMessages({ filter: message => message.author.id === interaction.user.id && !message.author.bot, max: 1, time: 5 * 60 * 1000, errors: ['time'] });
+      const replacement = replacementMessages.first()?.content?.trim() || '';
+      const minWords = Number(getSetting(interaction.guildId, 'staff_application_min_words_' + (index + 1)) || 0);
+      const count = replacement.split(/\\s+/).filter(Boolean).length;
+      if (!replacement || replacement.length > prompts[index][2] || count < minWords) { await sendApplicationDM(dm, 'Answer not accepted', 'Your answer must be within ' + prompts[index][2] + ' characters and contain at least ' + minWords + ' words. Please try again.'); continue; }
+      answers[prompts[index][0]] = replacement;
+      await sendApplicationDM(dm, 'Answer updated', 'Saved your revised answer. You can edit another answer or send submit.');
+    }
     const existing = db.prepare("SELECT id FROM staff_applications WHERE guild_id = ? AND user_id = ? AND status = 'pending'")
       .get(interaction.guildId, interaction.user.id);
     if (existing) {
