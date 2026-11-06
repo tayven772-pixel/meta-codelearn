@@ -20,21 +20,42 @@ const DEFAULT_CONFIG = {
   color: '#42B883',
   footer: 'Meta Code Administration • Learn the idea, then the code',
   rules: [
-    '🤝 Professional Conduct|Treat every developer and student with dignity. Harassment, discrimination, bullying, and personal attacks are prohibited.',
-    '💬 Constructive Dialogue|Keep code reviews and project debates civil. Criticism should focus on the work, never the person. Resolve personal conflicts privately or through a moderation ticket.',
-    '🧭 Channel Etiquette|Post questions, code snippets, and project updates in their designated channels. Follow channel-specific instructions.',
-    '✅ Appropriate Content|All media, repositories, links, and discussions must remain Safe For Work (SFW) and suitable for an educational environment.',
-    '🧩 Protect Learning Experiences|Do not reveal unmasked answers to interactive coding games or assignments. Use Discord spoiler formatting (||spoiler text||) when sharing solutions.',
-    '🚫 No Disruption|Script spam, excessive capitalization, message flooding, unnecessary staff mentions, and mass pings are prohibited.',
-    '🌐 Primary Language|Use English in public technical discussions so the moderation team can accurately review and support conversations.',
-    '🔒 Security & Privacy|Malware, phishing, credential theft, malicious downloads, unauthorized access, and attacks on services are prohibited. Never publish passwords, API keys, private credentials, or personal information without permission.',
-    '📣 No Unsolicited Solicitation|Do not use direct messages to recruit members to unrelated servers, solicit freelance services, or promote unauthorized commercial projects.',
-    '©️ Intellectual Property|Do not claim another person’s code, projects, or resources as your own. Credit original creators and follow applicable licenses.',
-    '🤖 AI Transparency|AI-generated code and content are welcome when permitted, but do not misrepresent another person’s work or submit copied work as your own.',
-    '⚖️ Obligatory Terms|[Meta Code Privacy Policy](https://metacodework.dbm.shared-servers.com/privacy)\n[Discord Terms of Service](https://discord.com/terms)\n[Discord Community Guidelines](https://discord.com/guidelines)',
-    '⚖️ Accountability Framework|Stage I: Formal notice. Stage II: 24-hour timeout. Stage III: 7-day timeout. Stage IV: Permanent ban. Moderators may skip stages depending on severity, intent, and circumstances. Previous violations may be considered.',
-    '📩 Appeals & Support|Members who believe a moderation action was applied incorrectly may submit an appeal through the official support or moderation ticket system. Appeals must remain respectful.',
-    '⚙️ Automated Infrastructure|Membership Screening, AutoMod, Community Onboarding, and moderation logging may be used to support enforcement. These tools supplement human moderation and do not replace members’ responsibility to follow these guidelines.'
+    '## 🤝 Professional Conduct',
+    '- Treat every developer and student with dignity. Harassment, discrimination, bullying, or derogatory remarks about someone’s learning pace or background are prohibited.',
+    '- Keep code reviews and project debates civil. Criticism should focus on the work, never the person.',
+    '- Keep personal conflicts out of public channels. Resolve disputes privately or open a moderation ticket.',
+    '',
+    '## 💬 Development Discourse & Content',
+    '- Post questions, code snippets, and project updates in their designated channels.',
+    '- Keep all media, repositories, links, and discussions Safe For Work (SFW) and suitable for an educational environment.',
+    '- Do not reveal unmasked answers to interactive coding games or assignments. Use Discord spoiler formatting (||spoiler text||) when sharing solutions.',
+    '- Avoid script spam, excessive capitalization, message flooding, unnecessary staff mentions, and mass pings.',
+    '- Use English in public technical discussions so the moderation team can accurately review and support conversations.',
+    '',
+    '## 🔒 Security & Intellectual Property',
+    '- Malware, phishing, credential theft, malicious downloads, unauthorized access, and attacks on services are prohibited.',
+    '- Do not use direct messages to recruit members to unrelated servers, solicit freelance services, or promote unauthorized commercial projects.',
+    '- Never publish passwords, API keys, private credentials, personal information, or identifying information without permission.',
+    '- Do not claim another person’s code, projects, or resources as your own. Credit original creators and follow applicable licenses.',
+    '- AI-generated code and content are welcome when permitted, but do not misrepresent another person’s work or submit copied work as your own.',
+    '',
+    '## ⚖️ Obligatory Terms',
+    '- [Meta Code Privacy Policy](https://metacodework.dbm.shared-servers.com/privacy)',
+    '- [Discord Terms of Service](https://discord.com/terms)',
+    '- [Discord Community Guidelines](https://discord.com/guidelines)',
+    '',
+    '## ⚖️ The Accountability Framework',
+    '- **Stage I — Formal Notice:** A private notification identifying the violated guideline, recorded for moderation purposes.',
+    '- **Stage II — Temporary Timeout (24 Hours):** Used for repeated or more serious violations.',
+    '- **Stage III — Extended Timeout (7 Days):** Used for continued violations or significant disruption.',
+    '- **Stage IV — Permanent Ban:** Reserved for severe violations such as malicious activity, doxxing, serious security threats, or repeated serious misconduct.',
+    '- Moderators may skip stages depending on severity, intent, and circumstances. Previous violations may also be considered.',
+    '',
+    '## 📩 Appeals & Support',
+    '- Members who believe a moderation action was applied incorrectly may submit an appeal through the official support or moderation ticket system. Appeals must remain respectful.',
+    '',
+    '## ⚙️ Automated Infrastructure',
+    '- Discord Membership Screening, AutoMod, Community Onboarding, and moderation logging may be used to support enforcement. These tools supplement human moderation and do not replace members’ responsibility to follow these guidelines.'
   ].join('\n')
 };
 
@@ -56,39 +77,29 @@ function readConfig(guildId) {
   }
 }
 
-function parseRules(text) {
-  const lines = String(text || '').split('\n').map(line => line.trim()).filter(Boolean);
-  if (!lines.length || lines.length > 20) {
-    throw new Error('Add between 1 and 20 rules, one per line.');
-  }
-  return lines.map((line, index) => {
-    const separator = line.indexOf('|');
-    if (separator < 1) throw new Error(`Rule line ${index + 1} must use: Heading | Rule details`);
-    const name = line.slice(0, separator).trim();
-    const value = line.slice(separator + 1).trim();
-    if (!name || name.length > 256 || !value || value.length > 1024) {
-      throw new Error(`Rule line ${index + 1} has an empty heading/details or exceeds Discord's limits.`);
-    }
-    return { name, value, inline: false };
-  });
-}
 
 export function buildRulesEmbed(config) {
-  const fields = parseRules(config.rules);
-  const color = Number.parseInt(String(config.color).replace(/^#/, ''), 16);
-  if (!Number.isInteger(color) || !/^(?:[0-9a-fA-F]{6})$/.test(String(config.color).replace(/^#/, ''))) {
-    throw new Error('The saved rules color is invalid. Run /editrules and use a six-digit hex color.');
+  const colorText = String(config.color || '').replace(/^#/, '');
+  const color = Number.parseInt(colorText, 16);
+  if (!/^[0-9a-fA-F]{6}$/.test(colorText) || !Number.isInteger(color)) {
+    throw new Error('The rules color must be a six-digit hex code, such as #42B883.');
   }
+
+  const title = String(config.title || '').trim();
+  if (!title || title.length > 256) throw new Error('The title must contain 1–256 characters.');
+
   const description = String(config.description || '').trim();
-  if (description.length > 4096) throw new Error('Rules description exceeds Discord’s 4,096-character limit.');
-  const total = description.length + fields.reduce((sum, field) => sum + field.name.length + field.value.length, 0);
-  if (total > 5800) throw new Error('The rules are too long for one Discord embed. Shorten the description or rule text.');
-  const embed = new EmbedBuilder()
+  const rules = String(config.rules || '').trim();
+  const combinedDescription = [description, rules].filter(Boolean).join('\n\n');
+  if (!rules) throw new Error('Add your community rules in the Rules and policy text field.');
+  if (combinedDescription.length > 4096) {
+    throw new Error(`The introduction and rules together are ${combinedDescription.length} characters. Discord allows up to 4,096 characters in an embed description. Shorten the text by ${combinedDescription.length - 4096} characters.`);
+  }
+
+  return new EmbedBuilder()
     .setColor(color)
-    .setTitle(String(config.title || '').slice(0, 256));
-  if (description) embed.setDescription(description);
-  return embed
-    .addFields(fields)
+    .setTitle(title)
+    .setDescription(combinedDescription)
     .setFooter({ text: String(config.footer || 'Meta Code Administration').slice(0, 2048) })
     .setTimestamp();
 }
@@ -116,7 +127,7 @@ async function openEditor(interaction) {
     .addComponents(
       makeInput('rules_title', 'Embed title', TextInputStyle.Short, config.title, 256),
       makeInput('rules_description', 'Introduction / description', TextInputStyle.Paragraph, config.description, 1000, false),
-      makeInput('rules_entries', 'Rules: one per line, Heading | Details', TextInputStyle.Paragraph, config.rules, 4000),
+      makeInput('rules_entries', 'Rules and policy text (Markdown supported)', TextInputStyle.Paragraph, config.rules, 4000),
       makeInput('rules_color', 'Embed color (hex, e.g. #42B883)', TextInputStyle.Short, config.color, 7),
       makeInput('rules_footer', 'Embed footer', TextInputStyle.Short, config.footer, 200, false)
     );
