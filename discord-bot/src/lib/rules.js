@@ -2,6 +2,7 @@ import {
   ActionRowBuilder,
   EmbedBuilder,
   ModalBuilder,
+  MessageFlags,
   PermissionFlagsBits,
   SlashCommandBuilder,
   TextInputBuilder,
@@ -124,21 +125,26 @@ async function openEditor(interaction) {
 
 async function saveEditor(interaction) {
   if (!interaction.inGuild() || !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-    await interaction.reply({ content: 'Only server administrators can edit the rules.', ephemeral: true });
+    await interaction.reply({ content: 'Only server administrators can edit the rules.', flags: MessageFlags.Ephemeral });
     return;
   }
-  const config = {
-    title: interaction.fields.getTextInputValue('rules_title').trim(),
-    description: interaction.fields.getTextInputValue('rules_description').trim(),
-    rules: interaction.fields.getTextInputValue('rules_entries').trim(),
-    color: interaction.fields.getTextInputValue('rules_color').trim(),
-    footer: interaction.fields.getTextInputValue('rules_footer').trim() || DEFAULT_CONFIG.footer
-  };
-  if (!config.title || config.title.length > 256) {
-    await interaction.reply({ content: 'The title must contain 1–256 characters.', ephemeral: true });
-    return;
-  }
+
+  // Acknowledge the modal before any Discord API fetch/edit calls.
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
   try {
+    const config = {
+      title: interaction.fields.getTextInputValue('rules_title').trim(),
+      description: interaction.fields.getTextInputValue('rules_description').trim(),
+      rules: interaction.fields.getTextInputValue('rules_entries').trim(),
+      color: interaction.fields.getTextInputValue('rules_color').trim(),
+      footer: interaction.fields.getTextInputValue('rules_footer').trim() || DEFAULT_CONFIG.footer
+    };
+    if (!config.title || config.title.length > 256) {
+      await interaction.editReply('The title must contain 1–256 characters.');
+      return;
+    }
+
     const preview = buildRulesEmbed(config);
     setSetting(interaction.guildId, SETTINGS_KEY, JSON.stringify(config));
 
@@ -157,14 +163,15 @@ async function saveEditor(interaction) {
         console.warn('[Rules] Saved rules but could not update the previous post:', error?.message || error);
       }
     }
-    await interaction.reply({
-      content: updatedExisting
+
+    await interaction.editReply(
+      updatedExisting
         ? '✅ Rules saved. I also updated the previous rules message.'
-        : '✅ Rules saved. Run /rules to post the updated version in a channel.',
-      ephemeral: true
-    });
+        : '✅ Rules saved. Run /rules to post the updated version in a channel.'
+    );
   } catch (error) {
-    await interaction.reply({ content: `Could not save the rules: ${error.message}`, ephemeral: true });
+    console.error('[Rules] Could not save submitted rules:', error?.message || error);
+    await interaction.editReply(`Could not save the rules: ${error.message || 'Please try again.'}`);
   }
 }
 
