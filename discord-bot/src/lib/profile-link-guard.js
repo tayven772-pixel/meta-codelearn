@@ -2,7 +2,7 @@ import { PermissionFlagsBits } from 'discord.js';
 import { getSetting } from './database.js';
 
 // Conservative URL matching: handles normal links, Discord invites, and markdown links.
-const LINK_RE = /(?:https?:\/\/|www\.)[^\s<>()]+|discord\.gg\/[\w-]+|discord(?:app)?\.com\/invite\/[\w-]+/i;
+const LINK_RE = /(?:https?:\/\/|www\.)[^\s<>()]+|discord\.gg\/[\w-]+|discord(?:app)?\.com\/invite\/[\w-]+|(?<![@\w.-])(?:[a-z0-9-]+\.)+(?:com|net|org|edu|gov|ca|uk|us|io|gg|dev|app|co|me|tv|info|biz|xyz|ai|site|online|tech|store)(?:\/[^\s<>()]*)?/i;
 const NSFW_PROFILE_RE = /(?:\bnsfw\b|\b18\s*\+\b|\badult\s*only\b|\bexplicit\b|\bsexual\s*content\b|\bporn(?:ographic)?\b)/i;
 const historicalScanLocks = new Set();
 
