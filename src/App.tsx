@@ -4260,7 +4260,7 @@ function BotControlPage() {
                 </button>
               </form>
             </section>
-            <section className="admin-publishing-guide" hidden={!panelSectionEnabled('security')}>
+            <section className="admin-publishing-guide">
               <h2>Security protections</h2>
               <p>These protections apply to the Meta home server. Link removal requires Manage Messages permission in each channel. Profile moderation checks member server nicknames; Discord does not expose reliable profile-image or bio classification to this bot.</p>
               <label style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}>
