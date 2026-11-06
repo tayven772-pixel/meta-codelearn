@@ -755,11 +755,14 @@ app.get('/api/auth/admin/ai/status', (req, res) => {
   if (!user) return;
   res.setHeader('Cache-Control', 'no-store');
   const ollamaConfigured = Boolean(process.env.OLLAMA_BASE_URL || process.env.OLLAMA_MODEL);
-  const model = String(process.env.OLLAMA_MODEL || process.env.OMNIROUTE_MODEL || '').trim();
+  const provider = ollamaConfigured ? 'Ollama' : 'Omniroute';
+  const model = String(
+    ollamaConfigured ? (process.env.OLLAMA_MODEL || '') : (process.env.OMNIROUTE_MODEL || '')
+  ).trim();
   return res.json({
-    enabled: Boolean(model),
+    enabled: Boolean(model && (ollamaConfigured ? process.env.OLLAMA_BASE_URL : process.env.OMNIROUTE_BASE_URL || 'http://127.0.0.1:20128/v1')),
     model: model || null,
-    provider: ollamaConfigured ? 'Ollama' : 'Omniroute'
+    provider
   });
 });
 app.post('/api/auth/admin/ai/chat', aiRequestLimiter, async (req, res) => {
@@ -779,10 +782,26 @@ app.post('/api/auth/admin/ai/chat', aiRequestLimiter, async (req, res) => {
     if (!content || content.length > 12000) return res.status(400).json({ error: 'Each message must contain 1–12,000 characters.' });
     cleanMessages.push({ role: message.role, content });
   }
-  const baseUrl = String(process.env.OMNIROUTE_BASE_URL || 'http://127.0.0.1:20128/v1').replace(/\/+$/, '');
-  const model = String(process.env.OMNIROUTE_MODEL || '').trim();
-  const apiKey = String(process.env.OMNIROUTE_API_KEY || '').trim();
-  if (!model) return res.status(503).json({ error: 'Meta AI is not configured yet. Set OMNIROUTE_MODEL in the auth service environment.' });
+  const ollamaConfigured = Boolean(process.env.OLLAMA_BASE_URL || process.env.OLLAMA_MODEL);
+  const provider = ollamaConfigured ? 'Ollama' : 'Omniroute';
+  const baseUrl = String(
+    ollamaConfigured
+      ? (process.env.OLLAMA_BASE_URL || '')
+      : (process.env.OMNIROUTE_BASE_URL || 'http://127.0.0.1:20128/v1')
+  ).replace(/\/+$/, '');
+  const model = String(
+    ollamaConfigured ? (process.env.OLLAMA_MODEL || '') : (process.env.OMNIROUTE_MODEL || '')
+  ).trim();
+  const apiKey = String(
+    ollamaConfigured ? (process.env.OLLAMA_API_KEY || '') : (process.env.OMNIROUTE_API_KEY || '')
+  ).trim();
+  if (!model || !baseUrl) {
+    return res.status(503).json({
+      error: ollamaConfigured
+        ? 'Meta AI Ollama is not configured yet. Set OLLAMA_BASE_URL and OLLAMA_MODEL in the auth service environment.'
+        : 'Meta AI is not configured yet. Set OMNIROUTE_MODEL in the auth service environment.'
+    });
+  }
   let endpoint;
   try {
     endpoint = new URL(baseUrl);
@@ -824,7 +843,7 @@ app.post('/api/auth/admin/ai/chat', aiRequestLimiter, async (req, res) => {
     }
     const answer = payload?.choices?.[0]?.message?.content;
     if (typeof answer !== 'string' || !answer.trim()) {
-      return res.status(502).json({ error: 'Omniroute returned an empty or unsupported response.' });
+      return res.status(502).json({ error: provider + ' returned an empty or unsupported response.' });
     }
     return res.json({ answer: answer.slice(0, 30000), model: payload.model || model });
   } catch (error) {
