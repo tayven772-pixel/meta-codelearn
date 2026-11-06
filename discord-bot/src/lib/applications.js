@@ -330,6 +330,28 @@ export async function handleStaffApplicationComponent(interaction) {
     return true;
   }
 
+  if (interaction.isButton() && /^staff_application_followup_\\d+$/.test(interaction.customId)) {
+    if (!(await isStaffReviewer(interaction))) { await interaction.reply({ content: 'Only authorized staff can follow up on applications.', flags: MessageFlags.Ephemeral }); return true; }
+    const id = Number(interaction.customId.split('_').at(-1));
+    const application = db.prepare('SELECT * FROM staff_applications WHERE id = ? AND guild_id = ?').get(id, interaction.guildId);
+    if (!application) { await interaction.reply({ content: 'Application not found.', flags: MessageFlags.Ephemeral }); return true; }
+    const modal = new ModalBuilder().setCustomId('staff_application_followup_modal_' + id).setTitle('Follow up with applicant');
+    modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('message').setLabel('Message to applicant').setStyle(TextInputStyle.Paragraph).setMaxLength(1500).setRequired(true)));
+    await interaction.showModal(modal);
+    return true;
+  }
+  if (interaction.isModalSubmit() && /^staff_application_followup_modal_\\d+$/.test(interaction.customId)) {
+    if (!(await isStaffReviewer(interaction))) { await interaction.reply({ content: 'Only authorized staff can send follow-ups.', flags: MessageFlags.Ephemeral }); return true; }
+    const id = Number(interaction.customId.split('_').at(-1));
+    const application = db.prepare('SELECT * FROM staff_applications WHERE id = ? AND guild_id = ?').get(id, interaction.guildId);
+    if (!application) { await interaction.reply({ content: 'Application not found.', flags: MessageFlags.Ephemeral }); return true; }
+    const applicant = await interaction.client.users.fetch(application.user_id).catch(() => null);
+    if (!applicant) { await interaction.reply({ content: 'Could not find the applicant account.', flags: MessageFlags.Ephemeral }); return true; }
+    const message = interaction.fields.getTextInputValue('message').trim();
+    await applicant.send({ embeds: [applicationDMEmbed('Staff follow-up for application #' + id, message, 0xF0B232)] });
+    await interaction.reply({ content: 'Follow-up sent to the applicant by DM.', flags: MessageFlags.Ephemeral });
+    return true;
+  }
   if (interaction.isButton() && /^staff_application_(accept|reject)_\d+$/.test(interaction.customId)) {
     if (!(await isStaffReviewer(interaction))) {
       await interaction.reply({ content: 'You need Manage Server or Administrator permission to review applications.', flags: MessageFlags.Ephemeral });
