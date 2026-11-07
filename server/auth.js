@@ -322,7 +322,7 @@ CREATE INDEX IF NOT EXISTS security_events_pending ON security_events(status,id)
 const botCommandNames = [
   'meta','lessons','ping','membercount','avatar','roleinfo','slowmode','lock','unlock','embed','help',
   'serverinfo','userinfo','poll','suggest','coinflip','roll','choose','8ball','announce',
-  'setup-applications','ticket','ticket-panel','setup-server','warn','warnings','timeout','untimeout','purge',
+  'setup-applications','ticket','ticket-panel','setup-server','warn','warnings','timeout','untimeout','kick','ban','purge',
   'autopartner-setup','partner-add','partner-remove','partner-list','partner-settings','partner-template','partner-post',
   'welcome-config','autorole','logging','level','leaderboard','giveaway','giveaway-end','role-menu','serverstats','config-export',
   'thread','topic','randomcolor','remindme'
@@ -526,6 +526,8 @@ function normalizeServerSetupTemplate(input) {
       ...(v2Bot.moderation.softbanChannel !== undefined ? { softbanChannel: v2Bot.moderation.softbanChannel } : {})
     } } : {}),
     ...(v2Bot.moderation ? { commands: {
+      ...(source.settings?.commands && typeof source.settings.commands === 'object' && !Array.isArray(source.settings.commands)
+        ? source.settings.commands : {}),
       ...(v2Bot.moderation.enabled === false ? { warn: false, timeout: false, kick: false, ban: false } : {}),
       ...(typeof v2Bot.moderation.warnEnabled === 'boolean' ? { warn: v2Bot.moderation.warnEnabled } : {}),
       ...(typeof v2Bot.moderation.timeoutEnabled === 'boolean' ? { timeout: v2Bot.moderation.timeoutEnabled } : {}),
