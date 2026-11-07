@@ -301,6 +301,64 @@ export function validateServerTemplate(template) {
   const permissionKeys = (channelPermissions || []).map(rule => normalizeChannelName(rule.channel) + '|' + rule.role.trim().toLowerCase());
   if (new Set(permissionKeys).size !== permissionKeys.length) throw new Error('Only one channelPermissions rule per channel/role pair is allowed.');
 
+  const onboarding = template.onboarding;
+  if (onboarding !== undefined) {
+    if (!isPlainObject(onboarding) || (onboarding.enabled !== undefined && typeof onboarding.enabled !== 'boolean') ||
+        !Array.isArray(onboarding.default_channel_names) || onboarding.default_channel_names.length > 25 ||
+        onboarding.default_channel_names.some(name => typeof name !== 'string' || !name.trim() || name.length > 100) ||
+        (onboarding.prompts !== undefined && (!Array.isArray(onboarding.prompts) || onboarding.prompts.length > 5 ||
+          onboarding.prompts.some(prompt => !isPlainObject(prompt) || typeof prompt.title !== 'string' || !prompt.title.trim() || prompt.title.length > 100 ||
+            !['single_choice','multiple_choice','dropdown'].includes(prompt.type) ||
+            (prompt.required !== undefined && typeof prompt.required !== 'boolean') ||
+            !Array.isArray(prompt.options) || prompt.options.length < 2 || prompt.options.length > 25 ||
+            prompt.options.some(option => !isPlainObject(option) || typeof option.title !== 'string' || !option.title.trim() || option.title.length > 50 ||
+              (option.description !== undefined && (typeof option.description !== 'string' || option.description.length > 100)) ||
+              (option.role !== undefined && (typeof option.role !== 'string' || !option.role.trim() || option.role.length > 100)) ||
+              (option.channels !== undefined && (!Array.isArray(option.channels) || option.channels.some(channel => typeof channel !== 'string' || !channel.trim() || channel.length > 100))))))) {
+      throw new Error('onboarding must contain enabled, default_channel_names, and valid prompts/options (up to 5 prompts).');
+    }
+    const onboardingChannels = new Set(template.categories.flatMap(group => group.channels.map(channel => normalizeChannelName(channel[1]))));
+    for (const channelName of onboarding.default_channel_names) {
+      if (!onboardingChannels.has(normalizeChannelName(channelName))) {
+        throw new Error('onboarding.default_channel_names contains unknown channel "' + channelName + '".');
+      }
+    }
+    for (const prompt of onboarding.prompts || []) {
+      for (const option of prompt.options) {
+        if (option.role && !roleNamesForPermissions.has(option.role.trim().toLowerCase())) {
+          throw new Error('Onboarding option role "' + option.role + '" must reference a role in roles.');
+        }
+        for (const channelName of option.channels || []) {
+          if (!onboardingChannels.has(normalizeChannelName(channelName))) {
+            throw new Error('Onboarding option channel "' + channelName + '" must reference a channel in categories.');
+          }
+        }
+      }
+    }
+    if (onboarding.enabled && onboarding.default_channel_names.length < 7) {
+      throw new Error('Discord requires at least 7 default channels to enable onboarding. Add at least ' + (7 - onboarding.default_channel_names.length) + ' more.');
+    }
+    if (onboarding.enabled) {
+      const defaultChannels = onboarding.default_channel_names.map(normalizeChannelName);
+      const categoryPermissionFor = (channelName, role) => {
+        const group = template.categories.find(category => category.channels.some(channel => normalizeChannelName(channel[1]) === channelName));
+        const channel = group?.channels.find(item => normalizeChannelName(item[1]) === channelName);
+        const channelRule = (template.channelPermissions || []).find(rule => normalizeChannelName(rule.channel) === channelName && rule.role.toLowerCase() === role);
+        const categoryRule = (group?.permissions || []).find(rule => rule.role.toLowerCase() === role);
+        const allow = channelRule?.allow ?? categoryRule?.allow ?? [];
+        const deny = channelRule?.deny ?? categoryRule?.deny ?? [];
+        return { allow, deny, channel, group };
+      };
+      const sendableCount = defaultChannels.filter(name => {
+        const permission = categoryPermissionFor(name, '@everyone');
+        return permission.deny.includes('SendMessages') ? false : true;
+      }).length;
+      if (sendableCount < 5) {
+        throw new Error('Discord onboarding requires at least 5 of its default channels to allow @everyone to send messages. Your template currently allows ' + sendableCount + '.');
+      }
+    }
+  }
+
   const panel = template.controlPanel;
   if (panel !== undefined && (!panel || typeof panel !== 'object' || Array.isArray(panel) ||
       (panel.title !== undefined && (typeof panel.title !== 'string' || panel.title.length > 80)) ||
