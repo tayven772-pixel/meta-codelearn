@@ -142,6 +142,7 @@ The `server` object supports `branding`, `roles`, `categories`, `channelPermissi
     {
       "name": "STAFF HQ",
       "private": true,
+      "staffRole": "Moderator",
       "channels": [
         ["text", "staff-chat"],
         ["text", "staff-applications"],
@@ -268,7 +269,7 @@ AutoMod uses Discord's native rule engine. Supported triggers are `keyword`, `sp
 
 Set `automod.enabled: false` to disable the rules named in the configuration. By default, rules not listed in JSON are left alone. Set `automod.syncUnlisted: true` only when you also intend the sync to delete AutoMod rules that are not listed. The preview displays those removals before confirmation.
 
-The structured `settings` blocks also support `welcome`, `autopartner`, `applications`, `tickets`, `commands`, `responses`, `security`, `community`, and `moderation`. The exported `botSettings` object restores saved Bot Control key/value settings and command toggles. Channel and role names referenced by structured settings should exist in the template or already exist on the server.
+The structured `settings` blocks also support `welcome`, `autopartner`, `applications`, `tickets`, `commands`, `responses`, `security`, `community`, and `moderation`. The exported `botSettings` object restores saved Bot Control key/value settings and command toggles. Names referenced by structured settings, AutoMod exemptions, or category/channel permission rules must be included in the template. Include any existing role or channel you want to keep; the confirmed sync removes unlisted deletable roles and channels.
 
 Publishing produces a live preview; it does not change Discord. Review role/channel/category changes, server settings, permission changes, AutoMod changes, and any listed removals. Confirming applies the reviewed setup and removes unlisted deletable roles, categories, and channels. Existing channel message history is permanently lost when a channel is deleted. Discord-managed roles, @everyone, administrator roles, roles at or above the bot's highest role, essential system channels, and channels/categories the bot cannot manage are protected. A server change after preview invalidates the confirmation and requires a fresh preview.
 
