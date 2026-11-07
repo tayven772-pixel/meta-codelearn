@@ -398,9 +398,9 @@ function normalizeServerSetupTemplate(input) {
   const branding = schemaV2 ? {
     ...(source.name ? { server_name: source.name } : {}),
     ...(source.description !== undefined ? { description: source.description } : {}),
-    ...(source.defaultMessageNotifications !== undefined ? { defaultMessageNotifications: String(source.defaultMessageNotifications).toLowerCase().replace(/_/g, '') } : {}),
-    ...(source.verificationLevel !== undefined ? { verificationLevel: String(source.verificationLevel).toLowerCase().replace(/_/g, '') } : {}),
-    ...(source.explicitContentFilter !== undefined ? { explicitContentFilter: String(source.explicitContentFilter).toLowerCase().replace(/_/g, '') } : {})
+    ...(source.defaultMessageNotifications !== undefined ? { defaultMessageNotifications: ({ ALL_MESSAGES: 'allMessages', ONLY_MENTIONS: 'onlyMentions' })[String(source.defaultMessageNotifications).toUpperCase()] || source.defaultMessageNotifications } : {}),
+    ...(source.verificationLevel !== undefined ? { verificationLevel: ({ NONE: 'none', LOW: 'low', MEDIUM: 'medium', HIGH: 'high', VERY_HIGH: 'veryHigh' })[String(source.verificationLevel).toUpperCase()] || source.verificationLevel } : {}),
+    ...(source.explicitContentFilter !== undefined ? { explicitContentFilter: ({ DISABLED: 'disabled', MEMBERS_WITHOUT_ROLES: 'membersWithoutRoles', ALL_MEMBERS: 'allMembers' })[String(source.explicitContentFilter).toUpperCase()] || source.explicitContentFilter } : {})
   } : source.branding;
 
   const roles = Array.isArray(source.roles) ? source.roles.map(role => {
@@ -422,7 +422,6 @@ function normalizeServerSetupTemplate(input) {
         const options = { ...rawOptions };
         if (options.user_limit !== undefined) { options.userLimit = options.user_limit; delete options.user_limit; }
         if (options.slowmode_delay !== undefined) { options.slowmode = options.slowmode_delay; delete options.slowmode_delay; }
-        if (permissions) options.permissions = permissions;
         return Object.keys(options).length ? [type, name, options] : [type, name];
       }
       return channel;
@@ -457,16 +456,16 @@ function normalizeServerSetupTemplate(input) {
   const permissionName = value => {
     if (typeof value !== 'string') return value;
     const aliases = {
-      view_channel: 'ViewChannel',
-      send_messages: 'SendMessages',
-      add_reactions: 'AddReactions',
-      create_public_threads: 'CreatePublicThreads',
-      create_private_threads: 'CreatePrivateThreads',
-      send_messages_in_threads: 'SendMessagesInThreads',
-      manage_messages: 'ManageMessages',
-      read_message_history: 'ReadMessageHistory',
-      attach_files: 'AttachFiles',
-      embed_links: 'EmbedLinks'
+      view_channel: 'ViewChannel', VIEW_CHANNEL: 'ViewChannel',
+      send_messages: 'SendMessages', SEND_MESSAGES: 'SendMessages',
+      add_reactions: 'AddReactions', ADD_REACTIONS: 'AddReactions',
+      create_public_threads: 'CreatePublicThreads', CREATE_PUBLIC_THREADS: 'CreatePublicThreads',
+      create_private_threads: 'CreatePrivateThreads', CREATE_PRIVATE_THREADS: 'CreatePrivateThreads',
+      send_messages_in_threads: 'SendMessagesInThreads', SEND_MESSAGES_IN_THREADS: 'SendMessagesInThreads',
+      manage_messages: 'ManageMessages', MANAGE_MESSAGES: 'ManageMessages',
+      read_message_history: 'ReadMessageHistory', READ_MESSAGE_HISTORY: 'ReadMessageHistory',
+      attach_files: 'AttachFiles', ATTACH_FILES: 'AttachFiles',
+      embed_links: 'EmbedLinks', EMBED_LINKS: 'EmbedLinks'
     };
     const normalized = value.trim();
     return aliases[normalized] || normalized.replace(/[_-](.)/g, (_, letter) => letter.toUpperCase())
@@ -493,6 +492,33 @@ function normalizeServerSetupTemplate(input) {
     }
   }
 
+  const v2Bot = schemaV2 && botSettings && typeof botSettings === 'object' ? botSettings : {};
+  const v2Settings = schemaV2 ? {
+    ...(source.settings || {}),
+    ...(v2Bot.welcome ? { welcome: {
+      enabled: v2Bot.welcome.enabled,
+      channel: v2Bot.welcome.channel,
+      message: v2Bot.welcome.message || v2Bot.welcome.embed?.description
+    } } : {}),
+    ...(v2Bot.applications ? { applications: {
+      enabled: v2Bot.applications.enabled,
+      staffRole: v2Bot.applications.staffRole,
+      staffChannel: v2Bot.applications.reviewChannel,
+      panelTitle: v2Bot.applications.panelTitle,
+      panelDescription: v2Bot.applications.panelDescription
+    } } : {}),
+    ...(v2Bot.tickets ? { tickets: {
+      enabled: v2Bot.tickets.enabled,
+      staffRole: Array.isArray(v2Bot.tickets.staffRoles) ? v2Bot.tickets.staffRoles[0] : v2Bot.tickets.staffRole,
+      category: v2Bot.tickets.categoryName,
+      logChannel: v2Bot.tickets.logChannel,
+      categories: Array.isArray(v2Bot.tickets.types) ? v2Bot.tickets.types.map(item => item.name) : v2Bot.tickets.categories,
+      panelTitle: v2Bot.tickets.panelTitle,
+      panelDescription: v2Bot.tickets.panelDescription
+    } } : {}),
+    ...(v2Bot.moderation ? { moderation: v2Bot.moderation } : {})
+  } : source.settings;
+  const normalizedBotSettings = schemaV2 ? undefined : botSettings;
   const normalizedAutomod = schemaV2 && source.automod && Array.isArray(source.automod.rules)
     ? {
         enabled: source.automod.enabled !== false,
@@ -524,12 +550,13 @@ function normalizeServerSetupTemplate(input) {
   const normalizedSource = {
     ...source,
     ...(branding ? { branding } : {}),
+    ...(v2Settings ? { settings: v2Settings } : {}),
     roles,
     categories,
     ...(normalizedAutomod ? { automod: normalizedAutomod } : {}),
     ...(rulesConfig ? { importedRulesConfig: rulesConfig } : {}),
     ...(channelPermissions.length ? { channelPermissions } : {}),
-    ...(botSettings && typeof botSettings === 'object' && !Array.isArray(botSettings) ? { botSettings } : {})
+    ...(normalizedBotSettings && typeof normalizedBotSettings === 'object' && !Array.isArray(normalizedBotSettings) ? { botSettings: normalizedBotSettings } : {})
   };
   return normalizedSource;
 }
