@@ -366,30 +366,41 @@ function normalizeServerSetupTemplate(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw new Error('Setup JSON must be an object.');
   }
+  if (input.schemaVersion !== undefined && input.schemaVersion !== 1) {
+    throw new Error('Unsupported Meta Code JSON schemaVersion. Export a fresh configuration backup.');
+  }
 
-  const roles = Array.isArray(input.roles) ? input.roles.map(role => {
+  // Accept both the editor's original template and the complete backup exported
+  // by Bot Control: { schemaVersion, server, botSettings }.
+  const source = input.server && typeof input.server === 'object' && !Array.isArray(input.server)
+    ? input.server
+    : input;
+  const botSettings = input.botSettings ?? source.botSettings;
+
+  const roles = Array.isArray(source.roles) ? source.roles.map(role => {
     if (!role || typeof role !== 'object' || Array.isArray(role)) return role;
     let color = role.color;
     if (typeof color === 'string' && /^#?[0-9a-f]{6}$/i.test(color.trim())) {
       color = Number.parseInt(color.trim().replace(/^#/, ''), 16);
     }
     return { ...role, color };
-  }) : input.roles;
+  }) : source.roles;
 
-  const categories = Array.isArray(input.categories) ? input.categories.map(category => {
+  const categories = Array.isArray(source.categories) ? source.categories.map(category => {
     if (!category || typeof category !== 'object' || Array.isArray(category)) return category;
     const channels = Array.isArray(category.channels) ? category.channels.map(channel => {
       if (Array.isArray(channel)) return channel;
       if (channel && typeof channel === 'object' && !Array.isArray(channel) &&
           ['text', 'voice'].includes(channel.type) && typeof channel.name === 'string') {
-        return [channel.type, channel.name];
+        const { type, name, ...options } = channel;
+        return Object.keys(options).length ? [type, name, options] : [type, name];
       }
       return channel;
     }) : category.channels;
     return { ...category, channels };
-  }) : input.categories;
+  }) : source.categories;
 
-  return { ...input, roles, categories };
+  return { ...source, roles, categories, ...(botSettings && typeof botSettings === 'object' && !Array.isArray(botSettings) ? { botSettings } : {}) };
 }
 
 function validGuildId(value) {
