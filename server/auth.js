@@ -10,6 +10,7 @@ import { OAuth2Client } from 'google-auth-library';
 import Database from 'better-sqlite3';
 import discordStart from '../api/auth/discord.js';
 import discordCallback from '../api/auth/callback.js';
+import coachHandler from '../api/coach.js';
 import { readSession, clearCookie, COOKIE_NAME } from '../lib/discord-auth.js';
 
 
@@ -950,6 +951,9 @@ function requireAdmin(req, res) {
 }
 // Private Meta AI endpoint. Both status and chat use the existing server-side owner allowlist.
 const aiRequestLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false });
+// The VPS serves /api/* through this Express app, so mount the project coach
+// handler here as well as keeping api/coach.js usable on serverless hosts.
+app.post('/api/coach', aiRequestLimiter, (req, res) => coachHandler(req, res));
 app.get('/api/auth/admin/ai/status', (req, res) => {
   const user = requireAdmin(req, res);
   if (!user) return;
@@ -1032,7 +1036,7 @@ app.post('/api/auth/admin/ai/chat', aiRequestLimiter, async (req, res) => {
         temperature: 0.4,
         stream: false
       }),
-      signal: AbortSignal.timeout(60000)
+      signal: AbortSignal.timeout(180000)
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
