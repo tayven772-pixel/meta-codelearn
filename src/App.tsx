@@ -3877,11 +3877,15 @@ function BotControlPage() {
     if ((serverTemplate as any).server && typeof (serverTemplate as any).server === 'object') {
       serverTemplate = (serverTemplate as any).server;
     }
+    const backupBotSettings = { ...(importedBotSettings && typeof importedBotSettings === 'object' ? importedBotSettings : {}), ...settings };
+    // The server template already lives in the "server" property; do not
+    // duplicate the whole template inside botSettings in the exported backup.
+    delete backupBotSettings.server_setup_template;
     const exported = {
       schemaVersion: 1,
       exportedAt: new Date().toISOString(),
       server: serverTemplate,
-      botSettings: { ...(importedBotSettings && typeof importedBotSettings === 'object' ? importedBotSettings : {}), ...settings },
+      botSettings: backupBotSettings,
     };
     const blob = new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
