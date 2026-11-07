@@ -151,6 +151,9 @@ function validateAutoModerationConfig(config) {
     const key = rule.name.trim().toLowerCase();
     if (names.has(key)) throw new Error('AutoMod rule names must be unique.');
     names.add(key);
+    triggerCounts[rule.trigger] = (triggerCounts[rule.trigger] || 0) + 1;
+    const triggerLimit = rule.trigger === 'keyword' ? 6 : 1;
+    if (triggerCounts[rule.trigger] > triggerLimit) throw new Error('Discord allows up to ' + triggerLimit + ' ' + rule.trigger + ' AutoMod rule(s) per server.');
     for (const [actionIndex, action] of rule.actions.entries()) {
       if (!isPlainObject(action) || !['blockMessage','sendAlert','timeout','blockMemberInteraction'].includes(action.type)) {
         throw new Error('Invalid action in AutoMod rule ' + rule.name + '. Use blockMessage, sendAlert, timeout, or blockMemberInteraction.');
@@ -163,8 +166,14 @@ function validateAutoModerationConfig(config) {
         throw new Error('AutoMod sendAlert actions must specify a text channel name or ID.');
       }
       if (action.type === 'timeout' &&
-          (!Number.isInteger(action.durationSeconds) || action.durationSeconds < 60 || action.durationSeconds > 2419200)) {
-        throw new Error('AutoMod timeout durationSeconds must be between 60 and 2,419,200.');
+          (rule.trigger !== 'keyword' || !Number.isInteger(action.durationSeconds) || action.durationSeconds < 60 || action.durationSeconds > 2419200)) {
+        throw new Error('AutoMod timeout actions are available only on keyword rules and need durationSeconds between 60 and 2,419,200.');
+      }
+      if (action.type === 'blockMemberInteraction' && rule.trigger !== 'memberProfile') {
+        throw new Error('blockMemberInteraction is only supported by memberProfile AutoMod rules.');
+      }
+      if (rule.trigger === 'memberProfile' && action.type === 'blockMessage') {
+        throw new Error('memberProfile AutoMod rules must use blockMemberInteraction rather than blockMessage.');
       }
     }
     if (['keyword','memberProfile'].includes(rule.trigger) && !(rule.keywords?.length || rule.regexPatterns?.length)) {
@@ -274,7 +283,7 @@ export function validateServerTemplate(template) {
     throw new Error('settings must be a JSON object.');
   }
   for (const [key, block] of Object.entries(settings || {})) {
-    if (!['welcome','autopartner','applications','tickets','automod'].includes(key) || !block || typeof block !== 'object' || Array.isArray(block)) {
+    if (!['welcome','autopartner','applications','tickets','automod','commands','responses','security','community','moderation'].includes(key) || !isPlainObject(block)) {
       throw new Error('Unsupported settings block: ' + key);
     }
   }
@@ -309,10 +318,52 @@ export function validateServerTemplate(template) {
       (applications.staffRole !== undefined && (typeof applications.staffRole !== 'string' || applications.staffRole.length > 100)))) {
     throw new Error('settings.applications has invalid enabled, panelTitle, or panelDescription values.');
   }
+  if (applications?.questions !== undefined && (!Array.isArray(applications.questions) || applications.questions.length > 5 ||
+      applications.questions.some(entry => {
+        const question = typeof entry === 'string' ? entry : entry?.question;
+        const minimumWords = typeof entry === 'object' && entry ? entry.minimumWords : 0;
+        return typeof question !== 'string' || !question.trim() || question.length > 500 ||
+          (minimumWords !== undefined && (!Number.isInteger(minimumWords) || minimumWords < 0 || minimumWords > 500));
+      }))) {
+    throw new Error('settings.applications.questions must contain up to 5 question strings or { question, minimumWords } objects.');
+  }
   const tickets = settings?.tickets;
   if (tickets && ((tickets.panelTitle !== undefined && (typeof tickets.panelTitle !== 'string' || tickets.panelTitle.length > 256)) ||
-      (tickets.panelDescription !== undefined && (typeof tickets.panelDescription !== 'string' || tickets.panelDescription.length > 4000)))) {
-    throw new Error('settings.tickets panel text exceeds Discord limits.');
+      (tickets.panelDescription !== undefined && (typeof tickets.panelDescription !== 'string' || tickets.panelDescription.length > 4000)) ||
+      (tickets.closeDelaySeconds !== undefined && (!Number.isInteger(tickets.closeDelaySeconds) || tickets.closeDelaySeconds < 1 || tickets.closeDelaySeconds > 300)) ||
+      (tickets.panelStyle !== undefined && !['dropdown','buttons'].includes(tickets.panelStyle)) ||
+      (tickets.staffRole !== undefined && (typeof tickets.staffRole !== 'string' || !tickets.staffRole.trim() || tickets.staffRole.length > 100)) ||
+      (tickets.logChannel !== undefined && (typeof tickets.logChannel !== 'string' || !tickets.logChannel.trim() || tickets.logChannel.length > 100)) ||
+      (tickets.categories !== undefined && (!Array.isArray(tickets.categories) || tickets.categories.length < 1 || tickets.categories.length > 25 ||
+        tickets.categories.some(item => typeof item !== 'string' || !item.trim() || item.length > 80))) ||
+      (tickets.formQuestions !== undefined && (!Array.isArray(tickets.formQuestions) || tickets.formQuestions.length < 1 || tickets.formQuestions.length > 5 ||
+        tickets.formQuestions.some(item => typeof item !== 'string' || !item.trim() || item.length > 45))))) {
+    throw new Error('settings.tickets contains invalid panel text, delay, style, role, channel, categories, or form questions.');
+  }
+  const commands = settings?.commands;
+  if (commands && Object.entries(commands).some(([name, enabled]) => !AUTO_MOD_COMMANDS.includes(name) || typeof enabled !== 'boolean')) {
+    throw new Error('settings.commands must map known command names to true or false.');
+  }
+  const responses = settings?.responses;
+  if (responses && Object.entries(responses).some(([name, value]) => !['meta','lessons','ping','help'].includes(name) || typeof value !== 'string' || value.length > 2000)) {
+    throw new Error('settings.responses supports meta, lessons, ping, and help strings up to 2,000 characters.');
+  }
+  const security = settings?.security;
+  if (security && ((security.linkProtectionEnabled !== undefined && typeof security.linkProtectionEnabled !== 'boolean') ||
+      (security.linkProtectionOwnerId !== undefined && (typeof security.linkProtectionOwnerId !== 'string' || (security.linkProtectionOwnerId && !/^\\d{17,20}$/.test(security.linkProtectionOwnerId)))) ||
+      (security.serverProfileGuardEnabled !== undefined && typeof security.serverProfileGuardEnabled !== 'boolean'))) {
+    throw new Error('settings.security has invalid link protection or profile guard values.');
+  }
+  const community = settings?.community;
+  if (community && ((community.xpEnabled !== undefined && typeof community.xpEnabled !== 'boolean') ||
+      (community.autorole !== undefined && (typeof community.autorole !== 'string' || !community.autorole.trim() || community.autorole.length > 100)) ||
+      (community.logChannel !== undefined && (typeof community.logChannel !== 'string' || !community.logChannel.trim() || community.logChannel.length > 100)))) {
+    throw new Error('settings.community has invalid autorole, logChannel, or xpEnabled values.');
+  }
+  const moderation = settings?.moderation;
+  if (moderation && moderation.softbanChannel !== undefined &&
+      typeof moderation.softbanChannel !== 'string' && typeof moderation.softbanChannel !== 'boolean') {
+    throw new Error('settings.moderation.softbanChannel must be a channel name, channel ID, or false.');
   }
   const channelDefinitions = new Map();
   for (const group of template.categories) for (const [kind, name] of group.channels) {
@@ -367,7 +418,12 @@ async function buildAutoModerationPlan(guild, config) {
     const entry = { name: rule.name, enabled: config.enabled !== false && rule.enabled !== false, trigger: rule.trigger };
     if (!current) {
       if (config.enabled !== false && rule.enabled !== false) create.push(entry);
-    } else update.push({ id: current.id, ...entry });
+    } else {
+      if (current.triggerType !== AUTO_MOD_TRIGGER_TYPES[rule.trigger]) {
+        throw new Error('AutoMod rule "' + rule.name + '" already exists with a different trigger. Remove or rename that Discord rule before importing this configuration.');
+      }
+      update.push({ id: current.id, ...entry });
+    }
   }
   if (config.syncUnlisted === true && config.enabled !== false) {
     for (const rule of existing.values()) {
