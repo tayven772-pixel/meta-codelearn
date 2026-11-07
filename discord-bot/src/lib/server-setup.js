@@ -192,8 +192,9 @@ function validateAutoModerationConfig(config) {
     if (rule.trigger === 'mentionSpam' && rule.mentionTotalLimit === undefined) {
       throw new Error('mentionSpam AutoMod rules need mentionTotalLimit (1–50).');
     }
-    if (!['keyword','memberProfile'].includes(rule.trigger) && (rule.keywords?.length || rule.regexPatterns?.length || rule.allowList?.length)) {
-      throw new Error('keywords, regexPatterns, and allowList are only supported by keyword or memberProfile AutoMod rules.');
+    if (!['keyword','memberProfile'].includes(rule.trigger) && (rule.keywords?.length || rule.regexPatterns?.length) ||
+        !['keyword','keywordPreset','memberProfile'].includes(rule.trigger) && rule.allowList?.length) {
+      throw new Error('keywords and regexPatterns are only supported by keyword/memberProfile rules; allowList also supports keywordPreset rules.');
     }
     if (rule.trigger !== 'keywordPreset' && rule.presets?.length) {
       throw new Error('presets are only supported by keywordPreset AutoMod rules.');
@@ -283,7 +284,7 @@ export function validateServerTemplate(template) {
       (panel.title !== undefined && (typeof panel.title !== 'string' || panel.title.length > 80)) ||
       (panel.description !== undefined && (typeof panel.description !== 'string' || panel.description.length > 240)) ||
       (panel.sections !== undefined && (!Array.isArray(panel.sections) ||
-        panel.sections.some(section => !['setup','commands','responses','tickets','messages','community','autopartner','applications'].includes(section)))))) {
+        panel.sections.some(section => !['setup','commands','responses','tickets','messages','security','automod','community','autopartner','applications'].includes(section)))))) {
     throw new Error('controlPanel must use a title, description, and known sections only.');
   }
   const settings = template.settings;
@@ -358,7 +359,7 @@ export function validateServerTemplate(template) {
   }
   const security = settings?.security;
   if (security && ((security.linkProtectionEnabled !== undefined && typeof security.linkProtectionEnabled !== 'boolean') ||
-      (security.linkProtectionOwnerId !== undefined && (typeof security.linkProtectionOwnerId !== 'string' || (security.linkProtectionOwnerId && !/^\\d{17,20}$/.test(security.linkProtectionOwnerId)))) ||
+      (security.linkProtectionOwnerId !== undefined && (typeof security.linkProtectionOwnerId !== 'string' || (security.linkProtectionOwnerId && !/^\d{17,20}$/.test(security.linkProtectionOwnerId)))) ||
       (security.serverProfileGuardEnabled !== undefined && typeof security.serverProfileGuardEnabled !== 'boolean'))) {
     throw new Error('settings.security has invalid link protection or profile guard values.');
   }
@@ -398,13 +399,13 @@ export function validateServerTemplate(template) {
 
 function resolveAutoModChannel(guild, reference) {
   const value = String(reference || '').trim();
-  return /^\\d{17,20}$/.test(value)
+  return /^\d{17,20}$/.test(value)
     ? guild.channels.cache.get(value) || null
     : guild.channels.cache.find(channel => channel.name.toLowerCase() === normalizeChannelName(value)) || null;
 }
 function resolveAutoModRole(guild, reference) {
   const value = String(reference || '').trim();
-  return /^\\d{17,20}$/.test(value)
+  return /^\d{17,20}$/.test(value)
     ? guild.roles.cache.get(value) || null
     : guild.roles.cache.find(role => role.name.toLowerCase() === value.toLowerCase()) || null;
 }
@@ -421,12 +422,18 @@ async function buildAutoModerationPlan(guild, config) {
   const existing = await guild.autoModerationRules.fetch();
   const wanted = new Map(config.rules.map(rule => [rule.name.trim().toLowerCase(), rule]));
   const create = [], update = [], remove = [];
+  const matchedIds = new Set();
   for (const rule of config.rules) {
     const current = existing.find(item => item.name.toLowerCase() === rule.name.trim().toLowerCase());
-    const entry = { name: rule.name, enabled: config.enabled !== false && rule.enabled !== false, trigger: rule.trigger };
+    const entry = { name: rule.name, enabled: config.enabled !== false && rule.enabled !== false, trigger: rule.trigger, actions: rule.actions, filters: {
+      keywords: rule.keywords || [], regexPatterns: rule.regexPatterns || [], allowList: rule.allowList || [],
+      presets: rule.presets || [], mentionTotalLimit: rule.mentionTotalLimit ?? null,
+      exemptRoles: rule.exemptRoles || [], exemptChannels: rule.exemptChannels || []
+    } };
     if (!current) {
       if (config.enabled !== false && rule.enabled !== false) create.push(entry);
     } else {
+      matchedIds.add(current.id);
       if (current.triggerType !== AUTO_MOD_TRIGGER_TYPES[rule.trigger]) {
         throw new Error('AutoMod rule "' + rule.name + '" already exists with a different trigger. Remove or rename that Discord rule before importing this configuration.');
       }
@@ -438,7 +445,23 @@ async function buildAutoModerationPlan(guild, config) {
       if (!wanted.has(rule.name.toLowerCase())) remove.push({ id: rule.id, name: rule.name });
     }
   }
-  const resultingCount = existing.size + create.length - remove.length;
+  const perTriggerLimits = {
+    [AutoModerationRuleTriggerType.Keyword]: 6,
+    [AutoModerationRuleTriggerType.Spam]: 1,
+    [AutoModerationRuleTriggerType.KeywordPreset]: 1,
+    [AutoModerationRuleTriggerType.MentionSpam]: 1,
+    [AutoModerationRuleTriggerType.MemberProfile]: 1
+  };
+  for (const [triggerType, limit] of Object.entries(perTriggerLimits)) {
+    const retainedCount = config.syncUnlisted === true
+      ? 0
+      : [...existing.values()].filter(rule => rule.triggerType === Number(triggerType) && !matchedIds.has(rule.id)).length;
+    const requestedCount = config.rules.filter(rule => AUTO_MOD_TRIGGER_TYPES[rule.trigger] === Number(triggerType) && (config.enabled !== false || existing.find(current => current.name.toLowerCase() === rule.name.trim().toLowerCase()))).length;
+    if (retainedCount + requestedCount > limit) {
+      throw new Error('Discord allows only ' + limit + ' rule(s) for AutoMod trigger type "' + triggerType + '". Set syncUnlisted:true to remove unlisted rules or remove the extra rule in Discord.');
+    }
+  }
+  const resultingCount = (config.syncUnlisted === true ? 0 : existing.size - remove.length) + create.length;
   if (resultingCount > 10) throw new Error('The requested AutoMod configuration would exceed Discord’s per-server rule limits.');
   return { enabled: config.enabled !== false, syncUnlisted: config.syncUnlisted === true, create, update, remove };
 }
@@ -783,8 +806,8 @@ async function applyTemplateSettings(guild, template) {
   }
 
   const moderation = settings.moderation;
-  if (moderation?.softbanChannel) {
-    const channel = findChannel(moderation.softbanChannel);
+  if (moderation?.softbanChannel !== undefined) {
+    const channel = typeof moderation.softbanChannel === 'string' ? findChannel(moderation.softbanChannel) : null;
     if (channel) write('softban_channel_id', channel.id);
     else if (moderation.softbanChannel === false) write('softban_channel_id', '');
   }
@@ -940,7 +963,7 @@ export async function applyServerTemplate(guild, template, options = {}) {
   }
   // Apply explicit role-level channel permissions after channels and roles exist.
   for (const rule of template.channelPermissions || []) {
-    const channel = /^\\d{17,20}$/.test(rule.channel)
+    const channel = /^\d{17,20}$/.test(rule.channel)
       ? guild.channels.cache.get(rule.channel)
       : guild.channels.cache.find(item => item.name.toLowerCase() === normalizeChannelName(rule.channel));
     const role = guild.roles.cache.find(item => item.name.toLowerCase() === rule.role.trim().toLowerCase());
