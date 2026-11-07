@@ -240,16 +240,16 @@ export function validateServerTemplate(template) {
             (rule.deny !== undefined && (!Array.isArray(rule.deny) || rule.deny.some(permission => typeof permission !== 'string' || !validRolePermissions.has(permission)))) ||
             (rule.allow !== undefined && rule.deny !== undefined && rule.allow.some(permission => rule.deny.includes(permission)))))) ||
         group.channels.some(channel => {
-          if (!Array.isArray(channel) || !['text','voice'].includes(channel[0]) ||
+          if (!Array.isArray(channel) || !['text','voice','stage'].includes(channel[0]) ||
               typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100) return true;
           const options = channel[2] ?? {};
           if (!isPlainObject(options) || Object.keys(options).some(key => !['topic','nsfw','slowmode','bitrate','userLimit'].includes(key))) return true;
           if (options.topic !== undefined && (typeof options.topic !== 'string' || options.topic.length > 1024)) return true;
           if (options.nsfw !== undefined && typeof options.nsfw !== 'boolean') return true;
           if (options.slowmode !== undefined && (channel[0] !== 'text' || !Number.isInteger(options.slowmode) || options.slowmode < 0 || options.slowmode > 21600)) return true;
-          if (options.bitrate !== undefined && (channel[0] !== 'voice' || !Number.isInteger(options.bitrate) || options.bitrate < 8000 || options.bitrate > 96000)) return true;
-          if (options.userLimit !== undefined && (channel[0] !== 'voice' || !Number.isInteger(options.userLimit) || options.userLimit < 0 || options.userLimit > 99)) return true;
-          if (channel[0] === 'voice' && options.topic !== undefined) return true;
+          if (options.bitrate !== undefined && (!['voice','stage'].includes(channel[0]) || !Number.isInteger(options.bitrate) || options.bitrate < 8000 || options.bitrate > 96000)) return true;
+          if (options.userLimit !== undefined && (!['voice','stage'].includes(channel[0]) || !Number.isInteger(options.userLimit) || options.userLimit < 0 || options.userLimit > 99)) return true;
+          if (channel[0] !== 'text' && options.topic !== undefined) return true;
           return false;
         }))) {
     throw new Error('Invalid template structure. Check role options, channel types, and channel topic/nsfw/slowmode/bitrate/userLimit values.');
@@ -638,7 +638,7 @@ function desiredChannelDefinitions(template) {
     for (const [kind, rawName, rawOptions] of group.channels) {
       output.push({
         name: normalizeChannelName(rawName),
-        type: kind === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText,
+        type: kind === 'voice' ? ChannelType.GuildVoice : kind === 'stage' ? ChannelType.GuildStageVoice : ChannelType.GuildText,
         categoryName: group.name.trim(),
         options: rawOptions || {}
       });
@@ -805,6 +805,9 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
 
 async function applyTemplateSettings(guild, template) {
   setSetting('global', 'server_setup_template', JSON.stringify(template));
+  if (template.importedRulesConfig) {
+    setSetting(guild.id, 'community_rules_config', JSON.stringify(template.importedRulesConfig));
+  }
   const settings = template.settings || {};
   const findChannel = reference => resolveAutoModChannel(guild, reference);
   const findRole = reference => resolveAutoModRole(guild, reference);
