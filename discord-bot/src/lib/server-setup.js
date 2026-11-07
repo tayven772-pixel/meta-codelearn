@@ -8,7 +8,8 @@ import {
   EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
-  ButtonStyle
+  ButtonStyle,
+  Routes
 } from 'discord.js';
 import { createHash } from 'node:crypto';
 import { getSetting, setSetting } from './database.js';
@@ -1039,6 +1040,70 @@ export async function applyServerTemplate(guild, template, options = {}) {
       catch (error) { throw new Error('Could not delete role ' + stale.name + ': ' + error.message); }
     }
   }
+  // Apply Discord's native onboarding only after channel and role IDs exist.
+  if (template.onboarding) {
+    const onboarding = template.onboarding;
+    const resolveChannelId = reference => {
+      const channel = resolveAutoModChannel(guild, reference);
+      return channel?.id || null;
+    };
+    const resolveRoleId = reference => {
+      const role = resolveAutoModRole(guild, reference);
+      if (!role) throw new Error('Onboarding role "' + reference + '" was not found.');
+      if (role.permissions.has(PermissionFlagsBits.Administrator) ||
+          role.permissions.has(PermissionFlagsBits.ManageGuild) ||
+          role.permissions.has(PermissionFlagsBits.ManageRoles) ||
+          role.permissions.has(PermissionFlagsBits.BanMembers) ||
+          role.permissions.has(PermissionFlagsBits.KickMembers)) {
+        throw new Error('Onboarding cannot grant privileged role "' + role.name + '". Remove it from onboarding options.');
+      }
+      return role.id;
+    };
+    const defaultChannelIds = (onboarding.default_channel_names || []).map(resolveChannelId).filter(Boolean);
+    if (onboarding.enabled && defaultChannelIds.length < 7) {
+      throw new Error('Discord requires at least 7 default channels to enable native onboarding. Your JSON lists ' + defaultChannelIds.length + '. Add at least ' + (7 - defaultChannelIds.length) + ' more default channels, then import again.');
+    }
+    const currentOnboarding = await guild.client.rest.get(Routes.guildOnboarding(guild.id)).catch(() => null);
+    const prompts = (onboarding.prompts || []).map((prompt, promptIndex) => {
+      const oldPrompt = currentOnboarding?.prompts?.find(item => item.title === prompt.title);
+      return {
+        id: oldPrompt?.id ?? null,
+        title: prompt.title,
+        type: prompt.type === 'dropdown' ? 1 : 0,
+        single_select: prompt.type === 'single_choice' || prompt.type === 'dropdown',
+        required: Boolean(prompt.required),
+        in_onboarding: true,
+        options: (prompt.options || []).map(option => {
+          const oldOption = oldPrompt?.options?.find(item => item.title === option.title);
+          return {
+            id: oldOption?.id ?? null,
+            title: option.title,
+            description: option.description || null,
+            emoji_id: null,
+            emoji_name: null,
+            emoji_animated: null,
+            role_ids: option.role ? [resolveRoleId(option.role)] : [],
+            channel_ids: (option.channels || []).map(resolveChannelId).filter(Boolean)
+          };
+        })
+      };
+    });
+    try {
+      await guild.client.rest.put(Routes.guildOnboarding(guild.id), {
+        body: {
+          enabled: Boolean(onboarding.enabled),
+          default_channel_ids: defaultChannelIds,
+          mode: 1,
+          prompts
+        },
+        reason: 'Meta Code JSON onboarding setup'
+      });
+      updated.push('Discord onboarding');
+    } catch (error) {
+      throw new Error('Server setup completed, but Discord onboarding could not be applied: ' + (error.message || 'Discord rejected the configuration') + '. Check Community server requirements, permissions, and onboarding constraints.');
+    }
+  }
+
   // Apply explicit role-level channel permissions after channels and roles exist.
   for (const rule of template.channelPermissions || []) {
     const channel = /^\d{17,20}$/.test(rule.channel)
