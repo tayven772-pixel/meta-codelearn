@@ -199,13 +199,26 @@ export function validateServerTemplate(template) {
   if (template.roles.length > 40 || template.categories.length > 30 ||
       template.roles.some(role => !role || typeof role.name !== 'string' || !role.name.trim() || role.name.length > 100 ||
         (role.color !== undefined && (!Number.isInteger(role.color) || role.color < 0 || role.color > 0xFFFFFF)) ||
+        (role.hoist !== undefined && typeof role.hoist !== 'boolean') ||
+        (role.mentionable !== undefined && typeof role.mentionable !== 'boolean') ||
         (role.permissions !== undefined && (!Array.isArray(role.permissions) ||
           role.permissions.some(permission => typeof permission !== 'string' || !validRolePermissions.has(permission))))) ||
       template.categories.some(group => !group || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 100 ||
         !Array.isArray(group.channels) || group.channels.length > 50 || (group.private !== undefined && typeof group.private !== 'boolean') ||
-        group.channels.some(channel => !Array.isArray(channel) || !['text','voice'].includes(channel[0]) ||
-          typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
-    throw new Error('Invalid template structure or values. Role permissions must be valid Discord permission names.');
+        group.channels.some(channel => {
+          if (!Array.isArray(channel) || !['text','voice'].includes(channel[0]) ||
+              typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100) return true;
+          const options = channel[2] ?? {};
+          if (!isPlainObject(options) || Object.keys(options).some(key => !['topic','nsfw','slowmode','bitrate','userLimit'].includes(key))) return true;
+          if (options.topic !== undefined && (typeof options.topic !== 'string' || options.topic.length > 1024)) return true;
+          if (options.nsfw !== undefined && typeof options.nsfw !== 'boolean') return true;
+          if (options.slowmode !== undefined && (channel[0] !== 'text' || !Number.isInteger(options.slowmode) || options.slowmode < 0 || options.slowmode > 21600)) return true;
+          if (options.bitrate !== undefined && (channel[0] !== 'voice' || !Number.isInteger(options.bitrate) || options.bitrate < 8000 || options.bitrate > 96000)) return true;
+          if (options.userLimit !== undefined && (channel[0] !== 'voice' || !Number.isInteger(options.userLimit) || options.userLimit < 0 || options.userLimit > 99)) return true;
+          if (channel[0] === 'voice' && options.topic !== undefined) return true;
+          return false;
+        }))) {
+    throw new Error('Invalid template structure. Check role options, channel types, and channel topic/nsfw/slowmode/bitrate/userLimit values.');
   }
   const totalChannels = template.categories.reduce((total, group) => total + group.channels.length, 0);
   if (totalChannels + template.categories.length > 450) throw new Error('The template exceeds the conservative 450-channel/category safety limit.');
@@ -224,8 +237,11 @@ export function validateServerTemplate(template) {
       channelPermissions.some(rule => !rule || typeof rule !== 'object' || Array.isArray(rule) ||
         typeof rule.channel !== 'string' || !rule.channel.trim() || rule.channel.length > 100 ||
         typeof rule.role !== 'string' || !rule.role.trim() || rule.role.length > 100 ||
-        (rule.sendMessages !== undefined && !['allow','deny','inherit'].includes(rule.sendMessages))))) {
-    throw new Error('channelPermissions must be an array of { channel, role, sendMessages: "allow" | "deny" | "inherit" } rules.');
+        (rule.sendMessages !== undefined && !['allow','deny','inherit'].includes(rule.sendMessages)) ||
+        (rule.allow !== undefined && (!Array.isArray(rule.allow) || rule.allow.some(permission => typeof permission !== 'string' || !validRolePermissions.has(permission)))) ||
+        (rule.deny !== undefined && (!Array.isArray(rule.deny) || rule.deny.some(permission => typeof permission !== 'string' || !validRolePermissions.has(permission)))) ||
+        (rule.allow !== undefined && rule.deny !== undefined && rule.allow.some(permission => rule.deny.includes(permission)))))) {
+    throw new Error('channelPermissions must contain channel/role references and optional allow/deny arrays of valid Discord permission names.');
   }
   const channelNamesForPermissions = new Set(template.categories.flatMap(group => group.channels.map(channel => normalizeChannelName(channel[1]))));
   const roleNamesForPermissions = new Set(template.roles.map(role => role.name.trim().toLowerCase()));
@@ -249,8 +265,20 @@ export function validateServerTemplate(template) {
     throw new Error('settings must be a JSON object.');
   }
   for (const [key, block] of Object.entries(settings || {})) {
-    if (!['welcome','autopartner','applications','tickets'].includes(key) || !block || typeof block !== 'object' || Array.isArray(block)) {
+    if (!['welcome','autopartner','applications','tickets','automod'].includes(key) || !block || typeof block !== 'object' || Array.isArray(block)) {
       throw new Error('Unsupported settings block: ' + key);
+    }
+  }
+  if (template.automod !== undefined && settings?.automod !== undefined) {
+    throw new Error('Configure AutoMod in only one place: use the top-level automod property.');
+  }
+  const automod = template.automod ?? settings?.automod;
+  if (automod !== undefined) validateAutoModerationConfig(automod);
+  if (template.botSettings !== undefined) {
+    if (!isPlainObject(template.botSettings) || Object.entries(template.botSettings).some(([key, value]) =>
+      !isAllowedBotSettingKey(key) || !['string','number','boolean'].includes(typeof value) ||
+      String(value).length > (key === 'server_setup_template' ? 30000 : 5000))) {
+      throw new Error('botSettings contains an unsupported key or invalid value. Export a fresh backup or use known Meta Bot Control setting keys.');
     }
   }
   const welcome = settings?.welcome;
