@@ -233,6 +233,7 @@ export function validateServerTemplate(template) {
           role.permissions.some(permission => typeof permission !== 'string' || !validRolePermissions.has(permission))))) ||
       template.categories.some(group => !group || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 100 ||
         !Array.isArray(group.channels) || group.channels.length > 50 || (group.private !== undefined && typeof group.private !== 'boolean') ||
+        (group.staffRole !== undefined && (typeof group.staffRole !== 'string' || !group.staffRole.trim() || group.staffRole.length > 100)) ||
         (group.permissions !== undefined && (!Array.isArray(group.permissions) || group.permissions.length > 100 ||
           group.permissions.some(rule => !isPlainObject(rule) || typeof rule.role !== 'string' || !rule.role.trim() || rule.role.length > 100 ||
             (rule.allow !== undefined && (!Array.isArray(rule.allow) || rule.allow.some(permission => typeof permission !== 'string' || !validRolePermissions.has(permission)))) ||
@@ -279,6 +280,9 @@ export function validateServerTemplate(template) {
   const channelNamesForPermissions = new Set(template.categories.flatMap(group => group.channels.map(channel => normalizeChannelName(channel[1]))));
   const roleNamesForPermissions = new Set(template.roles.map(role => role.name.trim().toLowerCase()));
   for (const group of template.categories) {
+    if (group.staffRole && !roleNamesForPermissions.has(group.staffRole.trim().toLowerCase())) {
+      throw new Error('Category staffRole must reference a role in roles.');
+    }
     const categoryPermissionKeys = [];
     for (const rule of group.permissions || []) {
       if (rule.role.trim() !== '@everyone' && !roleNamesForPermissions.has(rule.role.trim().toLowerCase())) {
