@@ -283,7 +283,6 @@ jobs:
           if ! sudo -n systemctl restart meta-codelearn-auth.service; then
             sudo -n cp -a "$AUTH_BACKUP" /opt/meta-codelearn/server/auth.js
             sudo -n cp -a "$COACH_BACKUP" /opt/meta-codelearn/api/coach.js
-            sudo -n cp -a "$COACH_BACKUP" /opt/meta-codelearn/api/coach.js
             sudo -n cp -a "$DISCORD_START_BACKUP" /opt/meta-codelearn/api/auth/discord.js
             sudo -n cp -a "$DISCORD_CALLBACK_BACKUP" /opt/meta-codelearn/api/auth/callback.js
             sudo -n cp -a "$DISCORD_AUTH_LIB_BACKUP" /opt/meta-codelearn/lib/discord-auth.js
