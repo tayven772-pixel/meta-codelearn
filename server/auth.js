@@ -740,7 +740,7 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
               (role.color !== undefined && (!Number.isInteger(role.color) || role.color < 0 || role.color > 0xFFFFFF))) ||
             template.categories.some(group => !group || typeof group.name !== 'string' || !group.name.trim() ||
               !Array.isArray(group.channels) || group.channels.length > 50 ||
-              group.channels.some(channel => !Array.isArray(channel) || !['text','voice'].includes(channel[0]) ||
+              group.channels.some(channel => !Array.isArray(channel) || !['text','voice','stage'].includes(channel[0]) ||
                 typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
           throw new Error('Setup template needs valid roles and categories. Channels may be ["text", "channel-name"] or {"type":"text","name":"channel-name"}. Limits: 40 roles, 30 categories, 50 channels per category.');
         }
@@ -773,7 +773,7 @@ app.post('/api/auth/admin/bot-control/publish-template', async (req, res) => {
         (role.color !== undefined && (!Number.isInteger(role.color) || role.color < 0 || role.color > 0xFFFFFF))) ||
       template.categories.some(group => !group || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 100 ||
         !Array.isArray(group.channels) || group.channels.length > 50 ||
-        group.channels.some(channel => !Array.isArray(channel) || !['text','voice'].includes(channel[0]) ||
+        group.channels.some(channel => !Array.isArray(channel) || !['text','voice','stage'].includes(channel[0]) ||
           typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
     return res.status(400).json({ error: 'Invalid setup JSON. Check role names/colors and category channel entries.' });
   }
