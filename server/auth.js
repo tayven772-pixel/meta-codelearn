@@ -522,7 +522,16 @@ function normalizeServerSetupTemplate(input) {
       panelTitle: v2Bot.tickets.panelTitle,
       panelDescription: v2Bot.tickets.panelDescription
     } } : {}),
-    ...(v2Bot.moderation ? { moderation: v2Bot.moderation } : {})
+    ...(v2Bot.moderation ? { moderation: {
+      ...(v2Bot.moderation.softbanChannel !== undefined ? { softbanChannel: v2Bot.moderation.softbanChannel } : {})
+    } } : {}),
+    ...(v2Bot.moderation ? { commands: {
+      ...(v2Bot.moderation.enabled === false ? { warn: false, timeout: false, kick: false, ban: false } : {}),
+      ...(typeof v2Bot.moderation.warnEnabled === 'boolean' ? { warn: v2Bot.moderation.warnEnabled } : {}),
+      ...(typeof v2Bot.moderation.timeoutEnabled === 'boolean' ? { timeout: v2Bot.moderation.timeoutEnabled } : {}),
+      ...(typeof v2Bot.moderation.kickEnabled === 'boolean' ? { kick: v2Bot.moderation.kickEnabled } : {}),
+      ...(typeof v2Bot.moderation.banEnabled === 'boolean' ? { ban: v2Bot.moderation.banEnabled } : {})
+    } } : {})
   } : source.settings;
   const normalizedBotSettings = schemaV2 ? undefined : botSettings;
   const normalizedAutomod = schemaV2 && source.automod && Array.isArray(source.automod.rules)
