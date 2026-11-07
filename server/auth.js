@@ -400,7 +400,60 @@ function normalizeServerSetupTemplate(input) {
     return { ...category, channels };
   }) : source.categories;
 
-  return { ...source, roles, categories, ...(botSettings && typeof botSettings === 'object' && !Array.isArray(botSettings) ? { botSettings } : {}) };
+  // Normalize readable channel permission blocks into the bot's native
+  // channelPermissions format. Discord permission overwrites are role-based:
+  // @everyone controls regular members, and staff_role grants staff access.
+  const channelPermissions = Array.isArray(source.channelPermissions)
+    ? [...source.channelPermissions]
+    : Array.isArray(source.channel_permissions)
+      ? [...source.channel_permissions]
+      : [];
+  const permissionName = value => {
+    if (typeof value !== 'string') return value;
+    const aliases = {
+      view_channel: 'ViewChannel',
+      send_messages: 'SendMessages',
+      add_reactions: 'AddReactions',
+      create_public_threads: 'CreatePublicThreads',
+      create_private_threads: 'CreatePrivateThreads',
+      send_messages_in_threads: 'SendMessagesInThreads',
+      manage_messages: 'ManageMessages',
+      read_message_history: 'ReadMessageHistory',
+      attach_files: 'AttachFiles',
+      embed_links: 'EmbedLinks'
+    };
+    const normalized = value.trim();
+    return aliases[normalized] || normalized.replace(/[_-](.)/g, (_, letter) => letter.toUpperCase())
+      .replace(/^./, letter => letter.toUpperCase());
+  };
+  const permissionRulesFromBlock = (channel, role, permissions) => {
+    if (!permissions || typeof permissions !== 'object' || Array.isArray(permissions)) return;
+    const allow = [];
+    const deny = [];
+    for (const [key, value] of Object.entries(permissions)) {
+      if (typeof value !== 'boolean') continue;
+      (value ? allow : deny).push(permissionName(key));
+    }
+    if (allow.length || deny.length) channelPermissions.push({ channel, role, allow, deny });
+  };
+  for (const entry of source.channel_permissions || []) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry) || typeof entry.channel !== 'string') continue;
+    permissionRulesFromBlock(entry.channel, '@everyone', entry.member_permissions);
+    if (entry.staff_permissions) {
+      const staffRole = typeof entry.staff_role === 'string' && entry.staff_role.trim()
+        ? entry.staff_role.trim()
+        : 'Moderator';
+      permissionRulesFromBlock(entry.channel, staffRole, entry.staff_permissions);
+    }
+  }
+
+  return {
+    ...source,
+    roles,
+    categories,
+    ...(channelPermissions.length ? { channelPermissions } : {}),
+    ...(botSettings && typeof botSettings === 'object' && !Array.isArray(botSettings) ? { botSettings } : {})
+  };
 }
 
 function validGuildId(value) {
