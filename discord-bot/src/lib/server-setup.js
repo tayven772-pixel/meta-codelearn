@@ -578,8 +578,16 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
   }
   if (branding.afkChannel !== undefined) {
     const afkChannel = resolveAutoModChannel(guild, branding.afkChannel);
-    if (!afkChannel || afkChannel.type !== ChannelType.GuildVoice) throw new Error('branding.afkChannel must reference an existing or templated voice channel.');
-    if (guild.afkChannelId !== afkChannel.id) updateServerSettings.afkChannel = afkChannel.id;
+    if (afkChannel && afkChannel.type === ChannelType.GuildVoice) {
+      if (guild.afkChannelId !== afkChannel.id) updateServerSettings.afkChannel = afkChannel.id;
+    } else {
+      const plannedVoiceChannel = desiredChannels.some(channel =>
+        channel.type === ChannelType.GuildVoice &&
+        (channel.name === normalizeChannelName(branding.afkChannel) || channel.name === String(branding.afkChannel).trim())
+      );
+      if (!plannedVoiceChannel) throw new Error('branding.afkChannel must reference an existing or templated voice channel.');
+      updateServerSettings.afkChannelName = normalizeChannelName(branding.afkChannel);
+    }
   }
 
   for (const definition of template.roles) {
@@ -698,7 +706,9 @@ async function applyTemplateSettings(guild, template) {
   // Structured settings below are applied afterward, so edits to the readable
   // JSON blocks take precedence over the corresponding legacy key/value fields.
   for (const [key, value] of Object.entries(template.botSettings || {})) {
-    if (isAllowedBotSettingKey(key)) write(key, value);
+    // The server template itself must always be the just-imported template,
+    // not the stale nested copy that was included in the exported backup.
+    if (key !== 'server_setup_template' && isAllowedBotSettingKey(key)) write(key, value);
   }
 
   const welcome = settings.welcome;
@@ -804,9 +814,15 @@ export async function applyServerTemplate(guild, template, options = {}) {
   const botMember = guild.members.me ?? await guild.members.fetchMe();
   if (plan.renameServer || Object.keys(plan.updateServerSettings).length) {
     try {
+      const { afkChannelName, ...serverSettings } = plan.updateServerSettings;
+      const afkChannel = afkChannelName
+        ? guild.channels.cache.find(channel => channel.type === ChannelType.GuildVoice && channel.name === afkChannelName)
+        : null;
+      if (afkChannelName && !afkChannel) throw new Error('The configured AFK voice channel was not created or found.');
       await guild.edit({
         ...(plan.renameServer ? { name: plan.renameServer.desired } : {}),
-        ...plan.updateServerSettings
+        ...serverSettings,
+        ...(afkChannel ? { afkChannel: afkChannel.id } : {})
       }, 'Meta Code JSON setup sync');
       if (plan.renameServer) updated.push('server name ' + plan.renameServer.desired);
       if (Object.keys(plan.updateServerSettings).length) updated.push('server settings ' + Object.keys(plan.updateServerSettings).join(', '));
