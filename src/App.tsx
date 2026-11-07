@@ -4003,12 +4003,16 @@ function BotControlPage() {
         throw new Error('Use roles and categories arrays (top-level or inside server). Each channel must define a text/voice type and name. Limits: 40 roles, 30 categories, 50 channels each.');
       }
     } catch (error) { setStatus('Setup template JSON is invalid: ' + (error instanceof Error ? error.message : 'check the JSON')); return; }
-    const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_min_members','autopartner_template','staff_applications_enabled','staff_applications_channel_id','staff_applications_title','staff_applications_description','staff_applications_role_id','community_welcome_avatar','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help','ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','ticket_close_delay_seconds','community_welcome_channel_id','community_welcome_message','community_autorole_id','community_log_channel_id','community_xp_enabled','link_protection_enabled','link_protection_owner_id','server_profile_guard_enabled']);
+    const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_min_members','autopartner_template','staff_applications_enabled','staff_applications_channel_id','staff_applications_title','staff_applications_description','staff_applications_role_id','community_welcome_avatar','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help','ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','ticket_close_delay_seconds','community_welcome_channel_id','community_welcome_message','community_autorole_id','community_log_channel_id','community_xp_enabled','link_protection_enabled','link_protection_owner_id','server_profile_guard_enabled','softban_channel_id','community_rules_config','community_rules_message_channel','community_rules_message_id','autopartner_last_posted_at','autopartner_last_partner_id']);
     const parsedTemplate = JSON.parse(template);
     const serverTemplate = parsedTemplate?.server && typeof parsedTemplate.server === 'object' && !Array.isArray(parsedTemplate.server) ? parsedTemplate.server : parsedTemplate;
     const importedBotSettings = parsedTemplate?.botSettings && typeof parsedTemplate.botSettings === 'object' && !Array.isArray(parsedTemplate.botSettings) ? parsedTemplate.botSettings : {};
     const combinedSettings = { ...settings, ...importedBotSettings };
-    const payload = Object.fromEntries(Object.entries(combinedSettings).filter(([key]) => editableKeys.has(key) || key.startsWith('bot_command_enabled:')));
+    const payload: Record<string, string> = Object.fromEntries(
+      Object.entries(combinedSettings)
+        .filter(([key]) => editableKeys.has(key) || key.startsWith('bot_command_enabled:') || /^staff_application_(?:question|min_words)_[1-5]$/.test(key))
+        .map(([key, value]) => [key, String(value ?? '')])
+    );
     payload.server_setup_template = JSON.stringify(serverTemplate);
     setBusy(true);
     try {
