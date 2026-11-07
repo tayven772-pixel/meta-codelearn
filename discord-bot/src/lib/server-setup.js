@@ -604,39 +604,106 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
 async function applyTemplateSettings(guild, template) {
   setSetting('global', 'server_setup_template', JSON.stringify(template));
   const settings = template.settings || {};
-  const findChannel = name => guild.channels.cache.find(channel => channel.name === normalizeChannelName(name));
+  const findChannel = reference => resolveAutoModChannel(guild, reference);
+  const findRole = reference => resolveAutoModRole(guild, reference);
+  const write = (key, value) => setSetting('global', key, String(value));
+
+  // Restore the exact dashboard values contained in an exported backup.
+  // Structured settings below are applied afterward, so edits to the readable
+  // JSON blocks take precedence over the corresponding legacy key/value fields.
+  for (const [key, value] of Object.entries(template.botSettings || {})) {
+    if (isAllowedBotSettingKey(key)) write(key, value);
+  }
+
   const welcome = settings.welcome;
   if (welcome) {
     const channel = welcome.channel ? findChannel(welcome.channel) : null;
-    if (welcome.enabled === false) setSetting('global', 'community_welcome_channel_id', '');
-    else if (channel) setSetting('global', 'community_welcome_channel_id', channel.id);
-    if (typeof welcome.message === 'string') setSetting('global', 'community_welcome_message', welcome.message.slice(0, 1500));
-    setSetting('global', 'community_welcome_avatar', welcome.showAvatar === false ? 'false' : 'true');
+    if (welcome.enabled === false) write('community_welcome_channel_id', '');
+    else if (channel) write('community_welcome_channel_id', channel.id);
+    if (typeof welcome.message === 'string') write('community_welcome_message', welcome.message.slice(0, 1500));
+    if (typeof welcome.showAvatar === 'boolean') write('community_welcome_avatar', welcome.showAvatar ? 'true' : 'false');
   }
+
   const partner = settings.autopartner;
   if (partner) {
     const channel = partner.channel ? findChannel(partner.channel) : null;
-    if (channel) setSetting('global', 'autopartner_channel_id', channel.id);
-    if (typeof partner.enabled === 'boolean') setSetting('global', 'autopartner_enabled', partner.enabled ? 'true' : 'false');
-    if (Number.isInteger(partner.intervalHours) && partner.intervalHours >= 6 && partner.intervalHours <= 168) setSetting('global', 'autopartner_interval_hours', String(partner.intervalHours));
-    if (Number.isInteger(partner.minimumMembers) && partner.minimumMembers >= 1 && partner.minimumMembers <= 10000000) setSetting('global', 'autopartner_min_members', String(partner.minimumMembers));
+    if (channel) write('autopartner_channel_id', channel.id);
+    if (typeof partner.enabled === 'boolean') write('autopartner_enabled', partner.enabled);
+    if (Number.isInteger(partner.intervalHours)) write('autopartner_interval_hours', partner.intervalHours);
+    if (Number.isInteger(partner.minimumMembers)) write('autopartner_min_members', partner.minimumMembers);
+    if (typeof partner.template === 'string') write('autopartner_template', partner.template.slice(0, 1800));
   }
+
   const applications = settings.applications;
   if (applications) {
     const channel = applications.staffChannel ? findChannel(applications.staffChannel) : null;
-    if (channel) setSetting('global', 'staff_applications_channel_id', channel.id);
-    const staffRole = applications.staffRole ? guild.roles.cache.find(role => role.name.toLowerCase() === applications.staffRole.trim().toLowerCase()) : null;
-    if (staffRole) setSetting('global', 'staff_applications_role_id', staffRole.id);
-    if (typeof applications.enabled === 'boolean') setSetting('global', 'staff_applications_enabled', applications.enabled ? 'true' : 'false');
-    if (typeof applications.panelTitle === 'string') setSetting('global', 'staff_applications_title', applications.panelTitle.slice(0, 45));
-    if (typeof applications.panelDescription === 'string') setSetting('global', 'staff_applications_description', applications.panelDescription.slice(0, 1000));
+    if (channel) write('staff_applications_channel_id', channel.id);
+    const staffRole = applications.staffRole ? findRole(applications.staffRole) : null;
+    if (staffRole) write('staff_applications_role_id', staffRole.id);
+    if (typeof applications.enabled === 'boolean') write('staff_applications_enabled', applications.enabled);
+    if (typeof applications.panelTitle === 'string') write('staff_applications_title', applications.panelTitle.slice(0, 45));
+    if (typeof applications.panelDescription === 'string') write('staff_applications_description', applications.panelDescription.slice(0, 1000));
+    if (Array.isArray(applications.questions)) {
+      applications.questions.forEach((entry, index) => {
+        const number = index + 1;
+        const question = typeof entry === 'string' ? entry : entry?.question;
+        const minimumWords = typeof entry === 'object' && entry ? entry.minimumWords : undefined;
+        if (typeof question === 'string') write('staff_application_question_' + number, question.slice(0, 500));
+        if (Number.isInteger(minimumWords)) write('staff_application_min_words_' + number, minimumWords);
+      });
+    }
   }
+
   const tickets = settings.tickets;
   if (tickets) {
     const category = tickets.category ? findChannel(tickets.category) : null;
-    if (category?.type === ChannelType.GuildCategory) setSetting('global', 'ticket_category_id', category.id);
-    if (typeof tickets.panelTitle === 'string') setSetting('global', 'ticket_panel_title', tickets.panelTitle.slice(0, 256));
-    if (typeof tickets.panelDescription === 'string') setSetting('global', 'ticket_panel_description', tickets.panelDescription.slice(0, 4000));
+    const staffRole = tickets.staffRole ? findRole(tickets.staffRole) : null;
+    const logChannel = tickets.logChannel ? findChannel(tickets.logChannel) : null;
+    if (category?.type === ChannelType.GuildCategory) write('ticket_category_id', category.id);
+    if (staffRole) write('ticket_staff_role_id', staffRole.id);
+    if (logChannel) write('ticket_log_channel_id', logChannel.id);
+    if (typeof tickets.closeDelaySeconds === 'number') write('ticket_close_delay_seconds', tickets.closeDelaySeconds);
+    if (typeof tickets.panelStyle === 'string') write('ticket_panel_style', tickets.panelStyle);
+    if (Array.isArray(tickets.categories)) write('ticket_categories', JSON.stringify(tickets.categories));
+    if (Array.isArray(tickets.formQuestions)) write('ticket_form_questions', JSON.stringify(tickets.formQuestions));
+    if (typeof tickets.panelTitle === 'string') write('ticket_panel_title', tickets.panelTitle.slice(0, 256));
+    if (typeof tickets.panelDescription === 'string') write('ticket_panel_description', tickets.panelDescription.slice(0, 4000));
+  }
+
+  const community = settings.community;
+  if (community) {
+    const role = community.autorole ? findRole(community.autorole) : null;
+    const logChannel = community.logChannel ? findChannel(community.logChannel) : null;
+    if (role) write('community_autorole_id', role.id);
+    if (logChannel) write('community_log_channel_id', logChannel.id);
+    if (typeof community.xpEnabled === 'boolean') write('community_xp_enabled', community.xpEnabled);
+  }
+
+  const security = settings.security;
+  if (security) {
+    if (typeof security.linkProtectionEnabled === 'boolean') write('link_protection_enabled', security.linkProtectionEnabled);
+    if (typeof security.linkProtectionOwnerId === 'string') write('link_protection_owner_id', security.linkProtectionOwnerId);
+    if (typeof security.serverProfileGuardEnabled === 'boolean') write('server_profile_guard_enabled', security.serverProfileGuardEnabled);
+  }
+
+  const moderation = settings.moderation;
+  if (moderation?.softbanChannel) {
+    const channel = findChannel(moderation.softbanChannel);
+    if (channel) write('softban_channel_id', channel.id);
+    else if (moderation.softbanChannel === false) write('softban_channel_id', '');
+  }
+
+  const commands = settings.commands;
+  if (commands) {
+    for (const [name, enabled] of Object.entries(commands)) {
+      if (AUTO_MOD_COMMANDS.includes(name) && typeof enabled === 'boolean') write('bot_command_enabled:' + name, enabled);
+    }
+  }
+  const responses = settings.responses;
+  if (responses) {
+    for (const name of ['meta','lessons','ping','help']) {
+      if (typeof responses[name] === 'string') write('bot_response:' + name, responses[name].slice(0, 2000));
+    }
   }
 }
 
@@ -765,9 +832,11 @@ export async function applyServerTemplate(guild, template, options = {}) {
       catch (error) { throw new Error('Could not delete role ' + stale.name + ': ' + error.message); }
     }
   }
-  // Apply explicit role-level channel message permissions after channels and roles exist.
+  // Apply explicit role-level channel permissions after channels and roles exist.
   for (const rule of template.channelPermissions || []) {
-    const channel = guild.channels.cache.find(item => item.name.toLowerCase() === normalizeChannelName(rule.channel));
+    const channel = /^\\d{17,20}$/.test(rule.channel)
+      ? guild.channels.cache.get(rule.channel)
+      : guild.channels.cache.find(item => item.name.toLowerCase() === normalizeChannelName(rule.channel));
     const role = guild.roles.cache.find(item => item.name.toLowerCase() === rule.role.trim().toLowerCase());
     if (!channel || !role) { skipped.push('channel permission rule ' + rule.channel + ' / ' + rule.role + ' (missing target)'); continue; }
     try {
@@ -788,8 +857,16 @@ export async function applyServerTemplate(guild, template, options = {}) {
       throw new Error('Could not set send-message permission for ' + rule.role + ' in ' + rule.channel + ': ' + error.message);
     }
   }
+  const automodConfig = template.automod ?? template.settings?.automod;
+  const automod = automodConfig ? await applyAutoModerationConfig(guild, automodConfig) : null;
+  if (automod) {
+    created.push(...automod.created.map(name => 'AutoMod rule ' + name));
+    updated.push(...automod.updated.map(name => 'AutoMod rule ' + name));
+    deleted.push(...automod.deleted.map(name => 'AutoMod rule ' + name));
+    skipped.push(...automod.disabled.map(name => 'disabled AutoMod rule ' + name));
+  }
   await applyTemplateSettings(guild, template);
-  return { created, updated, deleted, skipped, errors: [], protectedRoles: plan.protectedRoles, protectedChannels: plan.protectedChannels };
+  return { created, updated, deleted, skipped, errors: [], automod, protectedRoles: plan.protectedRoles, protectedChannels: plan.protectedChannels };
 }
 
 export async function previewServerTemplate(guild, template) {
@@ -807,9 +884,11 @@ export async function previewServerTemplate(guild, template) {
       deleteCategories: plan.deleteCategories,
       createChannels: plan.createChannels,
       moveChannels: plan.moveChannels,
+      updateChannels: plan.updateChannels,
       deleteChannels: plan.deleteChannels,
       syncChannelPermissions: plan.syncChannelPermissions,
       channelPermissions: plan.channelPermissions,
+      autoModeration: plan.autoModeration,
       protectedChannels: plan.protectedChannels
     }
   };
