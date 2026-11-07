@@ -283,6 +283,7 @@ jobs:
           if ! sudo -n systemctl restart meta-codelearn-auth.service; then
             sudo -n cp -a "$AUTH_BACKUP" /opt/meta-codelearn/server/auth.js
             sudo -n cp -a "$COACH_BACKUP" /opt/meta-codelearn/api/coach.js
+            sudo -n cp -a "$COACH_BACKUP" /opt/meta-codelearn/api/coach.js
             sudo -n cp -a "$DISCORD_START_BACKUP" /opt/meta-codelearn/api/auth/discord.js
             sudo -n cp -a "$DISCORD_CALLBACK_BACKUP" /opt/meta-codelearn/api/auth/callback.js
             sudo -n cp -a "$DISCORD_AUTH_LIB_BACKUP" /opt/meta-codelearn/lib/discord-auth.js
@@ -302,6 +303,7 @@ jobs:
             echo "Auth health check failed after retries; collecting service logs."
             sudo -n journalctl -u meta-codelearn-auth.service -n 25 --no-pager || true
             sudo -n cp -a "$AUTH_BACKUP" /opt/meta-codelearn/server/auth.js
+            sudo -n cp -a "$COACH_BACKUP" /opt/meta-codelearn/api/coach.js
             sudo -n cp -a "$DISCORD_START_BACKUP" /opt/meta-codelearn/api/auth/discord.js
             sudo -n cp -a "$DISCORD_CALLBACK_BACKUP" /opt/meta-codelearn/api/auth/callback.js
             sudo -n cp -a "$DISCORD_AUTH_LIB_BACKUP" /opt/meta-codelearn/lib/discord-auth.js
@@ -325,5 +327,5 @@ jobs:
           fi
           rm -rf "$STAGING"
           rm -f "$AUTH_STAGE" "$COACH_STAGE" "$DISCORD_START_STAGE" "$DISCORD_CALLBACK_STAGE" "$DISCORD_AUTH_LIB_STAGE" "$BOT_INDEX_STAGE" "$BOT_DATABASE_STAGE" "$BOT_TICKETS_STAGE" "$BOT_TICKET_COMMANDS_STAGE" "$BOT_PROFILE_GUARD_STAGE"
-          echo "Website, auth server, project AI handler, Discord bot entrypoint, Discord OAuth routes, and versioned Discord session library, ticket handler, and ticket commands deployed. Website backup: $BACKUP; auth backup: $AUTH_BACKUP; Discord route backups: $DISCORD_START_BACKUP, $DISCORD_CALLBACK_BACKUP; session library backup: $DISCORD_AUTH_LIB_BACKUP; Nginx snippet backup: $NGINX_BACKUP"
+          echo "Website, auth server, project AI handler, Discord bot entrypoint, Discord OAuth routes, and versioned Discord session library, ticket handler, and ticket commands deployed. Website backup: $BACKUP; auth backup: $AUTH_BACKUP; project AI handler backup: $COACH_BACKUP; Discord route backups: $DISCORD_START_BACKUP, $DISCORD_CALLBACK_BACKUP; session library backup: $DISCORD_AUTH_LIB_BACKUP; Nginx snippet backup: $NGINX_BACKUP"
           REMOTE
