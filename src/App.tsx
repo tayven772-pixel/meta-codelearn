@@ -176,6 +176,34 @@ type MetaProject = {
   updatedAt?: number;
 };
 
+type CoachResponse = {
+  error?: string;
+  reply?: string;
+  project?: {
+    name?: string;
+    type?: string;
+    files?: Record<string, string>;
+  };
+};
+
+async function readCoachResponse(response: Response): Promise<CoachResponse> {
+  const contentType = response.headers.get('content-type') || '';
+  const body = await response.text();
+  if (!contentType.toLowerCase().includes('application/json')) {
+    if (response.status === 404) {
+      throw new Error('The Meta AI API route was not found. The latest server update may still need to deploy.');
+    }
+    throw new Error('The server returned a webpage instead of an AI response. Please try again after the server update.');
+  }
+  try {
+    const payload: unknown = JSON.parse(body);
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('Invalid response');
+    return payload as CoachResponse;
+  } catch {
+    throw new Error('The Meta AI server returned invalid JSON. Please try again.');
+  }
+}
+
 const PROJECTS_KEY = 'meta-projects-v2';
 const ACTIVE_ACCOUNT_KEY = 'meta-active-account-v1';
 const ACCOUNT_SCOPE_EVENT = 'meta-account-scope-change';
@@ -1263,7 +1291,7 @@ function ProjectsPage() {
           project: null,
         }),
       });
-      const payload = await response.json();
+      const payload = await readCoachResponse(response);
       if (!response.ok) throw new Error(payload?.error || 'Meta AI could not start the project.');
 
       const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -1589,7 +1617,7 @@ function ProjectPage() {
           activeFile,
         }),
       });
-      const payload = await response.json();
+      const payload = await readCoachResponse(response);
       if (!response.ok) throw new Error(payload?.error || 'Meta AI could not respond.');
 
       setProjects((current) => current.map((item) =>
@@ -1636,7 +1664,7 @@ function ProjectPage() {
           activeFile,
         }),
       });
-      const payload = await response.json();
+      const payload = await readCoachResponse(response);
       if (!response.ok) throw new Error(payload?.error || 'Auto-correct could not complete.');
       const correctedCode = payload?.project?.files?.[activeFile];
       if (typeof correctedCode !== 'string') {
