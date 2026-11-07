@@ -2,6 +2,9 @@ import {
   SlashCommandBuilder,
   PermissionFlagsBits,
   ChannelType,
+  AutoModerationActionType,
+  AutoModerationRuleEventType,
+  AutoModerationRuleTriggerType,
   EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
@@ -86,6 +89,100 @@ const layout = [
 
 export function normalizeChannelName(rawName) {
   return String(rawName).trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 100) || 'new-channel';
+}
+
+const AUTO_MOD_TRIGGER_TYPES = {
+  keyword: AutoModerationRuleTriggerType.Keyword,
+  spam: AutoModerationRuleTriggerType.Spam,
+  keywordPreset: AutoModerationRuleTriggerType.KeywordPreset,
+  mentionSpam: AutoModerationRuleTriggerType.MentionSpam
+};
+const AUTO_MOD_PRESETS = { profanity: 1, sexualContent: 2, slurs: 3 };
+const AUTO_MOD_SETTING_KEYS = new Set([
+  'autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_min_members','autopartner_template',
+  'server_setup_template','bot_welcome_message','bot_rules_text','bot_status_text',
+  'community_welcome_channel_id','community_welcome_message','community_welcome_avatar','community_autorole_id','community_log_channel_id','community_xp_enabled',
+  'link_protection_enabled','link_protection_owner_id','server_profile_guard_enabled','softban_channel_id',
+  'staff_applications_enabled','staff_applications_channel_id','staff_applications_title','staff_applications_description','staff_applications_role_id',
+  'ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','ticket_close_delay_seconds',
+  'community_rules_config','community_rules_message_channel','community_rules_message_id',
+  ...['meta','lessons','ping','help'].map(name => 'bot_response:' + name)
+]);
+const AUTO_MOD_COMMANDS = [
+  'meta','lessons','ping','membercount','avatar','roleinfo','slowmode','lock','unlock','embed','help',
+  'serverinfo','userinfo','poll','suggest','coinflip','roll','choose','8ball','announce',
+  'setup-applications','ticket','ticket-panel','setup-server','warn','warnings','timeout','untimeout','purge',
+  'autopartner-setup','partner-add','partner-remove','partner-list','partner-settings','partner-template','partner-post',
+  'welcome-config','autorole','logging','level','leaderboard','giveaway','giveaway-end','role-menu','serverstats','config-export',
+  'thread','topic','randomcolor','remindme'
+];
+function isAllowedBotSettingKey(key) {
+  return AUTO_MOD_SETTING_KEYS.has(key) ||
+    AUTO_MOD_COMMANDS.some(name => key === 'bot_command_enabled:' + name) ||
+    /^staff_application_(?:question|min_words)_[1-5]$/.test(key);
+}
+function isPlainObject(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+function validateAutoModerationConfig(config) {
+  if (!isPlainObject(config) || (config.enabled !== undefined && typeof config.enabled !== 'boolean') ||
+      (config.syncUnlisted !== undefined && typeof config.syncUnlisted !== 'boolean') ||
+      !Array.isArray(config.rules) || config.rules.length > 6) {
+    throw new Error('automod must contain enabled (optional), syncUnlisted (optional), and a rules array with up to 6 rules.');
+  }
+  const names = new Set();
+  for (const [index, rule] of config.rules.entries()) {
+    if (!isPlainObject(rule) || typeof rule.name !== 'string' || !rule.name.trim() || rule.name.length > 100 ||
+        !Object.hasOwn(AUTO_MOD_TRIGGER_TYPES, rule.trigger) ||
+        (rule.enabled !== undefined && typeof rule.enabled !== 'boolean') ||
+        (rule.keywords !== undefined && (!Array.isArray(rule.keywords) || rule.keywords.length > 1000 || rule.keywords.some(item => typeof item !== 'string' || !item.trim() || item.length > 60))) ||
+        (rule.regexPatterns !== undefined && (!Array.isArray(rule.regexPatterns) || rule.regexPatterns.length > 10 || rule.regexPatterns.some(item => typeof item !== 'string' || !item.trim() || item.length > 260))) ||
+        (rule.allowList !== undefined && (!Array.isArray(rule.allowList) || rule.allowList.length > 100 || rule.allowList.some(item => typeof item !== 'string' || !item.trim() || item.length > 60))) ||
+        (rule.presets !== undefined && (!Array.isArray(rule.presets) || rule.presets.some(item => !Object.hasOwn(AUTO_MOD_PRESETS, item)))) ||
+        (rule.mentionTotalLimit !== undefined && (!Number.isInteger(rule.mentionTotalLimit) || rule.mentionTotalLimit < 1 || rule.mentionTotalLimit > 50)) ||
+        (rule.exemptRoles !== undefined && (!Array.isArray(rule.exemptRoles) || rule.exemptRoles.length > 20 || rule.exemptRoles.some(item => typeof item !== 'string' || !item.trim() || item.length > 100))) ||
+        (rule.exemptChannels !== undefined && (!Array.isArray(rule.exemptChannels) || rule.exemptChannels.length > 50 || rule.exemptChannels.some(item => typeof item !== 'string' || !item.trim() || item.length > 100))) ||
+        !Array.isArray(rule.actions) || rule.actions.length < 1 || rule.actions.length > 5) {
+      throw new Error('Invalid AutoMod rule #' + (index + 1) + '. Check its name, trigger, filters, exemptions, and actions.');
+    }
+    const key = rule.name.trim().toLowerCase();
+    if (names.has(key)) throw new Error('AutoMod rule names must be unique.');
+    names.add(key);
+    for (const [actionIndex, action] of rule.actions.entries()) {
+      if (!isPlainObject(action) || !['blockMessage','sendAlert','timeout'].includes(action.type)) {
+        throw new Error('Invalid action in AutoMod rule ' + rule.name + '. Use blockMessage, sendAlert, or timeout.');
+      }
+      if (action.type === 'blockMessage' && action.message !== undefined &&
+          (typeof action.message !== 'string' || action.message.length > 150)) {
+        throw new Error('AutoMod blockMessage text must be 150 characters or fewer.');
+      }
+      if (action.type === 'sendAlert' && (typeof action.channel !== 'string' || !action.channel.trim() || action.channel.length > 100)) {
+        throw new Error('AutoMod sendAlert actions must specify a text channel name or ID.');
+      }
+      if (action.type === 'timeout' &&
+          (!Number.isInteger(action.durationSeconds) || action.durationSeconds < 60 || action.durationSeconds > 2419200)) {
+        throw new Error('AutoMod timeout durationSeconds must be between 60 and 2,419,200.');
+      }
+    }
+    if (rule.trigger === 'keyword' && !(rule.keywords?.length || rule.regexPatterns?.length)) {
+      throw new Error('Keyword AutoMod rules need at least one keywords or regexPatterns entry.');
+    }
+    if (rule.trigger === 'keywordPreset' && !rule.presets?.length) {
+      throw new Error('keywordPreset AutoMod rules need at least one preset: profanity, sexualContent, or slurs.');
+    }
+    if (rule.trigger === 'mentionSpam' && rule.mentionTotalLimit === undefined) {
+      throw new Error('mentionSpam AutoMod rules need mentionTotalLimit (1–50).');
+    }
+    if (rule.trigger !== 'keyword' && (rule.keywords?.length || rule.regexPatterns?.length || rule.allowList?.length)) {
+      throw new Error('keywords, regexPatterns, and allowList are only supported by keyword AutoMod rules.');
+    }
+    if (rule.trigger !== 'keywordPreset' && rule.presets?.length) {
+      throw new Error('presets are only supported by keywordPreset AutoMod rules.');
+    }
+    if (rule.trigger !== 'mentionSpam' && rule.mentionTotalLimit !== undefined) {
+      throw new Error('mentionTotalLimit is only supported by mentionSpam AutoMod rules.');
+    }
+  }
 }
 
 export function validateServerTemplate(template) {
