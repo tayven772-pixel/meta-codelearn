@@ -275,7 +275,7 @@ export function validateServerTemplate(template) {
   const roleNamesForPermissions = new Set(template.roles.map(role => role.name.trim().toLowerCase()));
   for (const rule of channelPermissions || []) {
     if (!channelNamesForPermissions.has(normalizeChannelName(rule.channel))) throw new Error('channelPermissions.channel must reference a channel in categories.');
-    if (!roleNamesForPermissions.has(rule.role.trim().toLowerCase())) throw new Error('channelPermissions.role must reference a role in roles.');
+    if (rule.role.trim() !== '@everyone' && !roleNamesForPermissions.has(rule.role.trim().toLowerCase())) throw new Error('channelPermissions.role must reference a role in roles or @everyone.');
   }
   const permissionKeys = (channelPermissions || []).map(rule => normalizeChannelName(rule.channel) + '|' + rule.role.trim().toLowerCase());
   if (new Set(permissionKeys).size !== permissionKeys.length) throw new Error('Only one channelPermissions rule per channel/role pair is allowed.');
@@ -395,6 +395,36 @@ export function validateServerTemplate(template) {
   const ticketCategory = settings?.tickets?.category;
   if (ticketCategory && !categoryNamesForSettings.has(normalizeChannelName(ticketCategory))) {
     throw new Error('settings.tickets.category must reference a category name in categories.');
+  }
+  for (const [blockName, roleKey] of [['tickets','staffRole'],['community','autorole']]) {
+    const value = settings?.[blockName]?.[roleKey];
+    if (value && !roleNamesForSettings.has(value.trim().toLowerCase())) {
+      throw new Error('settings.' + blockName + '.' + roleKey + ' must reference a role in roles.');
+    }
+  }
+  for (const [blockName, channelKey] of [['tickets','logChannel'],['community','logChannel'],['moderation','softbanChannel']]) {
+    const value = settings?.[blockName]?.[channelKey];
+    if (typeof value === 'string' && value && channelDefinitions.get(normalizeChannelName(value)) !== 'text') {
+      throw new Error('settings.' + blockName + '.' + channelKey + ' must reference a text channel in categories.');
+    }
+  }
+  const autoModerationConfig = template.automod ?? settings?.automod;
+  for (const rule of autoModerationConfig?.rules || []) {
+    for (const action of rule.actions || []) {
+      if (action.type === 'sendAlert' && channelDefinitions.get(normalizeChannelName(action.channel)) !== 'text') {
+        throw new Error('AutoMod sendAlert channel "' + action.channel + '" must reference a text channel in categories.');
+      }
+    }
+    for (const roleName of rule.exemptRoles || []) {
+      if (!roleNamesForPermissions.has(roleName.trim().toLowerCase())) {
+        throw new Error('AutoMod exempt role "' + roleName + '" must be included in roles.');
+      }
+    }
+    for (const channelName of rule.exemptChannels || []) {
+      if (!channelNamesForPermissions.has(normalizeChannelName(channelName))) {
+        throw new Error('AutoMod exempt channel "' + channelName + '" must be included in categories.');
+      }
+    }
   }
 }
 
