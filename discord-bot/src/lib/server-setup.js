@@ -107,6 +107,7 @@ const AUTO_MOD_SETTING_KEYS = new Set([
   'staff_applications_enabled','staff_applications_channel_id','staff_applications_title','staff_applications_description','staff_applications_role_id',
   'ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','ticket_close_delay_seconds',
   'community_rules_config','community_rules_message_channel','community_rules_message_id',
+  'autopartner_last_posted_at','autopartner_last_partner_id',
   ...['meta','lessons','ping','help'].map(name => 'bot_response:' + name)
 ]);
 const AUTO_MOD_COMMANDS = [
