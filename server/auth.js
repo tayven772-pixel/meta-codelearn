@@ -551,7 +551,7 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
        const applicationQuestion = key.match(/^staff_application_question_([1-5])$/);
        if (applicationQuestion && value.length > 500) throw new Error('Staff application questions must be 500 characters or fewer.');
        const applicationMinWords = key.match(/^staff_application_min_words_([1-5])$/);
-       if (applicationMinWords && (!/^\\d+$/.test(value) || Number(value) > 500)) throw new Error('Staff application minimum words must be between 0 and 500.');
+       if (applicationMinWords && (!/^\d+$/.test(value) || Number(value) > 500)) throw new Error('Staff application minimum words must be between 0 and 500.');
       if (key === 'staff_applications_channel_id' && value && !/^\d{17,20}$/.test(value)) throw new Error('Staff application channel ID must be a Discord ID.');
       if (key === 'staff_applications_enabled' && !['true','false'].includes(value)) throw new Error('Staff applications enabled must be true or false.');
       if (key === 'community_welcome_avatar' && !['true','false'].includes(value)) throw new Error('Welcome avatar must be true or false.');
