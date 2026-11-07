@@ -3873,11 +3873,15 @@ function BotControlPage() {
       setStatus('Fix the setup JSON before exporting the complete configuration.');
       return;
     }
+    const importedBotSettings = (serverTemplate as any).botSettings;
+    if ((serverTemplate as any).server && typeof (serverTemplate as any).server === 'object') {
+      serverTemplate = (serverTemplate as any).server;
+    }
     const exported = {
       schemaVersion: 1,
       exportedAt: new Date().toISOString(),
       server: serverTemplate,
-      botSettings: settings,
+      botSettings: { ...settings, ...(importedBotSettings && typeof importedBotSettings === 'object' ? importedBotSettings : {}) },
     };
     const blob = new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -3888,7 +3892,7 @@ function BotControlPage() {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    setStatus('Exported the current server template and bot settings. This file is a backup; importing it is not yet supported as a unified restore.');
+    setStatus('Exported a complete JSON backup. Paste the backup into this same JSON editor and publish it to restore the server template and bot settings.');
   };
   const sendBotMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -3923,7 +3927,8 @@ function BotControlPage() {
   const publishSetupTemplate = async () => {
     let template;
     try { template = JSON.parse(templateText); } catch (error) { setStatus('Invalid JSON: ' + (error instanceof Error ? error.message : 'check the template')); return; }
-    if (!Array.isArray(template.roles) || !Array.isArray(template.categories)) { setStatus('JSON must contain roles and categories arrays.'); return; }
+    const serverTemplate = template?.server && typeof template.server === 'object' && !Array.isArray(template.server) ? template.server : template;
+    if (!Array.isArray(serverTemplate.roles) || !Array.isArray(serverTemplate.categories)) { setStatus('JSON must contain roles and categories arrays, either at the top level or inside server.'); return; }
     setBusy(true); setSetupPreview(null); setStatus('Requesting a Discord preview. No changes will be made yet…');
     try {
       const response = await fetch('/api/auth/admin/bot-control/publish-template', {
@@ -3975,19 +3980,30 @@ function BotControlPage() {
     let template = templateText;
     try {
       const parsed = JSON.parse(template);
-      if (!Array.isArray(parsed.roles) || !Array.isArray(parsed.categories) ||
-          parsed.roles.length > 40 || parsed.categories.length > 30 ||
-          parsed.roles.some((role: {name?: unknown}) => typeof role?.name !== 'string' || !role.name.trim() || role.name.length > 100) ||
-          parsed.categories.some((group: {name?: unknown; channels?: unknown}) => typeof group?.name !== 'string' || !group.name.trim() ||
+      const serverTemplate = parsed?.server && typeof parsed.server === 'object' && !Array.isArray(parsed.server) ? parsed.server : parsed;
+      if (!Array.isArray(serverTemplate.roles) || !Array.isArray(serverTemplate.categories) ||
+          serverTemplate.roles.length > 40 || serverTemplate.categories.length > 30 ||
+          serverTemplate.roles.some((role: {name?: unknown}) => typeof role?.name !== 'string' || !role.name.trim() || role.name.length > 100) ||
+          serverTemplate.categories.some((group: {name?: unknown; channels?: unknown}) => typeof group?.name !== 'string' || !group.name.trim() ||
             !Array.isArray(group.channels) || group.channels.length > 50 ||
-            group.channels.some((channel: unknown) => !Array.isArray(channel) || !['text','voice'].includes(channel[0] as string) ||
-              typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100))) {
-        throw new Error('Use roles and categories arrays. Each channel must be ["text" or "voice", "channel-name"]. Limits: 40 roles, 30 categories, 50 channels each.');
+            group.channels.some((channel: unknown) => {
+              if (Array.isArray(channel)) return !['text','voice'].includes(channel[0] as string) || typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100;
+              if (channel && typeof channel === 'object') {
+                const item = channel as {type?: unknown;name?: unknown};
+                return !['text','voice'].includes(item.type as string) || typeof item.name !== 'string' || !item.name.trim() || item.name.length > 100;
+              }
+              return true;
+            }))) {
+        throw new Error('Use roles and categories arrays (top-level or inside server). Each channel must define a text/voice type and name. Limits: 40 roles, 30 categories, 50 channels each.');
       }
     } catch (error) { setStatus('Setup template JSON is invalid: ' + (error instanceof Error ? error.message : 'check the JSON')); return; }
     const editableKeys = new Set(['autopartner_enabled','autopartner_channel_id','autopartner_interval_hours','autopartner_min_members','autopartner_template','staff_applications_enabled','staff_applications_channel_id','staff_applications_title','staff_applications_description','staff_applications_role_id','community_welcome_avatar','bot_welcome_message','bot_rules_text','bot_status_text','bot_response:meta','bot_response:lessons','bot_response:ping','bot_response:help','ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','ticket_close_delay_seconds','community_welcome_channel_id','community_welcome_message','community_autorole_id','community_log_channel_id','community_xp_enabled','link_protection_enabled','link_protection_owner_id','server_profile_guard_enabled']);
-    const payload = Object.fromEntries(Object.entries(settings).filter(([key]) => editableKeys.has(key) || key.startsWith('bot_command_enabled:')));
-    payload.server_setup_template = template;
+    const parsedTemplate = JSON.parse(template);
+    const serverTemplate = parsedTemplate?.server && typeof parsedTemplate.server === 'object' && !Array.isArray(parsedTemplate.server) ? parsedTemplate.server : parsedTemplate;
+    const importedBotSettings = parsedTemplate?.botSettings && typeof parsedTemplate.botSettings === 'object' && !Array.isArray(parsedTemplate.botSettings) ? parsedTemplate.botSettings : {};
+    const combinedSettings = { ...settings, ...importedBotSettings };
+    const payload = Object.fromEntries(Object.entries(combinedSettings).filter(([key]) => editableKeys.has(key) || key.startsWith('bot_command_enabled:')));
+    payload.server_setup_template = JSON.stringify(serverTemplate);
     setBusy(true);
     try {
       const response = await fetch('/api/auth/admin/bot-control/settings', {
@@ -4106,7 +4122,7 @@ function BotControlPage() {
             <section id="bot-settings-editor" className="admin-publishing-guide" hidden={!panelSectionEnabled('setup')}>
               <h2>Publish server setup JSON</h2>
               <button type="button" className="button-secondary" onClick={exportBotConfigJson} disabled={busy}>Export server + bot JSON backup</button>
-              <p>The JSON controls Discord roles, categories and channels, supported bot settings, and which dashboard sections are shown. Publish first creates a read-only preview. Confirm only after reviewing all removals. Deleting channels also deletes their message history.</p>
+              <p>Use the existing JSON editor to configure Discord roles, categories, channels, permissions, AutoMod rules, and bot settings. It accepts both a normal server template and the complete backup format with <code>server</code> and <code>botSettings</code>. Publish creates a read-only preview; confirm only after reviewing all changes and removals. Deleting channels also deletes their message history.</p>
               <textarea value={templateText} onChange={event => setTemplateText(event.target.value)} rows={18} spellCheck={false} style={{ ...fieldStyle, fontFamily: 'monospace' }} aria-label="Discord setup JSON" />
               <button type="button" className="button-primary" onClick={() => { void publishSetupTemplate(); }} disabled={busy}>{busy ? 'Publishing…' : 'Publish JSON to Discord'}</button>
               <button type="button" className="button-secondary" onClick={() => { setTemplateText(defaultTemplate); setSetupPreview(null); }} disabled={busy}>Reset template</button>
