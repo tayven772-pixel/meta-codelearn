@@ -233,6 +233,11 @@ export function validateServerTemplate(template) {
           role.permissions.some(permission => typeof permission !== 'string' || !validRolePermissions.has(permission))))) ||
       template.categories.some(group => !group || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 100 ||
         !Array.isArray(group.channels) || group.channels.length > 50 || (group.private !== undefined && typeof group.private !== 'boolean') ||
+        (group.permissions !== undefined && (!Array.isArray(group.permissions) || group.permissions.length > 100 ||
+          group.permissions.some(rule => !isPlainObject(rule) || typeof rule.role !== 'string' || !rule.role.trim() || rule.role.length > 100 ||
+            (rule.allow !== undefined && (!Array.isArray(rule.allow) || rule.allow.some(permission => typeof permission !== 'string' || !validRolePermissions.has(permission)))) ||
+            (rule.deny !== undefined && (!Array.isArray(rule.deny) || rule.deny.some(permission => typeof permission !== 'string' || !validRolePermissions.has(permission)))) ||
+            (rule.allow !== undefined && rule.deny !== undefined && rule.allow.some(permission => rule.deny.includes(permission)))))) ||
         group.channels.some(channel => {
           if (!Array.isArray(channel) || !['text','voice'].includes(channel[0]) ||
               typeof channel[1] !== 'string' || !channel[1].trim() || channel[1].length > 100) return true;
@@ -273,6 +278,17 @@ export function validateServerTemplate(template) {
   }
   const channelNamesForPermissions = new Set(template.categories.flatMap(group => group.channels.map(channel => normalizeChannelName(channel[1]))));
   const roleNamesForPermissions = new Set(template.roles.map(role => role.name.trim().toLowerCase()));
+  for (const group of template.categories) {
+    const categoryPermissionKeys = [];
+    for (const rule of group.permissions || []) {
+      if (rule.role.trim() !== '@everyone' && !roleNamesForPermissions.has(rule.role.trim().toLowerCase())) {
+        throw new Error('Category permission role "' + rule.role + '" must reference a role in roles or @everyone.');
+      }
+      const key = rule.role.trim().toLowerCase();
+      if (categoryPermissionKeys.includes(key)) throw new Error('Only one category permission rule per role is allowed in each category.');
+      categoryPermissionKeys.push(key);
+    }
+  }
   for (const rule of channelPermissions || []) {
     if (!channelNamesForPermissions.has(normalizeChannelName(rule.channel))) throw new Error('channelPermissions.channel must reference a channel in categories.');
     if (rule.role.trim() !== '@everyone' && !roleNamesForPermissions.has(rule.role.trim().toLowerCase())) throw new Error('channelPermissions.role must reference a role in roles or @everyone.');
@@ -432,13 +448,47 @@ function resolveAutoModChannel(guild, reference) {
   const value = String(reference || '').trim();
   return /^\d{17,20}$/.test(value)
     ? guild.channels.cache.get(value) || null
-    : guild.channels.cache.find(channel => channel.name.toLowerCase() === normalizeChannelName(value)) || null;
+    : guild.channels.cache.find(channel => channel.name.toLowerCase() === value.toLowerCase() || channel.name.toLowerCase() === normalizeChannelName(value)) || null;
 }
 function resolveAutoModRole(guild, reference) {
   const value = String(reference || '').trim();
   return /^\d{17,20}$/.test(value)
     ? guild.roles.cache.get(value) || null
     : guild.roles.cache.find(role => role.name.toLowerCase() === value.toLowerCase()) || null;
+}
+function buildCategoryPermissionOverwrites(guild, definition) {
+  const overwrites = new Map();
+  const add = (role, allow = [], deny = []) => {
+    const current = overwrites.get(role.id) || { id: role.id, allow: new Set(), deny: new Set() };
+    for (const permission of allow) {
+      current.deny.delete(permission);
+      current.allow.add(permission);
+    }
+    for (const permission of deny) {
+      current.allow.delete(permission);
+      current.deny.add(permission);
+    }
+    overwrites.set(role.id, current);
+  };
+  if (definition.private) {
+    add(guild.roles.everyone, [], ['ViewChannel']);
+    const staffNames = new Set(['Founder','Administrator','Moderator','Support Team']);
+    if (definition.staffRole) staffNames.add(definition.staffRole);
+    for (const roleId of [getSetting('global', 'staff_applications_role_id'), getSetting('global', 'ticket_staff_role_id')]) {
+      const configuredRole = roleId ? guild.roles.cache.get(roleId) : null;
+      if (configuredRole) staffNames.add(configuredRole.name);
+    }
+    for (const name of staffNames) {
+      const role = guild.roles.cache.find(item => item.name.toLowerCase() === name.toLowerCase());
+      if (role) add(role, ['ViewChannel','SendMessages','ReadMessageHistory']);
+    }
+  }
+  for (const rule of definition.permissions || []) {
+    const role = rule.role.trim() === '@everyone' ? guild.roles.everyone : resolveAutoModRole(guild, rule.role);
+    if (!role) throw new Error('Category permission role "' + rule.role + '" was not found after roles were created.');
+    add(role, rule.allow || [], rule.deny || []);
+  }
+  return [...overwrites.values()].map(rule => ({ id: rule.id, allow: [...rule.allow], deny: [...rule.deny] }));
 }
 async function buildAutoModerationPlan(guild, config) {
   const botMember = guild.members.me ?? await guild.members.fetchMe();
@@ -689,11 +739,11 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
 
   for (const group of template.categories) {
     const existing = guild.channels.cache.find(channel => channel.type === ChannelType.GuildCategory && channel.name.toLowerCase() === group.name.trim().toLowerCase() && !usedCategoryIds.has(channel.id));
-    if (!existing) createCategories.push({ name: group.name.trim(), private: Boolean(group.private) });
+    if (!existing) createCategories.push({ name: group.name.trim(), private: Boolean(group.private), permissions: group.permissions || [] });
     else {
       usedCategoryIds.add(existing.id);
       if (!existing.manageable) protectedChannels.push({ id: existing.id, name: existing.name, reason: 'category is not manageable by Meta bot' });
-      else updateCategories.push({ id: existing.id, name: existing.name, private: Boolean(group.private) });
+      else updateCategories.push({ id: existing.id, name: existing.name, private: Boolean(group.private), permissions: group.permissions || [] });
     }
   }
 
@@ -914,17 +964,7 @@ export async function applyServerTemplate(guild, template, options = {}) {
   await guild.roles.fetch();
   for (const definition of template.categories) {
     let category = guild.channels.cache.find(item => item.type === ChannelType.GuildCategory && item.name.toLowerCase() === definition.name.trim().toLowerCase());
-    const staffRoleNames = new Set(['Founder','Administrator','Moderator','Support Team']);
-    if (template.settings?.applications?.staffRole) staffRoleNames.add(template.settings.applications.staffRole);
-    for (const roleId of [getSetting('global', 'staff_applications_role_id'), getSetting('global', 'ticket_staff_role_id')]) {
-      const configuredRole = roleId ? guild.roles.cache.get(roleId) : null;
-      if (configuredRole) staffRoleNames.add(configuredRole.name);
-    }
-    const overwrites = definition.private ? [
-      { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
-      ...[...staffRoleNames].map(name => guild.roles.cache.find(role => role.name.toLowerCase() === name.toLowerCase())).filter(Boolean)
-        .map(role => ({ id: role.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }))
-    ] : [];
+    const overwrites = buildCategoryPermissionOverwrites(guild, definition);
     if (!category) {
       category = await guild.channels.create({ name: definition.name.trim(), type: ChannelType.GuildCategory, permissionOverwrites: overwrites, reason: 'Meta Code JSON setup sync' });
       created.push('category ' + category.name);
@@ -997,7 +1037,7 @@ export async function applyServerTemplate(guild, template, options = {}) {
     const channel = /^\d{17,20}$/.test(rule.channel)
       ? guild.channels.cache.get(rule.channel)
       : guild.channels.cache.find(item => item.name.toLowerCase() === normalizeChannelName(rule.channel));
-    const role = guild.roles.cache.find(item => item.name.toLowerCase() === rule.role.trim().toLowerCase());
+    const role = rule.role.trim() === '@everyone' ? guild.roles.everyone : guild.roles.cache.find(item => item.name.toLowerCase() === rule.role.trim().toLowerCase());
     if (!channel || !role) { skipped.push('channel permission rule ' + rule.channel + ' / ' + rule.role + ' (missing target)'); continue; }
     try {
       const overwrite = channel.permissionOverwrites.cache.get(role.id);
