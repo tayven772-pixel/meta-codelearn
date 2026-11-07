@@ -403,13 +403,19 @@ function normalizeServerSetupTemplate(input) {
     ...(source.explicitContentFilter !== undefined ? { explicitContentFilter: ({ DISABLED: 'disabled', MEMBERS_WITHOUT_ROLES: 'membersWithoutRoles', ALL_MEMBERS: 'allMembers' })[String(source.explicitContentFilter).toUpperCase()] || source.explicitContentFilter } : {})
   } : source.branding;
 
+  const rolePermissionName = value => {
+    if (typeof value !== 'string') return value;
+    const aliases = { ADMINISTRATOR: 'Administrator', VIEW_AUDIT_LOG: 'ViewAuditLog' };
+    return aliases[value] || value.toLowerCase().split(/[_-]+/).map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+  };
   const roles = Array.isArray(source.roles) ? source.roles.map(role => {
     if (!role || typeof role !== 'object' || Array.isArray(role)) return role;
     let color = role.color;
     if (typeof color === 'string' && /^#?[0-9a-f]{6}$/i.test(color.trim())) {
       color = Number.parseInt(color.trim().replace(/^#/, ''), 16);
     }
-    return { ...role, color };
+    const permissions = Array.isArray(role.permissions) ? role.permissions.map(rolePermissionName) : role.permissions;
+    return { ...role, color, ...(permissions ? { permissions } : {}) };
   }) : source.roles;
 
   const categories = Array.isArray(source.categories) ? source.categories.map(category => {
