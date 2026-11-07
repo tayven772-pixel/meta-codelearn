@@ -504,6 +504,8 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
     'server_setup_template','bot_welcome_message','bot_rules_text','bot_status_text',
     'community_welcome_channel_id','community_welcome_message','community_welcome_avatar','community_autorole_id','community_log_channel_id','community_xp_enabled',
     'link_protection_enabled','link_protection_owner_id','server_profile_guard_enabled',
+     'softban_channel_id','community_rules_config','community_rules_message_channel','community_rules_message_id',
+     'autopartner_last_posted_at','autopartner_last_partner_id',
      'staff_applications_enabled','staff_applications_channel_id','staff_applications_title','staff_applications_description','staff_applications_role_id',
     'ticket_panel_style','ticket_categories','ticket_form_questions','ticket_panel_title','ticket_panel_description','ticket_category_id','ticket_staff_role_id','ticket_log_channel_id','ticket_close_delay_seconds',
     ...botCommandNames.map(name => `bot_command_enabled:${name}`),
@@ -522,7 +524,7 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
         throw new Error(`Setting ${key} is too long.`);
       }
       if (['ticket_category_id','ticket_staff_role_id','ticket_log_channel_id'].includes(key) && value && !/^\d{17,20}$/.test(value)) throw new Error(key + ' must be a valid Discord ID (17–20 digits).');
-      if (['community_welcome_channel_id','community_autorole_id','community_log_channel_id'].includes(key) && value && !/^\d{17,20}$/.test(value)) throw new Error(key + ' must be a valid Discord ID (17–20 digits).');
+      if (['community_welcome_channel_id','community_autorole_id','community_log_channel_id','softban_channel_id','community_rules_message_channel','community_rules_message_id'].includes(key) && value && !/^\d{17,20}$/.test(value)) throw new Error(key + ' must be a valid Discord ID (17–20 digits).');
       if (['link_protection_enabled','server_profile_guard_enabled'].includes(key) && !['true','false'].includes(value)) throw new Error(key + ' must be true or false.');
        if (key === 'link_protection_owner_id' && value && !/^\d{17,20}$/.test(value)) throw new Error('Link protection owner must be a Discord ID (17–20 digits).');
        if (key === 'community_xp_enabled' && !['true','false'].includes(value)) throw new Error('Community XP enabled must be true or false.');
@@ -546,6 +548,10 @@ app.put('/api/auth/admin/bot-control/settings', async (req, res) => {
       if (key === 'autopartner_interval_hours' && (!/^\d+$/.test(value) || Number(value) < 6 || Number(value) > 168)) throw new Error('Autopartner interval must be 6–168 hours.');
       if (key === 'autopartner_min_members' && (!/^\d+$/.test(value) || Number(value) < 10 || Number(value) > 1000000)) throw new Error('Autopartner minimum members must be 10–1,000,000.');
       if (key === 'staff_applications_role_id' && value && !/^\d{17,20}$/.test(value)) throw new Error('Staff reviewer role ID must be a Discord ID.');
+       const applicationQuestion = key.match(/^staff_application_question_([1-5])$/);
+       if (applicationQuestion && value.length > 500) throw new Error('Staff application questions must be 500 characters or fewer.');
+       const applicationMinWords = key.match(/^staff_application_min_words_([1-5])$/);
+       if (applicationMinWords && (!/^\\d+$/.test(value) || Number(value) > 500)) throw new Error('Staff application minimum words must be between 0 and 500.');
       if (key === 'staff_applications_channel_id' && value && !/^\d{17,20}$/.test(value)) throw new Error('Staff application channel ID must be a Discord ID.');
       if (key === 'staff_applications_enabled' && !['true','false'].includes(value)) throw new Error('Staff applications enabled must be true or false.');
       if (key === 'community_welcome_avatar' && !['true','false'].includes(value)) throw new Error('Welcome avatar must be true or false.');
