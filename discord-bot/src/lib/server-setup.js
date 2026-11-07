@@ -331,11 +331,12 @@ export function validateServerTemplate(template) {
 function desiredChannelDefinitions(template) {
   const output = [];
   for (const group of template.categories) {
-    for (const [kind, rawName] of group.channels) {
+    for (const [kind, rawName, rawOptions] of group.channels) {
       output.push({
         name: normalizeChannelName(rawName),
         type: kind === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText,
-        categoryName: group.name.trim()
+        categoryName: group.name.trim(),
+        options: rawOptions || {}
       });
     }
   }
@@ -359,7 +360,7 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
   const usedChannelIds = new Set();
   const createRoles = [], updateRoles = [], deleteRoles = [], protectedRoles = [];
   const createCategories = [], updateCategories = [], deleteCategories = [];
-  const createChannels = [], moveChannels = [], syncChannelPermissions = [], deleteChannels = [], protectedChannels = [];
+  const createChannels = [], moveChannels = [], updateChannels = [], syncChannelPermissions = [], deleteChannels = [], protectedChannels = [];
   const desiredServerName = template.branding?.server_name?.trim();
   const renameServer = desiredServerName && desiredServerName !== guild.name
     ? { current: guild.name, desired: desiredServerName } : null;
@@ -370,7 +371,9 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
     if (!existing) createRoles.push({
       name: definition.name.trim(),
       color: definition.color ?? 0xD7DCE4,
-      permissions: desiredPermissions ?? []
+      permissions: desiredPermissions ?? [],
+      hoist: definition.hoist ?? false,
+      mentionable: definition.mentionable ?? false
     });
     else {
       usedRoleIds.add(existing.id);
@@ -378,7 +381,9 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
       const currentPermissions = existing.permissions.toArray().sort();
       const permissionsChanged = desiredPermissions !== undefined &&
         JSON.stringify(currentPermissions) !== JSON.stringify(desiredPermissions);
-      if (colorChanged || permissionsChanged) {
+      const hoistChanged = definition.hoist !== undefined && existing.hoist !== definition.hoist;
+      const mentionableChanged = definition.mentionable !== undefined && existing.mentionable !== definition.mentionable;
+      if (colorChanged || permissionsChanged || hoistChanged || mentionableChanged) {
         if (existing.managed || existing.position >= botHighest) {
           protectedRoles.push({ id: existing.id, name: existing.name, reason: existing.managed ? 'managed by Discord/integration' : 'at or above Meta bot role' });
         } else {
@@ -386,7 +391,9 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
             id: existing.id,
             name: existing.name,
             ...(colorChanged ? { color: definition.color } : {}),
-            ...(permissionsChanged ? { permissions: desiredPermissions } : {})
+            ...(permissionsChanged ? { permissions: desiredPermissions } : {}),
+            ...(hoistChanged ? { hoist: definition.hoist } : {}),
+            ...(mentionableChanged ? { mentionable: definition.mentionable } : {})
           });
         }
       }
@@ -417,10 +424,20 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
     if (existing) {
       usedChannelIds.add(existing.id);
       if (!existing.manageable) protectedChannels.push({ id: existing.id, name: existing.name, reason: 'channel is not manageable by Meta bot' });
-      else if (!category || existing.parentId !== category.id) moveChannels.push({ id: existing.id, name: existing.name, fromCategory: existing.parent?.name || 'No category', toCategory: definition.categoryName });
-      else syncChannelPermissions.push({ id: existing.id, name: existing.name, categoryName: definition.categoryName });
+      else {
+        if (!category || existing.parentId !== category.id) moveChannels.push({ id: existing.id, name: existing.name, fromCategory: existing.parent?.name || 'No category', toCategory: definition.categoryName });
+        else syncChannelPermissions.push({ id: existing.id, name: existing.name, categoryName: definition.categoryName });
+        const options = definition.options || {};
+        const changes = {};
+        if (options.topic !== undefined && existing.topic !== options.topic) changes.topic = options.topic;
+        if (options.nsfw !== undefined && existing.nsfw !== options.nsfw) changes.nsfw = options.nsfw;
+        if (options.slowmode !== undefined && existing.rateLimitPerUser !== options.slowmode) changes.rateLimitPerUser = options.slowmode;
+        if (options.bitrate !== undefined && existing.bitrate !== options.bitrate) changes.bitrate = options.bitrate;
+        if (options.userLimit !== undefined && existing.userLimit !== options.userLimit) changes.userLimit = options.userLimit;
+        if (Object.keys(changes).length) updateChannels.push({ id: existing.id, name: existing.name, changes });
+      }
     } else {
-      createChannels.push({ name: definition.name, type: definition.type, categoryName: definition.categoryName });
+      createChannels.push({ name: definition.name, type: definition.type, categoryName: definition.categoryName, options: definition.options || {} });
     }
   }
 
@@ -446,7 +463,9 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
     } else if (deleteUnlisted) deleteCategories.push({ id: category.id, name: category.name });
   }
 
-  const plan = { renameServer, createRoles, updateRoles, deleteRoles, protectedRoles, createCategories, updateCategories, deleteCategories, createChannels, moveChannels, syncChannelPermissions, deleteChannels, protectedChannels, channelPermissions: template.channelPermissions || [] };
+  const automodConfig = template.automod ?? template.settings?.automod;
+  const autoModeration = automodConfig ? await buildAutoModerationPlan(guild, automodConfig) : null;
+  const plan = { renameServer, createRoles, updateRoles, deleteRoles, protectedRoles, createCategories, updateCategories, deleteCategories, createChannels, moveChannels, updateChannels, syncChannelPermissions, deleteChannels, protectedChannels, channelPermissions: template.channelPermissions || [], autoModeration };
   const fingerprint = createHash('sha256').update(JSON.stringify(plan)).digest('hex');
   return { fingerprint, plan };
 }
@@ -513,6 +532,8 @@ export async function applyServerTemplate(guild, template, options = {}) {
         name: role.name,
         color: role.color,
         permissions: role.permissions,
+        hoist: role.hoist,
+        mentionable: role.mentionable,
         reason: 'Meta Code JSON setup sync'
       });
       created.push('role ' + item.name);
@@ -525,6 +546,8 @@ export async function applyServerTemplate(guild, template, options = {}) {
         const changes = {};
         if (role.color !== undefined) changes.color = role.color;
         if (role.permissions !== undefined) changes.permissions = role.permissions;
+        if (role.hoist !== undefined) changes.hoist = role.hoist;
+        if (role.mentionable !== undefined) changes.mentionable = role.mentionable;
         await item.edit(changes, 'Meta Code JSON setup sync');
         updated.push('role ' + role.name);
       }
@@ -559,7 +582,15 @@ export async function applyServerTemplate(guild, template, options = {}) {
     if (channel && protectedIds.has(channel.id)) { skipped.push('protected channel ' + channel.name); continue; }
     if (category && protectedIds.has(category.id)) { skipped.push('channel ' + definition.name + ' in protected category ' + category.name); continue; }
     if (!channel) {
-      channel = await guild.channels.create({ name: definition.name, type: definition.type, parent: category?.id, reason: 'Meta Code JSON setup sync' });
+      channel = await guild.channels.create({
+        name: definition.name, type: definition.type, parent: category?.id,
+        ...(definition.options?.topic !== undefined ? { topic: definition.options.topic } : {}),
+        ...(definition.options?.nsfw !== undefined ? { nsfw: definition.options.nsfw } : {}),
+        ...(definition.options?.slowmode !== undefined ? { rateLimitPerUser: definition.options.slowmode } : {}),
+        ...(definition.options?.bitrate !== undefined ? { bitrate: definition.options.bitrate } : {}),
+        ...(definition.options?.userLimit !== undefined ? { userLimit: definition.options.userLimit } : {}),
+        reason: 'Meta Code JSON setup sync'
+      });
       if (category && typeof channel.lockPermissions === 'function') await channel.lockPermissions();
       created.push('channel ' + channel.name);
     } else if (category && channel.parentId !== category.id) {
@@ -570,6 +601,16 @@ export async function applyServerTemplate(guild, template, options = {}) {
       updated.push('synced permissions for ' + channel.name);
     } else {
       skipped.push('channel ' + channel.name);
+    }
+  }
+  for (const update of plan.updateChannels) {
+    const channel = await guild.channels.fetch(update.id).catch(() => null);
+    if (!channel || !channel.manageable) { skipped.push('channel details ' + update.name + ' (not manageable)'); continue; }
+    try {
+      await channel.edit({ ...update.changes, reason: 'Meta Code JSON channel settings sync' });
+      updated.push('channel settings ' + update.name);
+    } catch (error) {
+      throw new Error('Could not update channel settings for ' + update.name + ': ' + error.message);
     }
   }
   if (deleteUnlisted) {
@@ -600,14 +641,18 @@ export async function applyServerTemplate(guild, template, options = {}) {
     if (!channel || !role) { skipped.push('channel permission rule ' + rule.channel + ' / ' + rule.role + ' (missing target)'); continue; }
     try {
       const overwrite = channel.permissionOverwrites.cache.get(role.id);
-      if (rule.sendMessages === 'inherit') {
-        if (overwrite) await channel.permissionOverwrites.delete(role.id, 'Meta Code JSON channel permission sync');
-      } else {
-        await channel.permissionOverwrites.edit(role.id, {
-          SendMessages: rule.sendMessages === 'allow' ? true : false
-        }, { reason: 'Meta Code JSON channel permission sync' });
+      const permissionChanges = {};
+      for (const permission of rule.allow || []) permissionChanges[permission] = true;
+      for (const permission of rule.deny || []) permissionChanges[permission] = false;
+      if (rule.sendMessages !== undefined && !Object.hasOwn(permissionChanges, 'SendMessages')) {
+        permissionChanges.SendMessages = rule.sendMessages === 'allow' ? true : rule.sendMessages === 'deny' ? false : null;
       }
-      updated.push('send messages ' + rule.sendMessages + ' for role ' + role.name + ' in #' + channel.name);
+      if (rule.sendMessages === 'inherit' && !Object.keys(permissionChanges).length) {
+        if (overwrite) await channel.permissionOverwrites.delete(role.id, 'Meta Code JSON channel permission sync');
+      } else if (Object.keys(permissionChanges).length) {
+        await channel.permissionOverwrites.edit(role.id, permissionChanges, { reason: 'Meta Code JSON channel permission sync' });
+      }
+      updated.push('channel permissions for role ' + role.name + ' in #' + channel.name);
     } catch (error) {
       throw new Error('Could not set send-message permission for ' + rule.role + ' in ' + rule.channel + ': ' + error.message);
     }
