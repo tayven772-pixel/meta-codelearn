@@ -550,7 +550,12 @@ function normalizeServerSetupTemplate(input) {
             name: String(rule.name || 'Imported AutoMod rule').slice(0, 100),
             trigger,
             ...(trigger === 'mentionSpam' ? { mentionTotalLimit: Math.min(50, Math.max(1, Number(rule.maxMentions) || 5)) } : {}),
-            ...(trigger === 'keyword' && Array.isArray(rule.keywords) ? { keywords: rule.keywords } : {}),
+            ...(trigger === 'keyword' && Array.isArray(rule.keywords) && rule.keywords.length ? { keywords: rule.keywords } : {}),
+            ...(trigger === 'keyword' && Array.isArray(rule.regexPatterns) && rule.regexPatterns.length
+              ? { regexPatterns: rule.regexPatterns }
+              : trigger === 'keyword' && rule.triggerType === 'LINK_FILTER'
+                ? { regexPatterns: ['https?://', 'www\\.'] }
+                : {}),
             actions
           }];
         })
