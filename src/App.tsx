@@ -3792,10 +3792,10 @@ function BotControlPage() {
       return {
         title: typeof panel.title === 'string' && panel.title.trim() ? panel.title.slice(0, 80) : 'Meta Code bot control',
         description: typeof panel.description === 'string' ? panel.description.slice(0, 240) : 'Owner dashboard configured from this JSON template.',
-        sections: Array.isArray(panel.sections) ? panel.sections : ['setup','commands','responses','tickets','messages','community','autopartner','applications']
+        sections: Array.isArray(panel.sections) ? panel.sections : ['setup','commands','responses','tickets','messages','security','automod','community','autopartner','applications']
       };
     } catch {
-      return { title: 'Meta Code bot control', description: 'Owner dashboard configured from this JSON template.', sections: ['setup','commands','responses','tickets','messages','community','autopartner','applications'] };
+      return { title: 'Meta Code bot control', description: 'Owner dashboard configured from this JSON template.', sections: ['setup','commands','responses','tickets','messages','security','automod','community','autopartner','applications'] };
     }
   }, [templateText]);
   const panelSectionEnabled = (name: string) => name === 'setup' || templatePanel.sections.includes(name);
@@ -3881,7 +3881,7 @@ function BotControlPage() {
       schemaVersion: 1,
       exportedAt: new Date().toISOString(),
       server: serverTemplate,
-      botSettings: { ...settings, ...(importedBotSettings && typeof importedBotSettings === 'object' ? importedBotSettings : {}) },
+      botSettings: { ...(importedBotSettings && typeof importedBotSettings === 'object' ? importedBotSettings : {}), ...settings },
     };
     const blob = new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -3943,7 +3943,8 @@ function BotControlPage() {
       setSetupPreview({ jobId: data.jobId, result: job.result });
       const summary = job.result.summary;
       const deletions = (summary.deleteChannels?.length || 0) + (summary.deleteCategories?.length || 0) + (summary.deleteRoles?.length || 0);
-      setStatus('Preview ready. ' + deletions + ' unlisted Discord items would be deleted. Nothing has changed yet; review the full list below.');
+      const automodDeletes = summary.autoModeration?.remove?.length || 0;
+      setStatus('Preview ready. ' + deletions + ' unlisted Discord items and ' + automodDeletes + ' unlisted AutoMod rules would be deleted. Nothing has changed yet; review the full list below.');
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not preview Discord setup.'); }
     finally { setBusy(false); }
   };
@@ -3953,9 +3954,10 @@ function BotControlPage() {
     const deleteChannels = summary.deleteChannels?.length || 0;
     const deleteCategories = summary.deleteCategories?.length || 0;
     const deleteRoles = summary.deleteRoles?.length || 0;
-    const totalDeletes = deleteChannels + deleteCategories + deleteRoles;
+    const deleteAutoModerationRules = summary.autoModeration?.remove?.length || 0;
+    const totalDeletes = deleteChannels + deleteCategories + deleteRoles + deleteAutoModerationRules;
     const rename = summary.renameServer ? ' The Discord server will also be renamed from "' + summary.renameServer.current + '" to "' + summary.renameServer.desired + '".' : '';
-    const detail = 'This will permanently delete ' + deleteChannels + ' channel(s), ' + deleteCategories + ' category/categories, and ' + deleteRoles + ' role(s) not in the JSON. Deleted channel message history cannot be recovered. Deleting a role also removes it from members who have it. Role permissions listed in the JSON will be applied to matching roles. Category permissions and child-channel overrides will be replaced to match the JSON, including private/public visibility.' + rename + ' Discord-managed roles, administrator roles, roles above Meta, and protected channels are kept. Continue?';
+    const detail = 'This will permanently delete ' + deleteChannels + ' channel(s), ' + deleteCategories + ' category/categories, ' + deleteRoles + ' role(s), and ' + deleteAutoModerationRules + ' unlisted AutoMod rule(s). Deleted channel message history cannot be recovered. Deleting a role also removes it from members who have it. Role permissions listed in the JSON will be applied to matching roles. Channel permissions, topics, slowmode and other supplied properties will be synchronized.' + rename + ' Discord-managed roles, administrator roles, roles above Meta, and protected channels are kept. Continue?';
     if (!window.confirm(detail)) return;
     setBusy(true); setStatus('Confirming sync and applying changes in Discord…');
     try {
