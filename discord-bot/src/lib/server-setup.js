@@ -143,6 +143,7 @@ function validateAutoModerationConfig(config) {
         (rule.allowList !== undefined && (!Array.isArray(rule.allowList) || rule.allowList.length > 100 || rule.allowList.some(item => typeof item !== 'string' || !item.trim() || item.length > 60))) ||
         (rule.presets !== undefined && (!Array.isArray(rule.presets) || rule.presets.some(item => !Object.hasOwn(AUTO_MOD_PRESETS, item)))) ||
         (rule.mentionTotalLimit !== undefined && (!Number.isInteger(rule.mentionTotalLimit) || rule.mentionTotalLimit < 1 || rule.mentionTotalLimit > 50)) ||
+        (rule.mentionRaidProtectionEnabled !== undefined && typeof rule.mentionRaidProtectionEnabled !== 'boolean') ||
         (rule.exemptRoles !== undefined && (!Array.isArray(rule.exemptRoles) || rule.exemptRoles.length > 20 || rule.exemptRoles.some(item => typeof item !== 'string' || !item.trim() || item.length > 100))) ||
         (rule.exemptChannels !== undefined && (!Array.isArray(rule.exemptChannels) || rule.exemptChannels.length > 50 || rule.exemptChannels.some(item => typeof item !== 'string' || !item.trim() || item.length > 100))) ||
         !Array.isArray(rule.actions) || rule.actions.length < 1 || rule.actions.length > 5) {
@@ -197,8 +198,8 @@ function validateAutoModerationConfig(config) {
     if (rule.trigger !== 'keywordPreset' && rule.presets?.length) {
       throw new Error('presets are only supported by keywordPreset AutoMod rules.');
     }
-    if (rule.trigger !== 'mentionSpam' && rule.mentionTotalLimit !== undefined) {
-      throw new Error('mentionTotalLimit is only supported by mentionSpam AutoMod rules.');
+    if (rule.trigger !== 'mentionSpam' && (rule.mentionTotalLimit !== undefined || rule.mentionRaidProtectionEnabled !== undefined)) {
+      throw new Error('mentionTotalLimit and mentionRaidProtectionEnabled are only supported by mentionSpam AutoMod rules.');
     }
   }
 }
@@ -208,11 +209,18 @@ export function validateServerTemplate(template) {
     throw new Error('Template must contain roles and categories arrays.');
   }
   const validRolePermissions = new Set(Object.keys(PermissionFlagsBits));
-  if (template.branding !== undefined && (!template.branding || typeof template.branding !== 'object' ||
-      Array.isArray(template.branding) || (template.branding.server_name !== undefined &&
+  if (template.branding !== undefined && (!isPlainObject(template.branding) ||
+      (template.branding.server_name !== undefined &&
         (typeof template.branding.server_name !== 'string' || !template.branding.server_name.trim() ||
-          template.branding.server_name.trim().length > 100)))) {
-    throw new Error('branding.server_name must be a non-empty Discord server name of 100 characters or fewer.');
+          template.branding.server_name.trim().length > 100)) ||
+      (template.branding.description !== undefined && (typeof template.branding.description !== 'string' || template.branding.description.length > 120)) ||
+      (template.branding.verificationLevel !== undefined && ![0,1,2,3,4,'none','low','medium','high','veryHigh'].includes(template.branding.verificationLevel)) ||
+      (template.branding.explicitContentFilter !== undefined && ![0,1,2,'disabled','membersWithoutRoles','allMembers'].includes(template.branding.explicitContentFilter)) ||
+      (template.branding.defaultMessageNotifications !== undefined && ![0,1,'allMessages','onlyMentions'].includes(template.branding.defaultMessageNotifications)) ||
+      (template.branding.afkTimeout !== undefined && ![60,300,900,1800,3600].includes(template.branding.afkTimeout)) ||
+      (template.branding.afkChannel !== undefined && (typeof template.branding.afkChannel !== 'string' || !template.branding.afkChannel.trim() || template.branding.afkChannel.length > 100)) ||
+      (template.branding.preferredLocale !== undefined && (typeof template.branding.preferredLocale !== 'string' || template.branding.preferredLocale.length > 20)))) {
+    throw new Error('branding contains an invalid server name, description, verification level, content filter, notification setting, AFK setting, or locale.');
   }
   if (template.roles.length > 40 || template.categories.length > 30 ||
       template.roles.some(role => !role || typeof role.name !== 'string' || !role.name.trim() || role.name.length > 100 ||
@@ -442,6 +450,7 @@ async function buildAutoModerationPayload(guild, rule, globallyEnabled = true) {
   if (rule.allowList?.length) triggerMetadata.allowList = rule.allowList;
   if (rule.presets?.length) triggerMetadata.presets = [...new Set(rule.presets)].map(preset => AUTO_MOD_PRESETS[preset]);
   if (rule.mentionTotalLimit !== undefined) triggerMetadata.mentionTotalLimit = rule.mentionTotalLimit;
+  if (rule.mentionRaidProtectionEnabled !== undefined) triggerMetadata.mentionRaidProtectionEnabled = rule.mentionRaidProtectionEnabled;
 
   const actions = [];
   for (const action of rule.actions) {
@@ -551,6 +560,27 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
   const desiredServerName = template.branding?.server_name?.trim();
   const renameServer = desiredServerName && desiredServerName !== guild.name
     ? { current: guild.name, desired: desiredServerName } : null;
+  const updateServerSettings = {};
+  const branding = template.branding || {};
+  const enumValue = (value, labels) => typeof value === 'string' ? labels[value] : value;
+  const desiredVerification = enumValue(branding.verificationLevel, { none: 0, low: 1, medium: 2, high: 3, veryHigh: 4 });
+  const desiredContentFilter = enumValue(branding.explicitContentFilter, { disabled: 0, membersWithoutRoles: 1, allMembers: 2 });
+  const desiredNotifications = enumValue(branding.defaultMessageNotifications, { allMessages: 0, onlyMentions: 1 });
+  for (const [key, value] of [
+    ['description', branding.description],
+    ['verificationLevel', desiredVerification],
+    ['explicitContentFilter', desiredContentFilter],
+    ['defaultMessageNotifications', desiredNotifications],
+    ['afkTimeout', branding.afkTimeout],
+    ['preferredLocale', branding.preferredLocale]
+  ]) {
+    if (value !== undefined && guild[key] !== value) updateServerSettings[key] = value;
+  }
+  if (branding.afkChannel !== undefined) {
+    const afkChannel = resolveAutoModChannel(guild, branding.afkChannel);
+    if (!afkChannel || afkChannel.type !== ChannelType.GuildVoice) throw new Error('branding.afkChannel must reference an existing or templated voice channel.');
+    if (guild.afkChannelId !== afkChannel.id) updateServerSettings.afkChannel = afkChannel.id;
+  }
 
   for (const definition of template.roles) {
     const existing = guild.roles.cache.find(role => role.name.toLowerCase() === definition.name.trim().toLowerCase());
@@ -652,7 +682,7 @@ export async function buildServerTemplatePlan(guild, template, deleteUnlisted = 
 
   const automodConfig = template.automod ?? template.settings?.automod;
   const autoModeration = automodConfig ? await buildAutoModerationPlan(guild, automodConfig) : null;
-  const plan = { renameServer, createRoles, updateRoles, deleteRoles, protectedRoles, createCategories, updateCategories, deleteCategories, createChannels, moveChannels, updateChannels, syncChannelPermissions, deleteChannels, protectedChannels, channelPermissions: template.channelPermissions || [], autoModeration };
+  const plan = { renameServer, updateServerSettings, createRoles, updateRoles, deleteRoles, protectedRoles, createCategories, updateCategories, deleteCategories, createChannels, moveChannels, updateChannels, syncChannelPermissions, deleteChannels, protectedChannels, channelPermissions: template.channelPermissions || [], autoModeration };
   const fingerprint = createHash('sha256').update(JSON.stringify(plan)).digest('hex');
   return { fingerprint, plan };
 }
@@ -772,12 +802,16 @@ export async function applyServerTemplate(guild, template, options = {}) {
   const created = [], updated = [], deleted = [], skipped = [];
   const protectedIds = new Set(plan.protectedChannels.map(item => item.id));
   const botMember = guild.members.me ?? await guild.members.fetchMe();
-  if (plan.renameServer) {
+  if (plan.renameServer || Object.keys(plan.updateServerSettings).length) {
     try {
-      await guild.edit({ name: plan.renameServer.desired }, 'Meta Code JSON setup sync');
-      updated.push('server name ' + plan.renameServer.desired);
+      await guild.edit({
+        ...(plan.renameServer ? { name: plan.renameServer.desired } : {}),
+        ...plan.updateServerSettings
+      }, 'Meta Code JSON setup sync');
+      if (plan.renameServer) updated.push('server name ' + plan.renameServer.desired);
+      if (Object.keys(plan.updateServerSettings).length) updated.push('server settings ' + Object.keys(plan.updateServerSettings).join(', '));
     } catch (error) {
-      throw new Error('Could not rename the Discord server: ' + error.message);
+      throw new Error('Could not update Discord server settings: ' + error.message);
     }
   }
   for (const role of plan.createRoles) {
@@ -931,6 +965,7 @@ export async function previewServerTemplate(guild, template) {
     fingerprint,
     summary: {
       renameServer: plan.renameServer,
+      updateServerSettings: plan.updateServerSettings,
       createRoles: plan.createRoles,
       updateRoles: plan.updateRoles,
       deleteRoles: plan.deleteRoles,
