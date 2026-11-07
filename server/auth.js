@@ -599,7 +599,7 @@ app.post('/api/auth/admin/bot-control/publish-template', async (req, res) => {
     return res.status(400).json({ error: 'Invalid setup JSON. Check role names/colors and category channel entries.' });
   }
   const templateJson = JSON.stringify(template);
-  if (templateJson.length > 30000) return res.status(413).json({ error: 'Setup JSON is too large (30 KB maximum).' });
+  if (templateJson.length > 100000) return res.status(413).json({ error: 'Setup JSON is too large (100 KB maximum).' });
   try {
     const result = getBotDb().prepare("INSERT INTO bot_setup_outbox (guild_id, template_json, action) VALUES (?, ?, 'preview')").run(guildId, templateJson);
     return res.status(202).json({ queued: true, jobId: Number(result.lastInsertRowid), message: 'Setup preview queued. No Discord changes have been made yet.' });
