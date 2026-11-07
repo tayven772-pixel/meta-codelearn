@@ -95,7 +95,8 @@ const AUTO_MOD_TRIGGER_TYPES = {
   keyword: AutoModerationRuleTriggerType.Keyword,
   spam: AutoModerationRuleTriggerType.Spam,
   keywordPreset: AutoModerationRuleTriggerType.KeywordPreset,
-  mentionSpam: AutoModerationRuleTriggerType.MentionSpam
+  mentionSpam: AutoModerationRuleTriggerType.MentionSpam,
+  memberProfile: AutoModerationRuleTriggerType.MemberProfile
 };
 const AUTO_MOD_PRESETS = { profanity: 1, sexualContent: 2, slurs: 3 };
 const AUTO_MOD_SETTING_KEYS = new Set([
@@ -127,13 +128,15 @@ function isPlainObject(value) {
 function validateAutoModerationConfig(config) {
   if (!isPlainObject(config) || (config.enabled !== undefined && typeof config.enabled !== 'boolean') ||
       (config.syncUnlisted !== undefined && typeof config.syncUnlisted !== 'boolean') ||
-      !Array.isArray(config.rules) || config.rules.length > 6) {
-    throw new Error('automod must contain enabled (optional), syncUnlisted (optional), and a rules array with up to 6 rules.');
+      !Array.isArray(config.rules) || config.rules.length > 10) {
+    throw new Error('automod must contain enabled (optional), syncUnlisted (optional), and up to 10 rules.');
   }
   const names = new Set();
+  const triggerCounts = {};
   for (const [index, rule] of config.rules.entries()) {
     if (!isPlainObject(rule) || typeof rule.name !== 'string' || !rule.name.trim() || rule.name.length > 100 ||
         !Object.hasOwn(AUTO_MOD_TRIGGER_TYPES, rule.trigger) ||
+        (rule.eventType !== undefined && !['messageSend','memberUpdate'].includes(rule.eventType)) ||
         (rule.enabled !== undefined && typeof rule.enabled !== 'boolean') ||
         (rule.keywords !== undefined && (!Array.isArray(rule.keywords) || rule.keywords.length > 1000 || rule.keywords.some(item => typeof item !== 'string' || !item.trim() || item.length > 60))) ||
         (rule.regexPatterns !== undefined && (!Array.isArray(rule.regexPatterns) || rule.regexPatterns.length > 10 || rule.regexPatterns.some(item => typeof item !== 'string' || !item.trim() || item.length > 260))) ||
@@ -149,8 +152,8 @@ function validateAutoModerationConfig(config) {
     if (names.has(key)) throw new Error('AutoMod rule names must be unique.');
     names.add(key);
     for (const [actionIndex, action] of rule.actions.entries()) {
-      if (!isPlainObject(action) || !['blockMessage','sendAlert','timeout'].includes(action.type)) {
-        throw new Error('Invalid action in AutoMod rule ' + rule.name + '. Use blockMessage, sendAlert, or timeout.');
+      if (!isPlainObject(action) || !['blockMessage','sendAlert','timeout','blockMemberInteraction'].includes(action.type)) {
+        throw new Error('Invalid action in AutoMod rule ' + rule.name + '. Use blockMessage, sendAlert, timeout, or blockMemberInteraction.');
       }
       if (action.type === 'blockMessage' && action.message !== undefined &&
           (typeof action.message !== 'string' || action.message.length > 150)) {
@@ -164,8 +167,14 @@ function validateAutoModerationConfig(config) {
         throw new Error('AutoMod timeout durationSeconds must be between 60 and 2,419,200.');
       }
     }
-    if (rule.trigger === 'keyword' && !(rule.keywords?.length || rule.regexPatterns?.length)) {
-      throw new Error('Keyword AutoMod rules need at least one keywords or regexPatterns entry.');
+    if (['keyword','memberProfile'].includes(rule.trigger) && !(rule.keywords?.length || rule.regexPatterns?.length)) {
+      throw new Error(rule.trigger + ' AutoMod rules need at least one keywords or regexPatterns entry.');
+    }
+    if (rule.trigger === 'memberProfile' && rule.eventType !== undefined && rule.eventType !== 'memberUpdate') {
+      throw new Error('memberProfile AutoMod rules must use eventType "memberUpdate".');
+    }
+    if (rule.trigger !== 'memberProfile' && rule.eventType === 'memberUpdate') {
+      throw new Error('Only memberProfile AutoMod rules can use eventType "memberUpdate".');
     }
     if (rule.trigger === 'keywordPreset' && !rule.presets?.length) {
       throw new Error('keywordPreset AutoMod rules need at least one preset: profanity, sexualContent, or slurs.');
@@ -173,8 +182,8 @@ function validateAutoModerationConfig(config) {
     if (rule.trigger === 'mentionSpam' && rule.mentionTotalLimit === undefined) {
       throw new Error('mentionSpam AutoMod rules need mentionTotalLimit (1–50).');
     }
-    if (rule.trigger !== 'keyword' && (rule.keywords?.length || rule.regexPatterns?.length || rule.allowList?.length)) {
-      throw new Error('keywords, regexPatterns, and allowList are only supported by keyword AutoMod rules.');
+    if (!['keyword','memberProfile'].includes(rule.trigger) && (rule.keywords?.length || rule.regexPatterns?.length || rule.allowList?.length)) {
+      throw new Error('keywords, regexPatterns, and allowList are only supported by keyword or memberProfile AutoMod rules.');
     }
     if (rule.trigger !== 'keywordPreset' && rule.presets?.length) {
       throw new Error('presets are only supported by keywordPreset AutoMod rules.');
@@ -326,6 +335,128 @@ export function validateServerTemplate(template) {
   if (ticketCategory && !categoryNamesForSettings.has(normalizeChannelName(ticketCategory))) {
     throw new Error('settings.tickets.category must reference a category name in categories.');
   }
+}
+
+function resolveAutoModChannel(guild, reference) {
+  const value = String(reference || '').trim();
+  return /^\\d{17,20}$/.test(value)
+    ? guild.channels.cache.get(value) || null
+    : guild.channels.cache.find(channel => channel.name.toLowerCase() === normalizeChannelName(value)) || null;
+}
+function resolveAutoModRole(guild, reference) {
+  const value = String(reference || '').trim();
+  return /^\\d{17,20}$/.test(value)
+    ? guild.roles.cache.get(value) || null
+    : guild.roles.cache.find(role => role.name.toLowerCase() === value.toLowerCase()) || null;
+}
+async function buildAutoModerationPlan(guild, config) {
+  const botMember = guild.members.me ?? await guild.members.fetchMe();
+  if (!botMember.permissions.has(PermissionFlagsBits.ManageGuild)) {
+    throw new Error('AutoMod JSON needs the bot to have Manage Server (Manage Guild) permission.');
+  }
+  if (config.rules.some(rule => rule.actions.some(action => action.type === 'timeout')) &&
+      !botMember.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+    throw new Error('AutoMod timeout actions need the bot to have Moderate Members permission.');
+  }
+  if (!guild.autoModerationRules?.fetch) throw new Error('This Discord server or bot library does not support AutoMod rule management.');
+  const existing = await guild.autoModerationRules.fetch();
+  const wanted = new Map(config.rules.map(rule => [rule.name.trim().toLowerCase(), rule]));
+  const create = [], update = [], remove = [];
+  for (const rule of config.rules) {
+    const current = existing.find(item => item.name.toLowerCase() === rule.name.trim().toLowerCase());
+    const entry = { name: rule.name, enabled: config.enabled !== false && rule.enabled !== false, trigger: rule.trigger };
+    if (!current) {
+      if (config.enabled !== false && rule.enabled !== false) create.push(entry);
+    } else update.push({ id: current.id, ...entry });
+  }
+  if (config.syncUnlisted === true && config.enabled !== false) {
+    for (const rule of existing.values()) {
+      if (!wanted.has(rule.name.toLowerCase())) remove.push({ id: rule.id, name: rule.name });
+    }
+  }
+  const resultingCount = existing.size + create.length - remove.length;
+  if (resultingCount > 10) throw new Error('The requested AutoMod configuration would exceed Discord’s per-server rule limits.');
+  return { enabled: config.enabled !== false, syncUnlisted: config.syncUnlisted === true, create, update, remove };
+}
+async function buildAutoModerationPayload(guild, rule, globallyEnabled = true) {
+  const triggerType = AUTO_MOD_TRIGGER_TYPES[rule.trigger];
+  const triggerMetadata = {};
+  if (rule.keywords?.length) triggerMetadata.keywordFilter = rule.keywords;
+  if (rule.regexPatterns?.length) triggerMetadata.regexPatterns = rule.regexPatterns;
+  if (rule.allowList?.length) triggerMetadata.allowList = rule.allowList;
+  if (rule.presets?.length) triggerMetadata.presets = [...new Set(rule.presets)].map(preset => AUTO_MOD_PRESETS[preset]);
+  if (rule.mentionTotalLimit !== undefined) triggerMetadata.mentionTotalLimit = rule.mentionTotalLimit;
+
+  const actions = [];
+  for (const action of rule.actions) {
+    if (action.type === 'blockMessage') {
+      actions.push({ type: AutoModerationActionType.BlockMessage, ...(action.message ? { metadata: { customMessage: action.message } } : {}) });
+    } else if (action.type === 'sendAlert') {
+      const channel = resolveAutoModChannel(guild, action.channel);
+      if (!channel || !channel.isTextBased?.() || channel.isDMBased?.()) {
+        throw new Error('AutoMod alert channel "' + action.channel + '" was not found as a server text channel.');
+      }
+      actions.push({ type: AutoModerationActionType.SendAlertMessage, metadata: { channel } });
+    } else if (action.type === 'timeout') {
+      actions.push({ type: AutoModerationActionType.Timeout, metadata: { durationSeconds: action.durationSeconds } });
+    } else if (action.type === 'blockMemberInteraction') {
+      actions.push({ type: AutoModerationActionType.BlockMemberInteraction });
+    }
+  }
+  const exemptRoles = (rule.exemptRoles || []).map(name => {
+    const role = resolveAutoModRole(guild, name);
+    if (!role) throw new Error('AutoMod exempt role "' + name + '" could not be found.');
+    return role;
+  });
+  const exemptChannels = (rule.exemptChannels || []).map(name => {
+    const channel = resolveAutoModChannel(guild, name);
+    if (!channel) throw new Error('AutoMod exempt channel "' + name + '" could not be found.');
+    return channel;
+  });
+  return {
+    name: rule.name.trim(),
+    enabled: globallyEnabled && rule.enabled !== false,
+    eventType: rule.eventType === 'memberUpdate' ? AutoModerationRuleEventType.MemberUpdate : AutoModerationRuleEventType.MessageSend,
+    triggerType,
+    triggerMetadata,
+    actions,
+    exemptRoles,
+    exemptChannels
+  };
+}
+async function applyAutoModerationConfig(guild, config) {
+  const current = await guild.autoModerationRules.fetch();
+  const results = { created: [], updated: [], deleted: [], disabled: [] };
+  const desiredNames = new Set(config.rules.map(rule => rule.name.trim().toLowerCase()));
+  for (const definition of config.rules) {
+    const existing = current.find(rule => rule.name.toLowerCase() === definition.name.trim().toLowerCase());
+    if (!existing && (config.enabled === false || definition.enabled === false)) continue;
+    const payload = await buildAutoModerationPayload(guild, definition, config.enabled !== false);
+    try {
+      if (existing) {
+        await guild.autoModerationRules.edit(existing.id, { ...payload, reason: 'Meta Code JSON AutoMod sync' });
+        if (!payload.enabled) results.disabled.push(definition.name);
+        else results.updated.push(definition.name);
+      } else {
+        await guild.autoModerationRules.create({ ...payload, reason: 'Meta Code JSON AutoMod sync' });
+        results.created.push(definition.name);
+      }
+    } catch (error) {
+      throw new Error('Could not apply AutoMod rule "' + definition.name + '": ' + error.message);
+    }
+  }
+  if (config.syncUnlisted === true && config.enabled !== false) {
+    for (const rule of current.values()) {
+      if (desiredNames.has(rule.name.toLowerCase())) continue;
+      try {
+        await guild.autoModerationRules.delete(rule.id, 'Not present in confirmed Meta Code AutoMod JSON');
+        results.deleted.push(rule.name);
+      } catch (error) {
+        throw new Error('Could not remove unlisted AutoMod rule "' + rule.name + '": ' + error.message);
+      }
+    }
+  }
+  return results;
 }
 
 function desiredChannelDefinitions(template) {
