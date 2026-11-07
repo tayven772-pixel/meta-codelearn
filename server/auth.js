@@ -366,16 +366,42 @@ function normalizeServerSetupTemplate(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw new Error('Setup JSON must be an object.');
   }
-  if (input.schemaVersion !== undefined && input.schemaVersion !== 1) {
-    throw new Error('Unsupported Meta Code JSON schemaVersion. Export a fresh configuration backup.');
+  if (input.schemaVersion !== undefined && ![1, 2].includes(input.schemaVersion)) {
+    throw new Error('Unsupported Meta Code JSON schemaVersion. Supported versions are 1 and 2.');
   }
 
-  // Accept both the editor's original template and the complete backup exported
-  // by Bot Control: { schemaVersion, server, botSettings }.
+  // Accept the legacy editor shape, exported backups, and schema v2 server JSON.
   const source = input.server && typeof input.server === 'object' && !Array.isArray(input.server)
     ? input.server
     : input;
   const botSettings = input.botSettings ?? source.botSettings;
+  const schemaV2 = input.schemaVersion === 2;
+  const permissionNames = value => {
+    if (typeof value !== 'string') return value;
+    const aliases = {
+      VIEW_CHANNEL: 'ViewChannel', SEND_MESSAGES: 'SendMessages',
+      READ_MESSAGE_HISTORY: 'ReadMessageHistory', ADD_REACTIONS: 'AddReactions',
+      MANAGE_MESSAGES: 'ManageMessages', CREATE_PUBLIC_THREADS: 'CreatePublicThreads',
+      CREATE_PRIVATE_THREADS: 'CreatePrivateThreads', SEND_MESSAGES_IN_THREADS: 'SendMessagesInThreads',
+      ATTACH_FILES: 'AttachFiles', EMBED_LINKS: 'EmbedLinks'
+    };
+    return aliases[value] || value;
+  };
+  const permissionMapToRules = map => {
+    if (!map || typeof map !== 'object' || Array.isArray(map)) return [];
+    return Object.entries(map).map(([role, permissions]) => ({
+      role,
+      allow: Array.isArray(permissions?.allow) ? permissions.allow.map(permissionNames) : [],
+      deny: Array.isArray(permissions?.deny) ? permissions.deny.map(permissionNames) : []
+    }));
+  };
+  const branding = schemaV2 ? {
+    ...(source.name ? { server_name: source.name } : {}),
+    ...(source.description !== undefined ? { description: source.description } : {}),
+    ...(source.defaultMessageNotifications !== undefined ? { defaultMessageNotifications: String(source.defaultMessageNotifications).toLowerCase().replace(/_/g, '') } : {}),
+    ...(source.verificationLevel !== undefined ? { verificationLevel: String(source.verificationLevel).toLowerCase().replace(/_/g, '') } : {}),
+    ...(source.explicitContentFilter !== undefined ? { explicitContentFilter: String(source.explicitContentFilter).toLowerCase().replace(/_/g, '') } : {})
+  } : source.branding;
 
   const roles = Array.isArray(source.roles) ? source.roles.map(role => {
     if (!role || typeof role !== 'object' || Array.isArray(role)) return role;
@@ -391,13 +417,23 @@ function normalizeServerSetupTemplate(input) {
     const channels = Array.isArray(category.channels) ? category.channels.map(channel => {
       if (Array.isArray(channel)) return channel;
       if (channel && typeof channel === 'object' && !Array.isArray(channel) &&
-          ['text', 'voice'].includes(channel.type) && typeof channel.name === 'string') {
-        const { type, name, ...options } = channel;
+          ['text', 'voice', 'stage'].includes(channel.type) && typeof channel.name === 'string') {
+        const { type, name, permissions, ...rawOptions } = channel;
+        const options = { ...rawOptions };
+        if (options.user_limit !== undefined) { options.userLimit = options.user_limit; delete options.user_limit; }
+        if (options.slowmode_delay !== undefined) { options.slowmode = options.slowmode_delay; delete options.slowmode_delay; }
+        if (permissions) options.permissions = permissions;
         return Object.keys(options).length ? [type, name, options] : [type, name];
       }
       return channel;
     }) : category.channels;
-    return { ...category, channels };
+    return {
+      ...category,
+      ...(schemaV2 ? { private: Boolean(category.staffOnly || category.private) } : {}),
+      ...(schemaV2 && category.permissions && !Array.isArray(category.permissions)
+        ? { permissions: permissionMapToRules(category.permissions) } : {}),
+      channels
+    };
   }) : source.categories;
 
   // Normalize readable channel permission blocks into the bot's native
@@ -408,6 +444,16 @@ function normalizeServerSetupTemplate(input) {
     : Array.isArray(source.channel_permissions)
       ? [...source.channel_permissions]
       : [];
+  if (schemaV2) {
+    for (const category of source.categories || []) {
+      for (const channel of category.channels || []) {
+        if (!channel || typeof channel !== 'object' || Array.isArray(channel) || !channel.permissions) continue;
+        for (const rule of permissionMapToRules(channel.permissions)) {
+          channelPermissions.push({ channel: channel.name, role: rule.role, allow: rule.allow, deny: rule.deny });
+        }
+      }
+    }
+  }
   const permissionName = value => {
     if (typeof value !== 'string') return value;
     const aliases = {
@@ -447,13 +493,45 @@ function normalizeServerSetupTemplate(input) {
     }
   }
 
-  return {
+  const normalizedAutomod = schemaV2 && source.automod && Array.isArray(source.automod.rules)
+    ? {
+        enabled: source.automod.enabled !== false,
+        rules: source.automod.rules.flatMap(rule => {
+          const triggerMap = { SPAM_AND_MENTIONS: 'mentionSpam', LINK_FILTER: 'keyword', KEYWORD_FILTER: 'keyword' };
+          const trigger = triggerMap[rule.triggerType];
+          if (!trigger) return [];
+          const actions = [];
+          if (rule.action === 'BLOCK_MESSAGE' || rule.action === 'BLOCK_MESSAGE_AND_ALERT') actions.push({ type: 'blockMessage' });
+          if (rule.action === 'TIMEOUT_MEMBER') actions.push({ type: 'timeout', durationSeconds: Math.min(2419200, Math.max(60, Number(rule.timeoutDurationSeconds) || 300)) });
+          if (rule.action === 'BLOCK_MESSAGE_AND_ALERT' && rule.alertChannel) actions.push({ type: 'sendAlert', channel: rule.alertChannel });
+          if (!actions.length) actions.push({ type: 'blockMessage' });
+          return [{
+            name: String(rule.name || 'Imported AutoMod rule').slice(0, 100),
+            trigger,
+            ...(trigger === 'mentionSpam' ? { mentionTotalLimit: Math.min(50, Math.max(1, Number(rule.maxMentions) || 5)) } : {}),
+            ...(trigger === 'keyword' && Array.isArray(rule.keywords) ? { keywords: rule.keywords } : {}),
+            actions
+          }];
+        })
+      } : source.automod;
+  const rulesConfig = schemaV2 && source.rules?.enabled ? {
+    title: source.rules.title || 'Meta Code Community Rules',
+    description: source.rules.description || '',
+    color: source.rules.color || '#5865F2',
+    footer: source.rules.footer || 'Meta Code • Learn the idea, then the code.',
+    rules: Array.isArray(source.rules.rules) ? source.rules.rules.join('\\n') : String(source.rules.rules || '')
+  } : undefined;
+  const normalizedSource = {
     ...source,
+    ...(branding ? { branding } : {}),
     roles,
     categories,
+    ...(normalizedAutomod ? { automod: normalizedAutomod } : {}),
+    ...(rulesConfig ? { importedRulesConfig: rulesConfig } : {}),
     ...(channelPermissions.length ? { channelPermissions } : {}),
     ...(botSettings && typeof botSettings === 'object' && !Array.isArray(botSettings) ? { botSettings } : {})
   };
+  return normalizedSource;
 }
 
 function validGuildId(value) {
