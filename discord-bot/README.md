@@ -100,7 +100,7 @@ The owner-only `/bot-control` editor uses the existing **Publish JSON → previe
 - Normal template: `{ "roles": [], "categories": [], ... }`
 - Complete backup: `{ "schemaVersion": 1, "server": { ... }, "botSettings": { ... } }`
 
-The `server` object supports `branding`, `roles`, `categories`, `channelPermissions`, `controlPanel`, `settings`, and `automod`. Example:
+The `server` object supports `branding`, `roles`, `categories`, `channelPermissions`, `controlPanel`, `settings`, and `automod`. Paste the complete exported backup directly into the existing JSON editor; it does not need to be manually extracted. Example server template:
 
 ```json
 {
@@ -238,7 +238,6 @@ The `server` object supports `branding`, `roles`, `categories`, `channelPermissi
     "commands": {
       "purge": true,
       "timeout": true,
-      "clearlinks": true
     },
     "responses": {
       "meta": "Learn the idea, then the code.",
