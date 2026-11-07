@@ -95,29 +95,120 @@ Join messages are sent as an embed with the new member's avatar, welcome text, s
 
 ## Publishing a complete server setup from JSON
 
-The owner-only `/bot-control` editor accepts a template with `roles`, `categories`, and optional `controlPanel` and `settings` objects. Example:
+The owner-only `/bot-control` editor uses the existing **Publish JSON → preview → confirm** workflow. It accepts a normal template object or the complete backup exported by Bot Control:
+
+- Normal template: `{ "roles": [], "categories": [], ... }`
+- Complete backup: `{ "schemaVersion": 1, "server": { ... }, "botSettings": { ... } }`
+
+The `server` object supports `branding`, `roles`, `categories`, `channelPermissions`, `controlPanel`, `settings`, and `automod`. Example:
 
 ```json
 {
+  "branding": {
+    "server_name": "Meta Code",
+    "description": "A friendly place to learn and build.",
+    "verificationLevel": "medium",
+    "explicitContentFilter": "allMembers",
+    "defaultMessageNotifications": "onlyMentions",
+    "afkTimeout": 300,
+    "afkChannel": "AFK"
+  },
   "roles": [
-    { "name": "Founder", "color": 16042333 },
-    { "name": "Moderator", "color": 7391137 }
+    {
+      "name": "Moderator",
+      "color": "#70C7A1",
+      "hoist": true,
+      "mentionable": false,
+      "permissions": ["ViewChannel", "ManageMessages", "ModerateMembers"]
+    },
+    {
+      "name": "Community Member",
+      "color": "#D7DCE4",
+      "permissions": ["ViewChannel", "SendMessages", "ReadMessageHistory"]
+    }
   ],
   "categories": [
     {
       "name": "GET STARTED",
-      "channels": [["text", "welcome"], ["text", "rules"]]
+      "channels": [["text", "welcome", { "topic": "Start here" }]]
+    },
+    {
+      "name": "COMMUNITY",
+      "channels": [
+        ["text", "general-chat", { "topic": "General discussion", "slowmode": 3 }],
+        ["text", "announcements", { "topic": "Official updates", "slowmode": 0 }]
+      ]
     },
     {
       "name": "STAFF HQ",
       "private": true,
-      "channels": [["text", "staff-applications"]]
+      "channels": [
+        ["text", "staff-chat"],
+        ["text", "staff-applications"],
+        ["text", "ticket-logs"],
+        ["text", "moderation-logs"]
+      ]
+    },
+    {
+      "name": "TICKETS",
+      "channels": [["text", "ticket-archive"]]
+    },
+    {
+      "name": "VOICE",
+      "channels": [
+        ["voice", "Community Lounge", { "bitrate": 64000, "userLimit": 25 }],
+        ["voice", "AFK", { "userLimit": 0 }]
+      ]
     }
   ],
-  "controlPanel": {
-    "title": "Meta Code bot control",
-    "description": "Owner dashboard configured from JSON.",
-    "sections": ["setup", "commands", "responses", "applications"]
+  "channelPermissions": [
+    {
+      "channel": "announcements",
+      "role": "Community Member",
+      "deny": ["SendMessages"]
+    },
+    {
+      "channel": "general-chat",
+      "role": "Moderator",
+      "allow": ["ManageMessages", "ManageThreads"]
+    }
+  ],
+  "automod": {
+    "enabled": true,
+    "syncUnlisted": false,
+    "rules": [
+      {
+        "name": "Block fake prize links",
+        "trigger": "keyword",
+        "keywords": ["fake prize link"],
+        "actions": [
+          { "type": "blockMessage", "message": "Please do not post suspicious giveaway links." },
+          { "type": "sendAlert", "channel": "moderation-logs" }
+        ],
+        "exemptRoles": ["Moderator"],
+        "exemptChannels": ["staff-chat"]
+      },
+      {
+        "name": "Discord spam detection",
+        "trigger": "spam",
+        "actions": [
+          { "type": "blockMessage" },
+          { "type": "sendAlert", "channel": "moderation-logs" }
+        ],
+        "exemptRoles": ["Moderator"],
+        "exemptChannels": ["staff-chat"]
+      },
+      {
+        "name": "Mention flood protection",
+        "trigger": "mentionSpam",
+        "mentionTotalLimit": 5,
+        "mentionRaidProtectionEnabled": true,
+        "actions": [
+          { "type": "blockMessage" },
+          { "type": "sendAlert", "channel": "moderation-logs" }
+        ]
+      }
+    ]
   },
   "settings": {
     "welcome": {
@@ -130,14 +221,58 @@ The owner-only `/bot-control` editor accepts a template with `roles`, `categorie
       "enabled": true,
       "staffChannel": "staff-applications",
       "staffRole": "Moderator",
-      "panelTitle": "Meta Code | Staff Applications"
+      "panelTitle": "Meta Code | Staff Applications",
+      "questions": [
+        { "question": "Which role are you applying for?", "minimumWords": 3 }
+      ]
+    },
+    "tickets": {
+      "category": "TICKETS",
+      "staffRole": "Moderator",
+      "logChannel": "ticket-logs",
+      "closeDelaySeconds": 5,
+      "panelStyle": "dropdown",
+      "categories": ["General Support", "Bug Report", "Website Help"],
+      "formQuestions": ["Briefly describe what you need help with."]
+    },
+    "commands": {
+      "purge": true,
+      "timeout": true,
+      "clearlinks": true
+    },
+    "responses": {
+      "meta": "Learn the idea, then the code.",
+      "help": "Use /meta to get started."
+    },
+    "security": {
+      "linkProtectionEnabled": true,
+      "linkProtectionOwnerId": "123456789012345678",
+      "serverProfileGuardEnabled": false
+    },
+    "community": {
+      "xpEnabled": true,
+      "autorole": "Community Member",
+      "logChannel": "moderation-logs"
     }
+  },
+  "controlPanel": {
+    "title": "Meta Code bot control",
+    "description": "Owner dashboard configured from JSON.",
+    "sections": ["setup", "commands", "responses", "tickets", "messages", "security", "automod", "community", "autopartner", "applications"]
   }
 }
 ```
 
-Publish first produces a live preview; it does not change Discord. The preview lists planned creations, updates, channel moves/permission syncs, deletions, and protected objects. Confirming the preview applies the template and removes unlisted deletable roles, categories, and channels. Existing channel message history is permanently lost when a channel is deleted. Discord-managed roles, @everyone, administrator roles, roles at or above the bot's highest role, essential system channels, and channels/categories the bot cannot manage are protected. A server change after preview invalidates the confirmation and requires a fresh preview.
+Channel entries may use the short form `["text", "channel-name"]` or `["text", "channel-name", { ...options }]`. Supported text options are `topic`, `nsfw`, and `slowmode`; supported voice options are `bitrate` and `userLimit`. Roles can set `color`, `permissions`, `hoist`, and `mentionable`. `channelPermissions` applies explicit `allow`/`deny` permission arrays to roles for channels. Permission names must be valid Discord permission names.
 
-`controlPanel.sections` controls which dashboard sections are shown; `title` and `description` update the dashboard heading. Supported sections: `setup`, `commands`, `responses`, `tickets`, `messages`, `community`, `autopartner`, and `applications`. The JSON settings blocks support `welcome`, `autopartner`, `applications`, and `tickets`. Names referenced by a setting must be present in the same template.
+AutoMod uses Discord's native rule engine. Supported triggers are `keyword`, `spam`, `keywordPreset`, `mentionSpam`, and `memberProfile`. Actions are `blockMessage`, `sendAlert`, `timeout` (keyword rules only), and `blockMemberInteraction` (member-profile rules only). Keyword presets are `profanity`, `sexualContent`, and `slurs`. Rules support role/channel exemptions. Discord limits the number of rules per trigger type; invalid combinations are rejected before sync. Regex patterns must use Rust-compatible syntax.
+
+Set `automod.enabled: false` to disable the rules named in the configuration. By default, rules not listed in JSON are left alone. Set `automod.syncUnlisted: true` only when you also intend the sync to delete AutoMod rules that are not listed. The preview displays those removals before confirmation.
+
+The structured `settings` blocks also support `welcome`, `autopartner`, `applications`, `tickets`, `commands`, `responses`, `security`, `community`, and `moderation`. The exported `botSettings` object restores saved Bot Control key/value settings and command toggles. Channel and role names referenced by structured settings should exist in the template or already exist on the server.
+
+Publishing produces a live preview; it does not change Discord. Review role/channel/category changes, server settings, permission changes, AutoMod changes, and any listed removals. Confirming applies the reviewed setup and removes unlisted deletable roles, categories, and channels. Existing channel message history is permanently lost when a channel is deleted. Discord-managed roles, @everyone, administrator roles, roles at or above the bot's highest role, essential system channels, and channels/categories the bot cannot manage are protected. A server change after preview invalidates the confirmation and requires a fresh preview.
+
+The bot needs **Manage Channels** and **Manage Roles** for layout changes, **Manage Server** for native AutoMod, and **Moderate Members** when AutoMod timeout actions are requested. Discord still enforces role hierarchy and server feature eligibility; this JSON cannot bypass those limits. Server icon/banner, owner, member accounts, integrations, and other Discord-managed items outside the bot's API permissions are not changed by this importer.
 
 The legacy `/setup-server` command remains non-destructive: it applies the saved template without deleting unlisted resources. Use the owner dashboard preview/confirm flow when you intend the server to match the JSON exactly.
